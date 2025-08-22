@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, Alert, Modal, TextInput, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -19,6 +19,14 @@ export default function ProfileDetails() {
   const { t } = useI18n();
 
   const user: User | undefined = useMemo(() => potentialMatches.find(u => u.id === String(id)), [id, potentialMatches]);
+
+  const hasCountedRef = useRef<boolean>(false);
+  useEffect(() => {
+    if (user && !hasCountedRef.current) {
+      hasCountedRef.current = true;
+      useDaily('views').catch((e) => console.log('[ProfileDetails] view count error', e));
+    }
+  }, [user, useDaily]);
 
   if (!user) {
     return (

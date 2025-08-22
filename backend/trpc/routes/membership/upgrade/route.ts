@@ -2,7 +2,7 @@ import { z } from "zod";
 import { protectedProcedure } from "../../../create-context";
 
 export default protectedProcedure
-  .input(z.object({ tier: z.enum(["free", "gold", "vip"]) }))
+  .input(z.object({ tier: z.enum(["free", "silver", "gold", "vip"]) }))
   .mutation(async ({ input, ctx }) => {
     const userId = ctx.user?.id;
     if (!userId) {

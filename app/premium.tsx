@@ -43,12 +43,27 @@ const tierData: Record<MembershipTier, TierInfo> = {
     features: [
       { icon: MessageCircle, text: '5 messages/day', included: true },
       { icon: Heart, text: '50 right swipes/day', included: true },
-      { icon: Eye, text: '50 profile views/day', included: true },
+      { icon: Eye, text: '10 profile views/day', included: true },
       { icon: Filter, text: 'Basic filters (age, gender)', included: true },
       { icon: Heart, text: 'See who liked you', included: true },
-      { icon: Zap, text: '1 free weekly boost', included: true },
+      { icon: Zap, text: 'Occasional boosts', included: true },
       { icon: EyeOff, text: 'Incognito mode', included: false },
       { icon: Star, text: 'Rewind last swipe', included: false },
+    ],
+  },
+  silver: {
+    name: 'Silver',
+    priceMonthly: 9.99,
+    color: '#C0C0C0',
+    gradient: ['#C0C0C0', '#9CA3AF'],
+    features: [
+      { icon: MessageCircle, text: '30 messages/day', included: true },
+      { icon: Heart, text: '150 right swipes/day', included: true },
+      { icon: Eye, text: '50 profile views/day', included: true },
+      { icon: Filter, text: 'Advanced filters (distance, interests)', included: true },
+      { icon: Star, text: 'Rewind last swipe', included: true },
+      { icon: Zap, text: 'Monthly boosts & 2 super likes', included: true },
+      { icon: EyeOff, text: 'Incognito mode', included: false },
     ],
   },
   gold: {
@@ -88,7 +103,7 @@ export default function PremiumScreen() {
   const router = useRouter();
   const { tier, upgradeTier, addCredits } = useMembership();
   const { unlockTheme } = useApp();
-  const [selectedTier, setSelectedTier] = useState<MembershipTier>('gold');
+  const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
 

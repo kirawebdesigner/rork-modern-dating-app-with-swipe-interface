@@ -70,7 +70,7 @@ export interface OnboardingSlide {
   image: string;
 }
 
-export type MembershipTier = 'free' | 'gold' | 'vip';
+export type MembershipTier = 'free' | 'silver' | 'gold' | 'vip';
 
 export interface MembershipFeatures {
   dailyMessages: number;
