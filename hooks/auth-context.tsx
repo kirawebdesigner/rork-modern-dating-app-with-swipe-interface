@@ -2,6 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { AuthUser, User } from '@/types';
 import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -118,6 +119,21 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     if (error) throw error;
     const u = data.user;
     if (!u) return;
+    try {
+      const code = await AsyncStorage.getItem('referrer_code');
+      if (code) {
+        const { data: refUser, error: refErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .or(`referral_code.eq.${code},id.eq.${code}`)
+          .maybeSingle();
+        if (!refErr && refUser && refUser.id !== u.id) {
+          await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', u.id);
+          await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: u.id });
+          await AsyncStorage.removeItem('referrer_code');
+        }
+      }
+    } catch {}
     const profile = await fetchProfile(u.id);
     const next: AuthUser = {
       id: u.id,

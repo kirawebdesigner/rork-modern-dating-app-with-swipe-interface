@@ -12,9 +12,20 @@ export default function ReferralsScreen() {
   const [referredCount, setReferredCount] = useState<number>(0);
 
   useEffect(() => {
-    const id = 'current';
-    const link = `https://zewijuna.com/join?ref=${id}`;
-    setRefLink(link);
+    (async () => {
+      try {
+        const { data: u } = await supabase.auth.getUser();
+        const uid = u.user?.id ?? '';
+        const { data: p } = await supabase.from('profiles').select('referral_code').eq('id', uid).maybeSingle();
+        const code = (p?.referral_code as string | undefined) ?? uid;
+        const link = `https://zewijuna.com/join?ref=${code}`;
+        setRefLink(link);
+        const { count } = await supabase.from('referrals').select('*', { count: 'exact', head: true }).eq('referrer_id', uid);
+        setReferredCount(count ?? 0);
+      } catch (e) {
+        console.log('[Referral] init error', e);
+      }
+    })();
   }, []);
 
   const copyLink = useCallback(async () => {
@@ -28,16 +39,21 @@ export default function ReferralsScreen() {
 
   const checkEligibility = useCallback(async () => {
     try {
-      setReferredCount(0);
-      if (referredCount >= 5) {
-        Alert.alert('Congrats!', 'You unlocked 1 month of Gold. It will be applied to your account.');
+      const { data: u } = await supabase.auth.getUser();
+      const uid = u.user?.id ?? '';
+      const { count } = await supabase.from('referrals').select('*', { count: 'exact', head: true }).eq('referrer_id', uid);
+      const total = count ?? 0;
+      setReferredCount(total);
+      if (total >= 5) {
+        await supabase.from('memberships').update({ tier: 'gold' }).eq('user_id', uid);
+        Alert.alert('Congrats!', 'You unlocked 1 month of Gold. Applied to your account.');
       } else {
-        Alert.alert('Keep sharing', `You need ${Math.max(0, 5 - referredCount)} more signups to unlock Gold.`);
+        Alert.alert('Keep sharing', `You need ${Math.max(0, 5 - total)} more signups to unlock Gold.`);
       }
     } catch (e) {
       console.log('[Referral] check error', e);
     }
-  }, [referredCount]);
+  }, []);
 
   return (
     <SafeAreaView style={styles.container}>

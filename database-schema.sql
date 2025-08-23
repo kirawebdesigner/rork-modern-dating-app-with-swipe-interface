@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   visibility TEXT DEFAULT 'everyone' CHECK (visibility IN ('everyone', 'matches', 'nobody')),
   hide_online_status BOOLEAN DEFAULT FALSE,
   incognito BOOLEAN DEFAULT FALSE,
+  referral_code TEXT UNIQUE DEFAULT uuid_generate_v4()::text,
+  referred_by UUID REFERENCES auth.users(id),
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
@@ -39,8 +41,17 @@ CREATE TABLE IF NOT EXISTS public.memberships (
   remaining_profile_views INTEGER DEFAULT 10,
   last_reset DATE DEFAULT CURRENT_DATE,
   expires_at TIMESTAMP WITH TIME ZONE,
+  referral_rewards_claimed INTEGER DEFAULT 0,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Referrals table
+CREATE TABLE IF NOT EXISTS public.referrals (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  referrer_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
+  referred_user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
 -- Swipes table
@@ -114,6 +125,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_gender ON public.profiles(gender);
 CREATE INDEX IF NOT EXISTS idx_profiles_age ON public.profiles(age);
 CREATE INDEX IF NOT EXISTS idx_profiles_city ON public.profiles(city);
 CREATE INDEX IF NOT EXISTS idx_profiles_last_active ON public.profiles(last_active);
+CREATE INDEX IF NOT EXISTS idx_profiles_referred_by ON public.profiles(referred_by);
 CREATE INDEX IF NOT EXISTS idx_swipes_swiper_id ON public.swipes(swiper_id);
 CREATE INDEX IF NOT EXISTS idx_swipes_swiped_id ON public.swipes(swiped_id);
 CREATE INDEX IF NOT EXISTS idx_matches_user1_id ON public.matches(user1_id);
@@ -123,6 +135,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON public.messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON public.messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_profile_views_viewer_id ON public.profile_views(viewer_id);
 CREATE INDEX IF NOT EXISTS idx_profile_views_viewed_id ON public.profile_views(viewed_id);
+CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON public.referrals(referrer_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -133,6 +146,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.profile_views ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_interests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 
@@ -155,6 +169,13 @@ CREATE POLICY "Users can update own membership" ON public.memberships
 
 CREATE POLICY "Users can insert own membership" ON public.memberships
   FOR INSERT WITH CHECK (auth.uid() = user_id);
+
+-- Referrals policies
+CREATE POLICY "Users can view own referrals" ON public.referrals
+  FOR SELECT USING (auth.uid() = referrer_id OR auth.uid() = referred_user_id);
+
+CREATE POLICY "Users can insert their referral record" ON public.referrals
+  FOR INSERT WITH CHECK (auth.uid() = referred_user_id);
 
 -- Swipes policies
 CREATE POLICY "Users can view own swipes" ON public.swipes
@@ -209,7 +230,7 @@ CREATE POLICY "Anyone can view interests" ON public.interests
 
 -- Function to create a profile when a user signs up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $
 BEGIN
   INSERT INTO public.profiles (id, name)
   VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'name', 'User'));
@@ -219,7 +240,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger to automatically create profile and membership on user signup
 CREATE OR REPLACE TRIGGER on_auth_user_created
@@ -228,12 +249,12 @@ CREATE OR REPLACE TRIGGER on_auth_user_created
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql;
+$ LANGUAGE plpgsql;
 
 -- Triggers for updated_at
 CREATE OR REPLACE TRIGGER update_profiles_updated_at
@@ -246,18 +267,15 @@ CREATE OR REPLACE TRIGGER update_memberships_updated_at
 
 -- Function to create matches when both users like each other
 CREATE OR REPLACE FUNCTION public.check_for_match()
-RETURNS TRIGGER AS $$
+RETURNS TRIGGER AS $
 BEGIN
-  -- Only check for matches on 'like' or 'superlike'
   IF NEW.action IN ('like', 'superlike') THEN
-    -- Check if the other user has also liked this user
     IF EXISTS (
       SELECT 1 FROM public.swipes
       WHERE swiper_id = NEW.swiped_id
         AND swiped_id = NEW.swiper_id
         AND action IN ('like', 'superlike')
     ) THEN
-      -- Create a match (ensure user1_id < user2_id for consistency)
       INSERT INTO public.matches (user1_id, user2_id)
       VALUES (
         LEAST(NEW.swiper_id, NEW.swiped_id),
@@ -269,7 +287,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- Trigger to check for matches after swipe
 CREATE OR REPLACE TRIGGER on_swipe_check_match
