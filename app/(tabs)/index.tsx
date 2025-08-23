@@ -182,25 +182,12 @@ export default function DiscoverScreen() {
     setHistory(prev => prev.slice(1));
   };
 
-
   const isFree = tier === 'free';
-const viewsLeftText = useMemo(() => {
-  if (features.profileViews === 'unlimited') return '∞';
-  if (typeof remainingProfileViews === 'number') return String(remainingProfileViews);
-  return '∞';
-}, [features.profileViews, remainingProfileViews]);
-
-if (!currentUser) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No more profiles!</Text>
-          <Text style={styles.emptySubtext}>Check back later for more matches</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
+  const viewsLeftText = useMemo(() => {
+    if (features.profileViews === 'unlimited') return '∞';
+    if (typeof remainingProfileViews === 'number') return String(remainingProfileViews);
+    return '∞';
+  }, [features.profileViews, remainingProfileViews]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -235,6 +222,7 @@ if (!currentUser) {
         <TouchableOpacity 
           style={styles.limitsBanner}
           onPress={() => router.push('/premium' as any)}
+          testID="limits-banner"
         >
           <Text style={styles.limitsText}>
             Free plan: swipes left today {typeof remainingRightSwipes === 'number' ? remainingRightSwipes : '∞'} • views {viewsLeftText}
@@ -243,75 +231,88 @@ if (!currentUser) {
         </TouchableOpacity>
       )}
 
-      <View style={styles.cardsContainer}>
-        {nextUser && (
-          <Animated.View
-            style={[
-              styles.cardWrapper,
-              { transform: [{ scale: nextCardScale }] },
-            ]}
-          >
-            <SwipeCard user={nextUser} onPress={() => router.push(`/(tabs)/profile-details/${nextUser.id}` as any)} />
-          </Animated.View>
-        )}
-
-        <Animated.View
-          {...panResponder.panHandlers}
-          style={[
-            styles.cardWrapper,
-            {
-              transform: [
-                { translateX: position.x },
-                { translateY: position.y },
-                { rotate },
-              ],
-            },
-          ]}
-        >
-          <SwipeCard user={currentUser} onPress={() => router.push(`/(tabs)/profile-details/${currentUser.id}` as any)} />
-
-          <Animated.View style={[styles.likeLabel, { opacity: likeOpacity }]}>
-            <Text style={styles.likeLabelText}>LIKE</Text>
-          </Animated.View>
-
-          <Animated.View style={[styles.nopeLabel, { opacity: nopeOpacity }]}>
-            <Text style={styles.nopeLabelText}>NOPE</Text>
-          </Animated.View>
-        </Animated.View>
-      </View>
-
-      <View style={styles.actions}>
-        {features.rewind && (
-          <TouchableOpacity
-            style={[styles.actionButton, styles.nopeButton]}
-            onPress={onRewind}
-            testID="rewind-btn"
-          >
-            <Undo2 size={26} color={Colors.nope} />
+      {!currentUser ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>No more profiles!</Text>
+          <Text style={styles.emptySubtext}>Check back later for more matches</Text>
+          <TouchableOpacity style={[styles.beSeenButton, { marginTop: 12 }]} onPress={() => router.push('/premium' as any)} testID="empty-upgrade">
+            <Rocket size={16} color={Colors.text.white} />
+            <Text style={styles.beSeenText}>Boost visibility</Text>
           </TouchableOpacity>
-        )}
+        </View>
+      ) : (
+        <>
+          <View style={styles.cardsContainer}>
+            {nextUser && (
+              <Animated.View
+                style={[
+                  styles.cardWrapper,
+                  { transform: [{ scale: nextCardScale }] },
+                ]}
+              >
+                <SwipeCard user={nextUser} onPress={() => router.push(`/(tabs)/profile-details/${nextUser.id}` as any)} />
+              </Animated.View>
+            )}
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.nopeButton]}
-          onPress={() => handleActionButton('nope')}
-        >
-          <X size={30} color={Colors.nope} />
-        </TouchableOpacity>
+            <Animated.View
+              {...panResponder.panHandlers}
+              style={[
+                styles.cardWrapper,
+                {
+                  transform: [
+                    { translateX: position.x },
+                    { translateY: position.y },
+                    { rotate },
+                  ],
+                },
+              ]}
+            >
+              <SwipeCard user={currentUser} onPress={() => router.push(`/(tabs)/profile-details/${currentUser.id}` as any)} />
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.superLikeButton]}
-          onPress={() => handleActionButton('superlike')}
-        >
-          <Star size={26} color={Colors.superLike} fill={Colors.superLike} />
-        </TouchableOpacity>
+              <Animated.View style={[styles.likeLabel, { opacity: likeOpacity }]}>
+                <Text style={styles.likeLabelText}>LIKE</Text>
+              </Animated.View>
 
-        <TouchableOpacity
-          style={[styles.actionButton, styles.likeButton]}
-          onPress={() => handleActionButton('like')}
-        >
-          <Heart size={30} color={Colors.like} fill={Colors.like} />
-        </TouchableOpacity>
-      </View>
+              <Animated.View style={[styles.nopeLabel, { opacity: nopeOpacity }]}>
+                <Text style={styles.nopeLabelText}>NOPE</Text>
+              </Animated.View>
+            </Animated.View>
+          </View>
+
+          <View style={styles.actions}>
+            {features.rewind && (
+              <TouchableOpacity
+                style={[styles.actionButton, styles.nopeButton]}
+                onPress={onRewind}
+                testID="rewind-btn"
+              >
+                <Undo2 size={26} color={Colors.nope} />
+              </TouchableOpacity>
+            )}
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.nopeButton]}
+              onPress={() => handleActionButton('nope')}
+            >
+              <X size={30} color={Colors.nope} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.superLikeButton]}
+              onPress={() => handleActionButton('superlike')}
+            >
+              <Star size={26} color={Colors.superLike} fill={Colors.superLike} />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.actionButton, styles.likeButton]}
+              onPress={() => handleActionButton('like')}
+            >
+              <Heart size={30} color={Colors.like} fill={Colors.like} />
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
 
       {isFree && (
         <View style={styles.adBanner} testID="ad-banner-bottom">
