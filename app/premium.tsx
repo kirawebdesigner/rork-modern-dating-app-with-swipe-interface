@@ -8,6 +8,7 @@ import {
   SafeAreaView,
   Alert,
   Modal,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, ArrowRight, Info, BadgePercent } from 'lucide-react-native';
@@ -119,6 +120,31 @@ export default function PremiumScreen() {
         return;
       }
 
+      const doUpgrade = async () => {
+        try {
+          console.log('[Premium] Confirm upgrade to', selectedTier);
+          await upgradeTier(selectedTier);
+          await setAppTier(selectedTier);
+          await resetDailyLimits();
+          await grantMonthlyAllowancesIfNeeded();
+          try {
+            await upgradeMutation.mutateAsync({ tier: selectedTier });
+          } catch (err: any) {
+            console.warn('[Premium] upgrade mutation failed, kept local tier', err?.message || err);
+          }
+          Alert.alert('Success!', `Welcome to ${tierData[selectedTier].name}! Enjoy your new features.`);
+          if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
+        } catch (err: any) {
+          console.error('[Premium] upgrade flow error', err?.message || err);
+          Alert.alert('Upgrade failed', 'Please try again later.');
+        }
+      };
+
+      if (Platform.OS === 'web') {
+        await doUpgrade();
+        return;
+      }
+
       const priceLabel = billingPeriod === 'monthly'
         ? `${tierData[selectedTier].priceMonthly.toFixed(2)}/month`
         : `${(tierData[selectedTier].priceMonthly * 6).toFixed(2)}/year (-50%)`;
@@ -128,28 +154,7 @@ export default function PremiumScreen() {
         `Upgrade to ${tierData[selectedTier].name} • ${priceLabel}`,
         [
           { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'Upgrade',
-            onPress: async () => {
-              try {
-                console.log('[Premium] Confirm upgrade to', selectedTier);
-                await upgradeTier(selectedTier);
-                await setAppTier(selectedTier);
-                await resetDailyLimits();
-                await grantMonthlyAllowancesIfNeeded();
-                try {
-                  await upgradeMutation.mutateAsync({ tier: selectedTier });
-                } catch (err: any) {
-                  console.warn('[Premium] upgrade mutation failed, kept local tier', err?.message || err);
-                }
-                Alert.alert('Success!', `Welcome to ${tierData[selectedTier].name}! Enjoy your new features.`);
-                if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
-              } catch (err: any) {
-                console.error('[Premium] upgrade flow error', err?.message || err);
-                Alert.alert('Upgrade failed', 'Please try again later.');
-              }
-            },
-          },
+          { text: 'Upgrade', onPress: doUpgrade },
         ]
       );
     } catch (e) {
