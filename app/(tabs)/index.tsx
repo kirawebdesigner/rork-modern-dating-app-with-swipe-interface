@@ -373,6 +373,9 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 12,
     alignItems: 'center',
+    position: 'relative',
+    zIndex: 3,
+    elevation: 4,
   },
   limitsText: {
     color: Colors.text.white,
@@ -394,6 +397,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 0,
   },
   cardWrapper: {
     position: 'absolute',
