@@ -3,10 +3,11 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, Keyboard
 import { ArrowLeft, Send, ShieldAlert, Crown } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Match, Message } from '@/types';
-import { useApp } from '@/hooks/app-context';
+import { Message } from '@/types';
 import { useMembership } from '@/hooks/membership-context';
-import { sendPushToUser } from '@/lib/notifications';
+import { useAuth } from '@/hooks/auth-context';
+import { supabase } from '@/lib/supabase';
+import { useRealtimeMessages } from '@/hooks/use-chat';
 
 class Boundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
@@ -32,21 +33,49 @@ class Boundary extends React.Component<{ children: React.ReactNode }, { hasError
 export default function ChatScreen() {
   const router = useRouter();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
-  const { matches } = useApp();
   const { tier, remainingDailyMessages, useDaily } = useMembership();
+  const { user } = useAuth();
+  const uid = user?.id ?? null;
   const [input, setInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
   const listRef = useRef<FlatList<Message>>(null);
 
-  const match: Match | undefined = useMemo(() => matches.find(m => m.id === chatId), [matches, chatId]);
+  const { messages, loading, error, sendMessage } = useRealtimeMessages(chatId ?? null, uid);
 
-  const [messages, setMessages] = useState<Message[]>([]);
+  const [otherName, setOtherName] = useState<string>('Chat');
+  const [otherId, setOtherId] = useState<string | null>(null);
+  const [initLoading, setInitLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    if (match?.lastMessage) {
-      setMessages([match.lastMessage]);
-    }
-  }, [match?.lastMessage]);
+    let active = true;
+    const load = async () => {
+      if (!chatId || !uid) { setInitLoading(false); return; }
+      try {
+        const { data: matchRow, error: mErr } = await supabase
+          .from('matches')
+          .select('id, user1_id, user2_id')
+          .eq('id', chatId)
+          .maybeSingle();
+        if (mErr) throw mErr;
+        if (!matchRow) throw new Error('Match not found');
+        const other = matchRow.user1_id === uid ? (matchRow.user2_id as string) : (matchRow.user1_id as string);
+        setOtherId(other);
+        const { data: prof, error: pErr } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', other)
+          .maybeSingle();
+        if (pErr) throw pErr;
+        setOtherName((prof?.name as string) ?? 'User');
+      } catch (e) {
+        console.error('[Chat] init other user error', e);
+      } finally {
+        if (active) setInitLoading(false);
+      }
+    };
+    load();
+    return () => { active = false; };
+  }, [chatId, uid]);
 
   const scrollToEnd = useCallback(() => {
     requestAnimationFrame(() => {
@@ -64,7 +93,6 @@ export default function ChatScreen() {
 
   const onSend = useCallback(async () => {
     if (!input.trim()) return;
-
     if (tier === 'free') {
       const allowed = await useDaily('messages');
       if (!allowed) {
@@ -79,29 +107,17 @@ export default function ChatScreen() {
         return;
       }
     }
-
     try {
       setSending(true);
-      const newMsg: Message = {
-        id: `${Date.now()}`,
-        senderId: 'current',
-        receiverId: match?.user.id ?? 'unknown',
-        text: input.trim(),
-        timestamp: new Date(),
-        read: false,
-      };
-      setMessages(prev => [...prev, newMsg]);
+      await sendMessage(input.trim());
       setInput('');
-      if (match?.user.id) {
-        sendPushToUser(match.user.id, { title: 'New message', body: input.trim().slice(0, 64) + (input.trim().length > 64 ? '…' : '') }).catch(() => {});
-      }
     } catch (e) {
       console.error('[Chat] send error', e);
       Alert.alert('Failed to send', 'Please try again.');
     } finally {
       setSending(false);
     }
-  }, [input, match?.user.id, router, tier, useDaily]);
+  }, [input, router, tier, useDaily, sendMessage]);
 
   const renderItem = useCallback(({ item }: { item: Message }) => {
     const isMine = item.senderId === 'current';
@@ -118,7 +134,7 @@ export default function ChatScreen() {
     );
   }, []);
 
-  if (!match) {
+  if (initLoading) {
     return (
       <SafeAreaView style={styles.container}>
         <View style={styles.loadingWrap}>
@@ -136,7 +152,7 @@ export default function ChatScreen() {
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} testID="chat-back">
             <ArrowLeft size={22} color={Colors.text.primary} />
           </TouchableOpacity>
-          <Text style={styles.title} numberOfLines={1} testID="chat-title">{match.user.name}</Text>
+          <Text style={styles.title} numberOfLines={1} testID="chat-title">{otherName}</Text>
           {tier === 'free' ? (
             <View style={styles.headerRight}>
               <Crown size={18} color={Colors.primary} />
@@ -152,14 +168,20 @@ export default function ChatScreen() {
           style={styles.flex}
           keyboardVerticalOffset={80}
         >
-          <FlatList
-            ref={listRef}
-            data={messages}
-            keyExtractor={(m) => m.id}
-            renderItem={renderItem}
-            contentContainerStyle={styles.listContent}
-            testID="chat-list"
-          />
+          {loading ? (
+            <View style={styles.loadingWrap}><ActivityIndicator color={Colors.primary} /><Text style={styles.loadingText}>Loading messages…</Text></View>
+          ) : error ? (
+            <View style={styles.errorWrap}><ShieldAlert size={28} color={Colors.error} /><Text style={styles.errorTitle}>Failed to load</Text><Text style={styles.errorText}>{error}</Text></View>
+          ) : (
+            <FlatList
+              ref={listRef}
+              data={messages}
+              keyExtractor={(m) => m.id}
+              renderItem={renderItem}
+              contentContainerStyle={styles.listContent}
+              testID="chat-list"
+            />
+          )}
 
           <View style={styles.composer}>
             <TextInput

@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { AuthUser } from '@/types';
+import { AuthUser, User } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -10,56 +10,139 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
+  reloadProfile: () => Promise<void>;
 }
 
 export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
 
   useEffect(() => {
-    loadUser();
+    let mounted = true;
+    const init = async () => {
+      try {
+        console.log('[Auth] Initializing session…');
+        const { data } = await supabase.auth.getSession();
+        if (!mounted) return;
+        const sessionUser = data.session?.user ?? null;
+        if (sessionUser) {
+          const profile = await fetchProfile(sessionUser.id);
+          const next: AuthUser = {
+            id: sessionUser.id,
+            email: sessionUser.email ?? '',
+            name: profile?.name ?? (sessionUser.user_metadata?.name as string | undefined) ?? 'User',
+            profile: profile ?? undefined,
+          };
+          setUser(next);
+        } else {
+          setUser(null);
+        }
+      } catch (e) {
+        console.error('[Auth] init error', e);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
+    init();
+
+    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
+      console.log('[Auth] onAuthStateChange', event);
+      if (!session?.user) {
+        setUser(null);
+        return;
+      }
+      const profile = await fetchProfile(session.user.id);
+      const next: AuthUser = {
+        id: session.user.id,
+        email: session.user.email ?? '',
+        name: profile?.name ?? (session.user.user_metadata?.name as string | undefined) ?? 'User',
+        profile: profile ?? undefined,
+      };
+      setUser(next);
+    });
+
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  const loadUser = async () => {
-    try {
-      const storedUser = await AsyncStorage.getItem('auth_user');
-      if (storedUser) {
-        setUser(JSON.parse(storedUser));
-      }
-    } catch (error) {
-      console.error('Error loading user:', error);
-    } finally {
-      setIsLoading(false);
+  const fetchProfile = async (uid: string): Promise<User | null> => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', uid)
+      .maybeSingle();
+    if (error) {
+      console.error('[Auth] fetchProfile error', error);
+      return null;
     }
+    if (!data) return null;
+    const u: User = {
+      id: data.id as string,
+      name: (data.name as string) ?? 'User',
+      age: (data.age as number | null) ?? 0,
+      gender: (data.gender as 'boy' | 'girl') ?? 'boy',
+      bio: (data.bio as string) ?? '',
+      photos: (data.photos as string[] | null) ?? [],
+      interests: (data.interests as string[] | null) ?? [],
+      location: { city: (data.city as string) ?? '' },
+      verified: Boolean(data.verified),
+      lastActive: data.last_active ? new Date(data.last_active as string) : undefined,
+      ownedThemes: [],
+      profileTheme: null,
+    };
+    return u;
   };
 
   const login = useCallback(async (email: string, password: string) => {
-    // Mock login - in production, this would call your backend
-    const mockUser: AuthUser = {
-      id: 'current',
-      email,
-      name: email.split('@')[0],
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw error;
+    const sessionUser = data.user;
+    const profile = await fetchProfile(sessionUser.id);
+    const next: AuthUser = {
+      id: sessionUser.id,
+      email: sessionUser.email ?? '',
+      name: profile?.name ?? (sessionUser.user_metadata?.name as string | undefined) ?? 'User',
+      profile: profile ?? undefined,
     };
-    
-    await AsyncStorage.setItem('auth_user', JSON.stringify(mockUser));
-    setUser(mockUser);
+    setUser(next);
   }, []);
 
   const signup = useCallback(async (email: string, password: string, name: string) => {
-    // Mock signup - in production, this would call your backend
-    const mockUser: AuthUser = {
-      id: 'current',
+    const { data, error } = await supabase.auth.signUp({
       email,
-      name,
+      password,
+      options: { data: { name } },
+    });
+    if (error) throw error;
+    const u = data.user;
+    if (!u) return;
+    const profile = await fetchProfile(u.id);
+    const next: AuthUser = {
+      id: u.id,
+      email: u.email ?? '',
+      name: name ?? 'User',
+      profile: profile ?? undefined,
     };
-    
-    await AsyncStorage.setItem('auth_user', JSON.stringify(mockUser));
-    setUser(mockUser);
+    setUser(next);
   }, []);
 
   const logout = useCallback(async () => {
-    await AsyncStorage.removeItem('auth_user');
+    await supabase.auth.signOut();
     setUser(null);
+  }, []);
+
+  const reloadProfile = useCallback(async () => {
+    const { data } = await supabase.auth.getUser();
+    const uid = data.user?.id;
+    if (!uid) return;
+    const profile = await fetchProfile(uid);
+    setUser(prev => {
+      if (!prev) return prev;
+      const next: AuthUser = { ...prev, profile: profile ?? undefined, name: profile?.name ?? prev.name };
+      return next;
+    });
   }, []);
 
   return useMemo(() => ({
@@ -69,5 +152,6 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     login,
     signup,
     logout,
-  }), [user, isLoading, login, signup, logout]);
+    reloadProfile,
+  }), [user, isLoading, login, signup, logout, reloadProfile]);
 });

@@ -1,27 +1,20 @@
-import React from 'react';
-import {
-  View,
-  Text,
-  StyleSheet,
-  FlatList,
-  TouchableOpacity,
-  Image,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
+import React, { useCallback, useMemo } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Alert } from 'react-native';
 import { MessageCircle, Crown, Send } from 'lucide-react-native';
 import Colors from '@/constants/colors';
-import { useApp } from '@/hooks/app-context';
 import { useMembership } from '@/hooks/membership-context';
 import { useRouter } from 'expo-router';
-import { Match } from '@/types';
+import { useAuth } from '@/hooks/auth-context';
+import { useUserMatches, MatchListItem } from '@/hooks/use-chat';
 
 export default function MessagesScreen() {
-  const { matches } = useApp();
-  const { tier, remainingDailyMessages, useDaily } = useMembership();
   const router = useRouter();
+  const { user } = useAuth();
+  const uid = user?.id ?? null;
+  const { items, loading } = useUserMatches(uid);
+  const { tier, remainingDailyMessages, useDaily } = useMembership();
 
-  const handleConversationPress = async (match: Match) => {
+  const handleConversationPress = useCallback(async (item: MatchListItem) => {
     const canMessage = await useDaily('messages');
     if (!canMessage && tier === 'free') {
       Alert.alert(
@@ -34,41 +27,44 @@ export default function MessagesScreen() {
       );
       return;
     }
+    router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId: item.id } } as any);
+  }, [router, tier, useDaily]);
 
-    router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId: match.id } } as any);
-  };
+  const getTimeSince = useCallback((date: Date) => {
+    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
+    const minutes = Math.floor(seconds / 60);
+    const hours = Math.floor(minutes / 60);
+    const days = Math.floor(hours / 24);
+    if (days > 0) return `${days}d`;
+    if (hours > 0) return `${hours}h`;
+    if (minutes > 0) return `${minutes}m`;
+    return 'now';
+  }, []);
 
-  const renderConversation = ({ item }: { item: Match }) => {
+  const data = useMemo(() => items, [items]);
+
+  const renderConversation = ({ item }: { item: MatchListItem }) => {
     const lastMessage = item.lastMessage;
     const timeSince = lastMessage ? getTimeSince(new Date(lastMessage.timestamp)) : '';
-
     return (
-      <TouchableOpacity 
-        style={styles.conversationCard}
-        onPress={() => handleConversationPress(item)}
-      >
-        <Image source={{ uri: item.user.photos[0] }} style={styles.avatar} />
-        {item.hasNewMessage && <View style={styles.unreadDot} />}
-        
+      <TouchableOpacity style={styles.conversationCard} onPress={() => handleConversationPress(item)}>
+        {item.otherUserAvatar ? (
+          <Image source={{ uri: item.otherUserAvatar }} style={styles.avatar} />
+        ) : (
+          <View style={[styles.avatar, styles.placeholderAvatar]} />
+        )}
         <View style={styles.conversationInfo}>
           <View style={styles.conversationHeader}>
-            <Text style={styles.userName}>{item.user.name}</Text>
+            <Text style={styles.userName}>{item.otherUserName}</Text>
             <Text style={styles.timestamp}>{timeSince}</Text>
           </View>
           {lastMessage && (
-            <Text
-              style={[
-                styles.lastMessage,
-                !lastMessage.read && styles.unreadMessage,
-              ]}
-              numberOfLines={1}
-            >
-              {lastMessage.senderId === 'current' ? 'You: ' : ''}
+            <Text style={[styles.lastMessage]} numberOfLines={1}>
+              {lastMessage.senderId === uid ? 'You: ' : ''}
               {lastMessage.text}
             </Text>
           )}
         </View>
-        
         <View style={styles.messageActions}>
           {tier === 'free' && remainingDailyMessages <= 3 && (
             <Crown size={16} color={Colors.primary} />
@@ -79,31 +75,6 @@ export default function MessagesScreen() {
     );
   };
 
-  const getTimeSince = (date: Date) => {
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-
-    if (days > 0) return `${days}d`;
-    if (hours > 0) return `${hours}h`;
-    if (minutes > 0) return `${minutes}m`;
-    return 'now';
-  };
-
-  const conversationsWithMessages = matches.filter(m => m.lastMessage);
-
-  const renderSeparator = (index: number) => {
-    if (tier === 'free' && index > 0 && index % 4 === 0) {
-      return (
-        <View style={styles.adBanner} testID={`ad-row-${index}`}>
-          <Text style={styles.adText}>Ad Placeholder</Text>
-        </View>
-      );
-    }
-    return <View style={styles.separator} />;
-  };
-
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -111,34 +82,28 @@ export default function MessagesScreen() {
           <Text style={styles.title}>Messages</Text>
           <MessageCircle size={24} color={Colors.primary} />
         </View>
-        
         {tier === 'free' && (
-          <TouchableOpacity 
-            style={styles.limitsBanner}
-            onPress={() => router.push('/premium' as any)}
-          >
-            <Text style={styles.limitsText}>
-              {remainingDailyMessages} messages left today
-            </Text>
+          <TouchableOpacity style={styles.limitsBanner} onPress={() => router.push('/premium' as any)}>
+            <Text style={styles.limitsText}>{remainingDailyMessages} messages left today</Text>
             <Crown size={16} color={Colors.text.white} />
           </TouchableOpacity>
         )}
       </View>
 
-      {conversationsWithMessages.length === 0 ? (
+      {loading ? (
+        <View style={styles.emptyContainer}><Text style={styles.emptySubtext}>Loading…</Text></View>
+      ) : data.length === 0 ? (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>No messages yet</Text>
-          <Text style={styles.emptySubtext}>
-            Start a conversation with your matches!
-          </Text>
+          <Text style={styles.emptySubtext}>Start a conversation with your matches!</Text>
         </View>
       ) : (
         <FlatList
-          data={conversationsWithMessages}
+          data={data}
           renderItem={renderConversation}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.list}
-          ItemSeparatorComponent={({}) => <View style={styles.separator} />}
+          ItemSeparatorComponent={() => <View style={styles.separator} />}
           ListFooterComponent={() => (tier === 'free' ? <View style={styles.footerAdWrap}><View style={styles.adBanner}><Text style={styles.adText}>Ad Placeholder</Text></View></View> : null)}
         />
       )}
@@ -199,6 +164,9 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: 28,
     marginRight: 12,
+  },
+  placeholderAvatar: {
+    backgroundColor: Colors.backgroundSecondary,
   },
   unreadDot: {
     position: 'absolute',
