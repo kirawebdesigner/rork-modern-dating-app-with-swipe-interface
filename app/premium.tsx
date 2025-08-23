@@ -101,7 +101,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
 
 export default function PremiumScreen() {
   const router = useRouter();
-  const { tier, upgradeTier, addCredits } = useMembership();
+  const { tier, upgradeTier, addCredits, resetDailyLimits, grantMonthlyAllowancesIfNeeded } = useMembership();
   const { unlockTheme, setTier: setAppTier } = useApp();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
@@ -133,13 +133,19 @@ export default function PremiumScreen() {
             onPress: async () => {
               try {
                 console.log('[Premium] Confirm upgrade to', selectedTier);
-                await upgradeMutation.mutateAsync({ tier: selectedTier });
                 await upgradeTier(selectedTier);
                 await setAppTier(selectedTier);
+                await resetDailyLimits();
+                await grantMonthlyAllowancesIfNeeded();
+                try {
+                  await upgradeMutation.mutateAsync({ tier: selectedTier });
+                } catch (err: any) {
+                  console.warn('[Premium] upgrade mutation failed, kept local tier', err?.message || err);
+                }
                 Alert.alert('Success!', `Welcome to ${tierData[selectedTier].name}! Enjoy your new features.`);
                 if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
               } catch (err: any) {
-                console.error('[Premium] upgrade mutation error', err?.message || err);
+                console.error('[Premium] upgrade flow error', err?.message || err);
                 Alert.alert('Upgrade failed', 'Please try again later.');
               }
             },
@@ -183,7 +189,7 @@ export default function PremiumScreen() {
         >
           <Crown size={60} color={Colors.text.white} />
           <Text style={styles.heroTitle}>Choose Your Plan</Text>
-          <Text style={styles.heroSubtitle}>
+          <Text style={styles.heroSubtitle} testID="current-plan">
             Current plan: {tierData[tier].name}
           </Text>
           <View style={styles.badgesRow}>
