@@ -8,6 +8,9 @@ import { AppProvider } from "@/hooks/app-context";
 import { MembershipProvider } from "@/hooks/membership-context";
 import { I18nProvider } from "@/hooks/i18n-context";
 import { trpc, trpcClient } from "@/lib/trpc";
+import { Platform } from "react-native";
+import * as Linking from "expo-linking";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 
 SplashScreen.preventAutoHideAsync();
 
@@ -34,6 +37,26 @@ function RootLayoutNav() {
 export default function RootLayout() {
   useEffect(() => {
     SplashScreen.hideAsync();
+    (async () => {
+      try {
+        const already = await AsyncStorage.getItem('referrer_code');
+        if (already) return;
+        if (Platform.OS === 'web') {
+          const params = new URLSearchParams(window.location.search);
+          const ref = params.get('ref');
+          if (ref) await AsyncStorage.setItem('referrer_code', ref);
+        } else {
+          const url = await Linking.getInitialURL();
+          if (url) {
+            const { queryParams } = Linking.parse(url);
+            const ref = (queryParams?.ref as string | undefined) ?? null;
+            if (ref) await AsyncStorage.setItem('referrer_code', ref);
+          }
+        }
+      } catch (e) {
+        console.log('[RootLayout] ref parse failed', e);
+      }
+    })();
   }, []);
 
   return (

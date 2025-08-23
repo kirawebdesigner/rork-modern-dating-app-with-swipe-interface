@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Contacts from 'expo-contacts';
@@ -27,6 +27,12 @@ export default function ContactsPermission() {
     }
   };
 
+  useEffect(() => {
+    if (granted) {
+      router.replace('/permissions/notifications' as any);
+    }
+  }, [granted]);
+
   const next = () => router.replace('/permissions/notifications' as any);
 
   return (
@@ -35,7 +41,7 @@ export default function ContactsPermission() {
         <Text style={styles.title}>Find friends from contacts</Text>
         <Text style={styles.subtitle}>Allow access to your contacts to discover friends already on the app.</Text>
 
-        <GradientButton title={granted ? 'Granted' : 'Allow contacts access'} onPress={request} loading={loading} style={styles.button} />
+        <GradientButton title={granted ? 'Granted 680' : 'Allow contacts access'} onPress={request} loading={loading} style={styles.button} />
         <TouchableOpacity onPress={next}>
           <Text style={styles.skip}>Skip</Text>
         </TouchableOpacity>

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as Notifications from 'expo-notifications';
@@ -29,6 +29,12 @@ export default function NotificationsPermission() {
   };
 
   const next = () => router.replace('/(tabs)' as any);
+
+  useEffect(() => {
+    if (granted) {
+      router.replace('/(tabs)' as any);
+    }
+  }, [granted]);
 
   return (
     <SafeAreaView style={styles.safeArea}>

@@ -23,6 +23,8 @@ export interface User {
     latitude?: number;
     longitude?: number;
   };
+  heightCm?: number;
+  education?: string;
   verified?: boolean;
   isPremium?: boolean;
   lastActive?: Date;

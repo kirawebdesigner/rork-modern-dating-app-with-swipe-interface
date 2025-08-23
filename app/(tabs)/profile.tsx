@@ -246,7 +246,7 @@ export default function ProfileScreen() {
             </View>
             <View style={styles.detailItem}>
               <GraduationCap size={16} color={Colors.text.secondary} />
-              <Text style={styles.detailText}>Education • Optional</Text>
+              <Text style={styles.detailText}>{currentProfile.education ? currentProfile.education : 'Education not set'}</Text>
             </View>
           </View>
         </View>
@@ -282,12 +282,12 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Daily Usage</Text>
+          <Text style={styles.sectionTitle}>Usage & Credits</Text>
           <View style={styles.statsContainer}>
             <View style={styles.statItem}>
               <Heart size={20} color={Colors.like} />
-              <Text style={styles.statLabel}>Likes Left</Text>
-              <Text style={styles.statValue}>{remainingDailyMessages ?? 0}</Text>
+              <Text style={styles.statLabel}>Messages</Text>
+              <Text style={styles.statValue}>{tier === 'vip' || remainingDailyMessages >= 99999 ? '∞' : remainingDailyMessages}</Text>
             </View>
             <TouchableOpacity style={styles.statItem} onPress={() => router.push('/profile-views' as any)} testID="open-profile-views">
               <Eye size={20} color={Colors.primary} />
@@ -296,8 +296,13 @@ export default function ProfileScreen() {
             </TouchableOpacity>
             <View style={styles.statItem}>
               <Coins size={20} color={Colors.gradient.start} />
-              <Text style={styles.statLabel}>Credits</Text>
-              <Text style={styles.statValue}>{totalCredits}</Text>
+              <Text style={styles.statLabel}>Boosts</Text>
+              <Text style={styles.statValue}>{credits.boosts}</Text>
+            </View>
+            <View style={styles.statItem}>
+              <Coins size={20} color={Colors.primary} />
+              <Text style={styles.statLabel}>Unlocks</Text>
+              <Text style={styles.statValue}>{credits.unlocks}</Text>
             </View>
           </View>
         </View>

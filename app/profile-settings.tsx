@@ -23,6 +23,9 @@ export default function ProfileSettings() {
   const [incognito, setIncognito] = useState<boolean>(currentProfile?.privacy?.incognito ?? false);
   const [name, setName] = useState<string>(currentProfile?.name ?? '');
   const [age, setAge] = useState<string>(currentProfile?.age ? String(currentProfile.age) : '');
+  const [city, setCity] = useState<string>(currentProfile?.location?.city ?? '');
+  const [heightCm, setHeightCm] = useState<string>(currentProfile?.heightCm ? String(currentProfile.heightCm) : '');
+  const [education, setEducation] = useState<string>(currentProfile?.education ?? '');
   const ownedThemes = (currentProfile?.ownedThemes ?? []) as ThemeId[];
   const selectedTheme = (currentProfile?.profileTheme ?? null) as ThemeId | null;
 
@@ -190,6 +193,32 @@ export default function ProfileSettings() {
               placeholderTextColor={Colors.text.secondary}
             />
           </View>
+          <View style={[styles.rowInputs, { marginTop: 12 }]}> 
+            <TextInput
+              style={styles.textInput}
+              value={city}
+              onChangeText={setCity}
+              placeholder="City, Country"
+              placeholderTextColor={Colors.text.secondary}
+            />
+            <TextInput
+              style={styles.textInput}
+              value={heightCm}
+              onChangeText={(t) => setHeightCm(t.replace(/[^0-9]/g, ''))}
+              inputMode="numeric"
+              placeholder="Height (cm)"
+              placeholderTextColor={Colors.text.secondary}
+            />
+          </View>
+          <View style={{ marginTop: 12 }}>
+            <TextInput
+              style={styles.textInput}
+              value={education}
+              onChangeText={setEducation}
+              placeholder="Education (e.g., Bachelor in CS)"
+              placeholderTextColor={Colors.text.secondary}
+            />
+          </View>
         </View>
 
         <View style={styles.section}>
@@ -333,7 +362,7 @@ export default function ProfileSettings() {
         <GradientButton
           title="Save Changes"
           onPress={async () => {
-            await updateProfile({ name, age: Number(age) || currentProfile.age, photos, bio, interests, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito } });
+            await updateProfile({ name, age: Number(age) || currentProfile.age, photos, bio, interests, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
             await setFilters({ ...filters, distanceKm: radius });
             Alert.alert('Success', 'Profile updated successfully!');
             if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }

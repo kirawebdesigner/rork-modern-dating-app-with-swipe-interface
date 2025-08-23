@@ -16,6 +16,9 @@ interface FiltersState {
   latitude?: number;
   longitude?: number;
   showVerifiedOnly?: boolean;
+  education?: string;
+  heightRange?: string;
+  specificLocation?: string;
 }
 
 interface AppContextType {
@@ -139,6 +142,17 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (u.age < f.ageMin || u.age > f.ageMax) return false;
       if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
       if (f.showVerifiedOnly && !u.verified) return false;
+      if (f.education && !(u.education ?? '').toLowerCase().includes(f.education.toLowerCase())) return false;
+      if (f.heightRange) {
+        const m = f.heightRange.match(/(\d+)\s*-\s*(\d+)/);
+        if (m) {
+          const min = parseInt(m[1], 10);
+          const max = parseInt(m[2], 10);
+          const h = u.heightCm ?? 0;
+          if (h && (h < min || h > max)) return false;
+        }
+      }
+      if (f.specificLocation && !(u.location.city ?? '').toLowerCase().includes(f.specificLocation.toLowerCase())) return false;
       return true;
     });
   };

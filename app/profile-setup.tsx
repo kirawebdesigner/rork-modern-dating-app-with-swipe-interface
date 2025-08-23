@@ -9,7 +9,7 @@ import { categorizedInterests } from '@/mocks/interests';
 import { useApp } from '@/hooks/app-context';
 import { User } from '@/types';
 
-type ProfileStep = 'details' | 'gender' | 'interests';
+type ProfileStep = 'details' | 'gender' | 'extras' | 'interests';
 
 interface ProfileData {
   firstName: string;
@@ -18,6 +18,9 @@ interface ProfileData {
   gender: 'girl' | 'boy' | null;
   interests: string[];
   photoUri?: string | null;
+  city?: string;
+  heightCm?: string;
+  education?: string;
 }
 
 export default function ProfileSetup() {
@@ -48,7 +51,7 @@ export default function ProfileSetup() {
       }
     } else if (currentStep === 'gender') {
       setCurrentStep('details');
-    } else if (currentStep === 'interests') {
+    } else if (currentStep === 'extras') {
       setCurrentStep('gender');
     }
   };
@@ -73,8 +76,12 @@ export default function ProfileSetup() {
         Alert.alert('Error', 'Please select your gender');
         return;
       }
-      setCurrentStep('interests');
-    } else if (currentStep === 'interests') {
+      setCurrentStep('extras');
+    } else if (currentStep === 'extras') {
+      if (!profileData.city || !profileData.heightCm || !profileData.education) {
+        Alert.alert('Missing info', 'Please enter location, height, and education');
+        return;
+      }
       try {
         const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
         const birthday = profileData.birthday ?? new Date(1995, 0, 1);
@@ -88,7 +95,9 @@ export default function ProfileSetup() {
           bio: 'Hey there! I am new here.',
           photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
           interests: profileData.interests,
-          location: { city: 'Chicago, USA', distance: 1 },
+          location: { city: profileData.city || '', distance: 1 },
+          heightCm: Number(profileData.heightCm) || undefined,
+          education: profileData.education || undefined,
           verified: false,
           isPremium: false,
           lastActive: new Date(),
@@ -248,6 +257,49 @@ export default function ProfileSetup() {
     </TouchableOpacity>
   );
 
+  const renderExtras = () => (
+    <View style={styles.container}>
+      {renderHeader()}
+      <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
+        <Text style={styles.title}>More about you</Text>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Location</Text>
+          <TextInput
+            style={styles.textInput}
+            value={profileData.city ?? ''}
+            onChangeText={(text) => setProfileData(prev => ({ ...prev, city: text }))}
+            placeholder="City, Country"
+            placeholderTextColor={colors.text.light}
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Height (cm)</Text>
+          <TextInput
+            style={styles.textInput}
+            value={profileData.heightCm ?? ''}
+            onChangeText={(text) => setProfileData(prev => ({ ...prev, heightCm: text.replace(/[^0-9]/g,'') }))}
+            placeholder="e.g., 175"
+            placeholderTextColor={colors.text.light}
+            inputMode="numeric"
+          />
+        </View>
+        <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>Education</Text>
+          <TextInput
+            style={styles.textInput}
+            value={profileData.education ?? ''}
+            onChangeText={(text) => setProfileData(prev => ({ ...prev, education: text }))}
+            placeholder="e.g., Bachelor in CS"
+            placeholderTextColor={colors.text.light}
+          />
+        </View>
+      </ScrollView>
+      <View style={styles.bottomContainer}>
+        <GradientButton title="Continue" onPress={() => setCurrentStep('interests')} style={styles.confirmButton} />
+      </View>
+    </View>
+  );
+
   const renderInterestSelection = () => (
     <View style={styles.container}>
       {renderHeader()}
@@ -398,6 +450,7 @@ export default function ProfileSetup() {
     <SafeAreaView style={styles.safeArea}>
       {currentStep === 'details' && renderProfileDetails()}
       {currentStep === 'gender' && renderGenderSelection()}
+      {currentStep === 'extras' && renderExtras()}
       {currentStep === 'interests' && renderInterestSelection()}
       {renderDatePickerModal()}
     </SafeAreaView>
