@@ -102,7 +102,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
 export default function PremiumScreen() {
   const router = useRouter();
   const { tier, upgradeTier, addCredits } = useMembership();
-  const { unlockTheme } = useApp();
+  const { unlockTheme, setTier: setAppTier } = useApp();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
@@ -135,6 +135,7 @@ export default function PremiumScreen() {
                 console.log('[Premium] Confirm upgrade to', selectedTier);
                 await upgradeMutation.mutateAsync({ tier: selectedTier });
                 await upgradeTier(selectedTier);
+                await setAppTier(selectedTier);
                 Alert.alert('Success!', `Welcome to ${tierData[selectedTier].name}! Enjoy your new features.`);
                 if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
               } catch (err: any) {
