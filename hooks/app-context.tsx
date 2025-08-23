@@ -2,9 +2,8 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { User, Match, SwipeAction, MembershipTier, ThemeId } from '@/types';
-import { mockUsers } from '@/mocks/users';
-import { mockMatches } from '@/mocks/matches';
 import { sendPushToUser } from '@/lib/notifications';
+import { supabase } from '@/lib/supabase';
 
 type InterestedIn = 'girl' | 'boy';
 
@@ -42,7 +41,7 @@ interface AppContextType {
 export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   const [currentProfile, setCurrentProfileState] = useState<User | null>(null);
   const [potentialMatches, setPotentialMatches] = useState<User[]>([]);
-  const [matches, setMatches] = useState<Match[]>(mockMatches);
+  const [matches, setMatches] = useState<Match[]>([]);
   const [swipeHistory, setSwipeHistory] = useState<SwipeAction[]>([]);
   const [tier, setTierState] = useState<MembershipTier>('free');
   const [credits, setCredits] = useState<number>(0);
@@ -90,7 +89,40 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (history) setSwipeHistory(JSON.parse(history));
       if (storedFilters) setFiltersState(JSON.parse(storedFilters));
       if (storedBlocked) setBlockedIds(JSON.parse(storedBlocked));
-      setPotentialMatches(applyFilters(mockUsers, filters, [], JSON.parse(storedBlocked ?? '[]')));
+
+      const { data: profiles, error } = await supabase
+        .from('profiles')
+        .select('id,name,age,gender,bio,photos,interests,city,verified,last_active,profile_theme,owned_themes')
+        .limit(100);
+      if (error) {
+        console.log('[App] load profiles error', error.message);
+        setPotentialMatches([]);
+      } else {
+        const mapped: User[] = (profiles as any[]).map((row) => ({
+          id: String(row.id),
+          name: String(row.name ?? 'User'),
+          age: Number(row.age ?? 0),
+          gender: (row.gender as 'boy' | 'girl') ?? 'boy',
+          bio: String(row.bio ?? ''),
+          photos: Array.isArray(row.photos) ? (row.photos as string[]) : [],
+          interests: Array.isArray(row.interests) ? (row.interests as string[]) : [],
+          location: { city: String(row.city ?? '') },
+          verified: Boolean(row.verified),
+          lastActive: row.last_active ? new Date(String(row.last_active)) : undefined,
+          ownedThemes: Array.isArray(row.owned_themes) ? (row.owned_themes as ThemeId[]) : [],
+          profileTheme: (row.profile_theme as ThemeId | null) ?? null,
+        } as User));
+        const filtered = applyFilters(mapped, filters, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'));
+        setPotentialMatches(filtered);
+      }
+
+      const { data: matchesRows } = await supabase
+        .from('matches')
+        .select('id, user1_id, user2_id, matched_at');
+      if (matchesRows) {
+        const m: Match[] = (matchesRows as any[]).map((r) => ({ id: String(r.id), user: { id: '', name: '', age: 0, gender: 'boy', bio: '', photos: [], interests: [], location: { city: '' } }, matchedAt: new Date(String(r.matched_at)) } as Match));
+        setMatches(m);
+      }
     } catch (error) {
       console.error('Error loading app data:', error);
     }
@@ -112,8 +144,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   };
 
   const refilterPotential = () => {
-    const filtered = applyFilters(mockUsers, filters, swipeHistory, blockedIds);
-    setPotentialMatches(filtered);
+    setPotentialMatches(prev => applyFilters(prev, filters, swipeHistory, blockedIds));
   };
 
   const setCurrentProfile = useCallback(async (profile: User) => {
@@ -124,6 +155,26 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     } as User;
     await AsyncStorage.setItem('user_profile', JSON.stringify(normalized));
     setCurrentProfileState(normalized);
+    try {
+      const payload = {
+        id: normalized.id,
+        name: normalized.name,
+        age: normalized.age,
+        gender: normalized.gender,
+        bio: normalized.bio,
+        photos: normalized.photos,
+        interests: normalized.interests,
+        city: normalized.location.city,
+        verified: normalized.verified ?? false,
+        last_active: new Date().toISOString(),
+        profile_theme: normalized.profileTheme ?? null,
+        owned_themes: normalized.ownedThemes ?? [],
+      } as const;
+      const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+      if (error) console.log('[App] profile upsert error', error.message);
+    } catch (e) {
+      console.log('[App] profile sync error', e);
+    }
   }, []);
 
   const updateProfile = useCallback(async (patch: Partial<User>) => {
@@ -138,6 +189,28 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         profileTheme: (hasProfileTheme ? (patch.profileTheme as ThemeId | null | undefined) : base.profileTheme) ?? null,
       } as User;
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
+      (async () => {
+        try {
+          const payload = {
+            id: next.id,
+            name: next.name,
+            age: next.age,
+            gender: next.gender,
+            bio: next.bio,
+            photos: next.photos,
+            interests: next.interests,
+            city: next.location.city,
+            verified: next.verified ?? false,
+            last_active: new Date().toISOString(),
+            profile_theme: next.profileTheme ?? null,
+            owned_themes: next.ownedThemes ?? [],
+          } as const;
+          const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+          if (error) console.log('[App] profile update error', error.message);
+        } catch (e) {
+          console.log('[App] profile update sync failed', e);
+        }
+      })();
       return next;
     });
   }, []);
@@ -170,28 +243,31 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     setPotentialMatches(prev => prev.filter(u => u.id !== userId));
 
     if (action === 'like' || action === 'superlike') {
-      // Notify the other user about a new like
       sendPushToUser(userId, {
         title: 'New like',
         body: 'Someone liked your profile. Open the app to check!',
       }).catch(e => console.log('[Push] like notify failed', e));
-
-      if (Math.random() > 0.5) {
-        const user = mockUsers.find(u => u.id === userId);
-        if (user) {
-          const newMatch: Match = {
-            id: `m${Date.now()}`,
-            user,
-            matchedAt: new Date(),
-            hasNewMessage: false,
-          };
-          setMatches(prev => [newMatch, ...prev]);
-          // Notify both users about a new match
-          sendPushToUser(userId, { title: 'It’s a match!', body: `You matched with ${user.name}! 🎉` }).catch(() => {});
+      (async () => {
+        try {
+          const { data: u } = await supabase.auth.getUser();
+          const myId = u?.user?.id ?? (currentProfile?.id ?? null);
+          if (!myId) return;
+          await supabase.from('likes').insert({ liker_id: myId, liked_id: userId, type: action });
+          const { data: reciprocal } = await supabase
+            .from('likes')
+            .select('id')
+            .eq('liker_id', userId)
+            .eq('liked_id', myId)
+            .maybeSingle();
+          if (reciprocal) {
+            await supabase.from('matches').insert({ user1_id: myId, user2_id: userId, matched_at: new Date().toISOString() });
+          }
+        } catch (e) {
+          console.log('[App] swipe sync failed', e);
         }
-      }
+      })();
     }
-  }, [swipeHistory]);
+  }, [swipeHistory, currentProfile?.id]);
 
   const setTier = useCallback(async (next: MembershipTier) => {
     await AsyncStorage.setItem('tier', JSON.stringify(next));
@@ -212,6 +288,11 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       owned.add(theme);
       const next: User = { ...(prev as User), ownedThemes: Array.from(owned) } as User;
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
+      (async () => {
+        try {
+          await supabase.from('profiles').update({ owned_themes: Array.from(owned) }).eq('id', (prev as User).id);
+        } catch {}
+      })();
       return next;
     });
   }, []);
@@ -220,6 +301,11 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     setCurrentProfileState(prev => {
       const next: User = { ...(prev as User), profileTheme: theme } as User;
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
+      (async () => {
+        try {
+          await supabase.from('profiles').update({ profile_theme: theme }).eq('id', (prev as User).id);
+        } catch {}
+      })();
       return next;
     });
   }, []);

@@ -120,7 +120,7 @@ export default function ChatScreen() {
   }, [input, router, tier, useDaily, sendMessage]);
 
   const renderItem = useCallback(({ item }: { item: Message }) => {
-    const isMine = item.senderId === 'current';
+    const isMine = uid != null && item.senderId === uid;
     return (
       <View
         style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
@@ -132,7 +132,7 @@ export default function ChatScreen() {
         </Text>
       </View>
     );
-  }, []);
+  }, [uid]);
 
   if (initLoading) {
     return (
