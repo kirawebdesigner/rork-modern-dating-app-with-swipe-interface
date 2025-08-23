@@ -284,21 +284,59 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
   const unlockTheme = useCallback(async (theme: ThemeId) => {
     setCurrentProfileState(prev => {
-      const owned = new Set([...(prev?.ownedThemes ?? [])]);
-      owned.add(theme);
-      const next: User = { ...(prev as User), ownedThemes: Array.from(owned) } as User;
-      AsyncStorage.setItem('user_profile', JSON.stringify(next));
-      (async () => {
-        try {
-          await supabase.from('profiles').update({ owned_themes: Array.from(owned) }).eq('id', (prev as User).id);
-        } catch {}
-      })();
-      return next;
+      try {
+        const owned = new Set([...(prev?.ownedThemes ?? [])]);
+        owned.add(theme);
+        let base: User;
+        if (!prev) {
+          const fallbackId = Math.random().toString(36).slice(2);
+          base = {
+            id: fallbackId,
+            name: 'Me',
+            age: 18,
+            gender: 'boy',
+            bio: '',
+            photos: [],
+            interests: [],
+            location: { city: '' },
+            verified: false,
+            ownedThemes: [],
+            profileTheme: null,
+          } as User;
+        } else {
+          base = prev as User;
+        }
+        const next: User = { ...base, ownedThemes: Array.from(owned) } as User;
+        AsyncStorage.setItem('user_profile', JSON.stringify(next));
+        (async () => {
+          try {
+            await supabase.from('profiles').upsert({
+              id: next.id,
+              name: next.name,
+              age: next.age,
+              gender: next.gender,
+              bio: next.bio,
+              photos: next.photos,
+              interests: next.interests,
+              city: next.location.city,
+              verified: next.verified ?? false,
+              last_active: new Date().toISOString(),
+              profile_theme: next.profileTheme ?? null,
+              owned_themes: next.ownedThemes ?? [],
+            }, { onConflict: 'id' });
+          } catch {}
+        })();
+        return next;
+      } catch (e) {
+        console.log('[App] unlockTheme failed', e);
+        return prev ?? null;
+      }
     });
   }, []);
 
   const setProfileThemeFn = useCallback(async (theme: ThemeId | null) => {
     setCurrentProfileState(prev => {
+      if (!prev) return prev as any;
       const next: User = { ...(prev as User), profileTheme: theme } as User;
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
       (async () => {
