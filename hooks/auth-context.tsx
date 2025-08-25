@@ -145,7 +145,33 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   }, []);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch (e) {
+      console.log('[Auth] signOut error, continuing', e);
+    }
+    try {
+      const keys = [
+        'user_profile',
+        'tier',
+        'credits',
+        'swipe_history',
+        'filters_state',
+        'blocked_ids',
+        'membership_tier',
+        'membership_credits',
+        'remaining_daily_messages',
+        'remaining_profile_views',
+        'remaining_right_swipes',
+        'remaining_compliments',
+        'last_reset',
+        'monthly_allowances',
+        'last_allowance_grant',
+      ];
+      await AsyncStorage.multiRemove(keys);
+    } catch (e) {
+      console.log('[Auth] clear storage failed', e);
+    }
     setUser(null);
   }, []);
 
