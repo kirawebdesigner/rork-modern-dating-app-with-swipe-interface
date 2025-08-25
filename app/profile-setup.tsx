@@ -8,6 +8,7 @@ import GradientButton from '@/components/GradientButton';
 import { categorizedInterests } from '@/mocks/interests';
 import { useApp } from '@/hooks/app-context';
 import { User } from '@/types';
+import { supabase } from '@/lib/supabase';
 
 type ProfileStep = 'details' | 'gender' | 'extras' | 'interests';
 
@@ -78,16 +79,14 @@ export default function ProfileSetup() {
       }
       setCurrentStep('extras');
     } else if (currentStep === 'extras') {
-      if (!profileData.city || !profileData.heightCm || !profileData.education) {
-        Alert.alert('Missing info', 'Please enter location, height, and education');
-        return;
-      }
       try {
+        const { data: authData } = await supabase.auth.getUser();
+        const authId = authData?.user?.id ?? null;
         const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
         const birthday = profileData.birthday ?? new Date(1995, 0, 1);
         const age = calculateAge(birthday);
         const user: User = {
-          id: 'current',
+          id: String(authId ?? Math.random().toString(36).slice(2)),
           name: name || 'New User',
           age,
           birthday,
@@ -95,17 +94,46 @@ export default function ProfileSetup() {
           bio: 'Hey there! I am new here.',
           photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
           interests: profileData.interests,
-          location: { city: profileData.city || '', distance: 1 },
-          heightCm: Number(profileData.heightCm) || undefined,
-          education: profileData.education || undefined,
+          location: { city: profileData.city ?? '' },
+          heightCm: profileData.heightCm ? Number(profileData.heightCm) : undefined,
+          education: profileData.education ?? undefined,
           verified: false,
           isPremium: false,
           lastActive: new Date(),
-        };
+        } as User;
         await setCurrentProfile(user);
-        console.log('[ProfileSetup] Saved profile to storage and context');
+        console.log('[ProfileSetup] Saved partial profile (extras)');
       } catch (e) {
         console.log('[ProfileSetup] Save profile error', e);
+      }
+      setCurrentStep('interests');
+    } else if (currentStep === 'interests') {
+      try {
+        const { data: authData } = await supabase.auth.getUser();
+        const authId = authData?.user?.id ?? null;
+        const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
+        const birthday = profileData.birthday ?? new Date(1995, 0, 1);
+        const age = calculateAge(birthday);
+        const user: User = {
+          id: String(authId ?? Math.random().toString(36).slice(2)),
+          name: name || 'New User',
+          age,
+          birthday,
+          gender: (profileData.gender ?? 'girl'),
+          bio: 'Hey there! I am new here.',
+          photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+          interests: profileData.interests,
+          location: { city: profileData.city ?? '' },
+          heightCm: profileData.heightCm ? Number(profileData.heightCm) : undefined,
+          education: profileData.education ?? undefined,
+          verified: false,
+          isPremium: false,
+          lastActive: new Date(),
+        } as User;
+        await setCurrentProfile(user);
+        console.log('[ProfileSetup] Saved profile on interests');
+      } catch (e) {
+        console.log('[ProfileSetup] Final save error', e);
       }
       router.replace('/permissions/contacts' as any);
     }
@@ -295,7 +323,7 @@ export default function ProfileSetup() {
         </View>
       </ScrollView>
       <View style={styles.bottomContainer}>
-        <GradientButton title="Continue" onPress={() => setCurrentStep('interests')} style={styles.confirmButton} />
+        <GradientButton title="Continue" onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
   );
