@@ -238,7 +238,7 @@ export default function DiscoverScreen() {
           <Text style={styles.emptyText}>No more profiles!</Text>
           <Text style={styles.emptySubtext}>Check back later for more matches</Text>
           <TouchableOpacity style={[styles.beSeenButton, { marginTop: 12 }]} onPress={() => router.push('/premium' as any)} testID="empty-upgrade">
-            <Rocket size={16} color={Colors.text.white} />
+            <Rocket size={16} color={colors.text.white} />
             <Text style={styles.beSeenText}>Boost visibility</Text>
           </TouchableOpacity>
         </View>
@@ -288,7 +288,7 @@ export default function DiscoverScreen() {
                 onPress={onRewind}
                 testID="rewind-btn"
               >
-                <Undo2 size={26} color={Colors.nope} />
+                <Undo2 size={26} color={colors.nope} />
               </TouchableOpacity>
             )}
 
