@@ -7,6 +7,7 @@ import { AuthProvider } from "@/hooks/auth-context";
 import { AppProvider } from "@/hooks/app-context";
 import { MembershipProvider } from "@/hooks/membership-context";
 import { I18nProvider } from "@/hooks/i18n-context";
+import { ThemeProvider } from "@/hooks/theme-context";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
@@ -67,7 +68,9 @@ export default function RootLayout() {
             <AppProvider>
               <MembershipProvider>
                 <I18nProvider>
-                  <RootLayoutNav />
+                  <ThemeProvider>
+                    <RootLayoutNav />
+                  </ThemeProvider>
                 </I18nProvider>
               </MembershipProvider>
             </AppProvider>

@@ -11,7 +11,8 @@ import {
   Alert,
 } from 'react-native';
 import { X, Heart, Star, MapPin, Filter, Rocket, Undo2 } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import ColorsConst from '@/constants/colors';
+import { useTheme } from '@/hooks/theme-context';
 import SwipeCard from '@/components/SwipeCard';
 import { useApp } from '@/hooks/app-context';
 import { useMembership } from '@/hooks/membership-context';
@@ -22,6 +23,7 @@ const SWIPE_THRESHOLD = screenWidth * 0.25;
 
 export default function DiscoverScreen() {
   const { potentialMatches, swipeUser, filters } = useApp();
+  const { colors } = useTheme();
   const { tier, features, remainingProfileViews, useDaily, remainingRightSwipes, useSuperLike } = useMembership();
   const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState<number>(0);
@@ -195,39 +197,39 @@ export default function DiscoverScreen() {
         <View style={styles.titleWrap}>
           <Text style={styles.title} testID="discover-title">Discover</Text>
           <View style={styles.locationRow}>
-            <MapPin size={16} color={Colors.text.secondary} />
+            <MapPin size={16} color={colors.text.secondary} testID="icon-location" />
             <Text style={styles.subtitle} numberOfLines={1} testID="discover-location">{filters.locationLabel}</Text>
           </View>
         </View>
         <View style={styles.headerRight}>
           <TouchableOpacity 
-            style={styles.beSeenButton}
+            style={[styles.beSeenButton, { backgroundColor: colors.primary }]}
             onPress={() => router.push('/credits' as any)}
             testID="be-seen"
           >
-            <Rocket size={16} color={Colors.text.white} />
-            <Text style={styles.beSeenText}>Be seen</Text>
+            <Rocket size={16} color={colors.text.white} testID="icon-boost" />
+            <Text style={[styles.beSeenText, { color: colors.text.white }]}>Be seen</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.filterButton}
             onPress={() => router.push('/discovery-filters' as any)}
             testID="open-filters"
           >
-            <Filter size={20} color={Colors.primary} />
+            <Filter size={20} color={colors.primary} testID="icon-filter" />
           </TouchableOpacity>
         </View>
       </View>
 
       {isFree && (
         <TouchableOpacity 
-          style={styles.limitsBanner}
+          style={[styles.limitsBanner, { backgroundColor: colors.gradient.start }]}
           onPress={() => router.push('/premium' as any)}
           testID="limits-banner"
         >
-          <Text style={styles.limitsText}>
+          <Text style={[styles.limitsText, { color: colors.text.white }]}>
             Free plan: swipes left today {typeof remainingRightSwipes === 'number' ? remainingRightSwipes : '∞'} • views {viewsLeftText}
           </Text>
-          <Text style={styles.upgradePrompt}>Tap to upgrade</Text>
+          <Text style={[styles.upgradePrompt, { color: colors.text.white }]}>Tap to upgrade</Text>
         </TouchableOpacity>
       )}
 
@@ -242,7 +244,7 @@ export default function DiscoverScreen() {
         </View>
       ) : (
         <>
-          <View style={styles.cardsContainer}>
+          <View style={styles.cardsContainer} testID="cards-container" accessibilityLabel="Cards">
             {nextUser && (
               <Animated.View
                 style={[
@@ -270,11 +272,11 @@ export default function DiscoverScreen() {
               <SwipeCard user={currentUser} onPress={() => router.push(`/(tabs)/profile-details/${currentUser.id}` as any)} />
 
               <Animated.View style={[styles.likeLabel, { opacity: likeOpacity }]}>
-                <Text style={styles.likeLabelText}>LIKE</Text>
+                <Text style={[styles.likeLabelText, { borderColor: colors.like, color: colors.like }]}>LIKE</Text>
               </Animated.View>
 
               <Animated.View style={[styles.nopeLabel, { opacity: nopeOpacity }]}>
-                <Text style={styles.nopeLabelText}>NOPE</Text>
+                <Text style={[styles.nopeLabelText, { borderColor: colors.nope, color: colors.nope }]}>NOPE</Text>
               </Animated.View>
             </Animated.View>
           </View>
@@ -291,32 +293,32 @@ export default function DiscoverScreen() {
             )}
 
             <TouchableOpacity
-              style={[styles.actionButton, styles.nopeButton]}
+              style={[styles.actionButton, { borderWidth: 2, borderColor: colors.nope, backgroundColor: colors.background }]}
               onPress={() => handleActionButton('nope')}
             >
-              <X size={30} color={Colors.nope} />
+              <X size={30} color={colors.nope} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionButton, styles.superLikeButton]}
+              style={[styles.actionButton, { borderWidth: 2, borderColor: colors.superLike, backgroundColor: colors.background }]}
               onPress={() => handleActionButton('superlike')}
             >
-              <Star size={26} color={Colors.superLike} fill={Colors.superLike} />
+              <Star size={26} color={colors.superLike} fill={colors.superLike} />
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={[styles.actionButton, styles.likeButton]}
+              style={[styles.actionButton, { borderWidth: 2, borderColor: colors.like, backgroundColor: colors.background }]}
               onPress={() => handleActionButton('like')}
             >
-              <Heart size={30} color={Colors.like} fill={Colors.like} />
+              <Heart size={30} color={colors.like} fill={colors.like} />
             </TouchableOpacity>
           </View>
         </>
       )}
 
       {isFree && (
-        <View style={styles.adBanner} testID="ad-banner-bottom">
-          <Text style={styles.adText}>Ad Placeholder</Text>
+        <View style={[styles.adBanner, { borderColor: colors.border, backgroundColor: '#E9ECF2' }]} testID="ad-banner-bottom">
+          <Text style={[styles.adText, { color: colors.text.secondary }]}>Ad Placeholder</Text>
         </View>
       )}
     </SafeAreaView>
@@ -326,7 +328,7 @@ export default function DiscoverScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: ColorsConst.background,
   },
   header: {
     flexDirection: 'row',
@@ -334,7 +336,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingVertical: 16,
-    backgroundColor: Colors.background,
+    backgroundColor: 'transparent',
     zIndex: 10,
     elevation: 10,
     shadowColor: '#000',
@@ -346,15 +348,15 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: Colors.background,
+    backgroundColor: ColorsConst.background,
     justifyContent: 'center',
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
+    borderColor: ColorsConst.border,
   },
   titleWrap: { flexDirection: 'column', flex: 1 },
   locationRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 2 },
-  subtitle: { fontSize: 13, color: Colors.text.secondary, maxWidth: 200 },
+  subtitle: { fontSize: 13, color: ColorsConst.text.secondary, maxWidth: 200 },
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -362,7 +364,6 @@ const styles = StyleSheet.create({
     zIndex: 11,
   },
   beSeenButton: {
-    backgroundColor: Colors.primary,
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 18,
@@ -371,12 +372,10 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   beSeenText: {
-    color: Colors.text.white,
     fontSize: 12,
     fontWeight: '700',
   },
   limitsBanner: {
-    backgroundColor: Colors.gradient.start,
     marginHorizontal: 20,
     marginBottom: 16,
     padding: 12,
@@ -387,12 +386,10 @@ const styles = StyleSheet.create({
     elevation: 4,
   },
   limitsText: {
-    color: Colors.text.white,
     fontSize: 14,
     fontWeight: '600',
   },
   upgradePrompt: {
-    color: Colors.text.white,
     fontSize: 12,
     opacity: 0.8,
     marginTop: 2,
@@ -400,7 +397,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: 'bold',
-    color: Colors.text.primary,
+    color: ColorsConst.text.primary,
   },
   cardsContainer: {
     flex: 1,
@@ -420,8 +417,6 @@ const styles = StyleSheet.create({
   },
   likeLabelText: {
     borderWidth: 4,
-    borderColor: Colors.like,
-    color: Colors.like,
     fontSize: 32,
     fontWeight: '800',
     padding: 10,
@@ -435,8 +430,6 @@ const styles = StyleSheet.create({
   },
   nopeLabelText: {
     borderWidth: 4,
-    borderColor: Colors.nope,
-    color: Colors.nope,
     fontSize: 32,
     fontWeight: '800',
     padding: 10,
@@ -453,7 +446,6 @@ const styles = StyleSheet.create({
     width: 60,
     height: 60,
     borderRadius: 30,
-    backgroundColor: Colors.background,
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -464,15 +456,15 @@ const styles = StyleSheet.create({
   },
   nopeButton: {
     borderWidth: 2,
-    borderColor: Colors.nope,
+    borderColor: ColorsConst.nope,
   },
   superLikeButton: {
     borderWidth: 2,
-    borderColor: Colors.superLike,
+    borderColor: ColorsConst.superLike,
   },
   likeButton: {
     borderWidth: 2,
-    borderColor: Colors.like,
+    borderColor: ColorsConst.like,
   },
   emptyContainer: {
     flex: 1,
@@ -483,12 +475,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 24,
     fontWeight: 'bold',
-    color: Colors.text.primary,
+    color: ColorsConst.text.primary,
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 16,
-    color: Colors.text.secondary,
+    color: ColorsConst.text.secondary,
     textAlign: 'center',
   },
   adBanner: {
@@ -496,11 +488,9 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     height: 52,
     borderRadius: 12,
-    backgroundColor: '#E9ECF2',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 1,
-    borderColor: Colors.border,
   },
-  adText: { color: Colors.text.secondary, fontWeight: '600' },
+  adText: { fontWeight: '600' },
 });
