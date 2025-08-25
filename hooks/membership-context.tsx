@@ -243,10 +243,13 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   }, []);
 
   const useCredit = useCallback(async (type: keyof UserCredits): Promise<boolean> => {
+    if (tier === 'vip' && (type === 'boosts' || type === 'unlocks')) {
+      return true;
+    }
     if (credits[type] <= 0) return false;
     setCredits(prev => ({ ...prev, [type]: prev[type] - 1 }));
     return true;
-  }, [credits]);
+  }, [credits, tier]);
 
   const useDaily = useCallback(async (type: 'messages' | 'views' | 'rightSwipes' | 'compliments'): Promise<boolean> => {
     const f = TIER_FEATURES[tier];
@@ -312,6 +315,9 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   }, [tier, credits, allowances, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, lastAllowanceGrantISO, syncToStorage, syncToServer]);
 
   const useBoost = useCallback(async (): Promise<boolean> => {
+    if (tier === 'vip') {
+      return true;
+    }
     if (allowances.monthlyBoosts > 0) {
       setAllowances(prev => ({ ...prev, monthlyBoosts: prev.monthlyBoosts - 1 }));
       return true;
@@ -321,7 +327,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       return true;
     }
     return false;
-  }, [allowances.monthlyBoosts, credits.boosts]);
+  }, [tier, allowances.monthlyBoosts, credits.boosts]);
 
   const useSuperLike = useCallback(async (): Promise<boolean> => {
     if (allowances.monthlySuperLikes > 0) {

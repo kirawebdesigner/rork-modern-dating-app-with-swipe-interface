@@ -297,12 +297,12 @@ export default function ProfileScreen() {
             <View style={styles.statItem}>
               <Coins size={20} color={Colors.gradient.start} />
               <Text style={styles.statLabel}>Boosts</Text>
-              <Text style={styles.statValue}>{credits.boosts}</Text>
+              <Text style={styles.statValue}>{tier === 'vip' ? '\u221e' : credits.boosts}</Text>
             </View>
             <View style={styles.statItem}>
               <Coins size={20} color={Colors.primary} />
               <Text style={styles.statLabel}>Unlocks</Text>
-              <Text style={styles.statValue}>{credits.unlocks}</Text>
+              <Text style={styles.statValue}>{tier === 'vip' ? '\u221e' : credits.unlocks}</Text>
             </View>
           </View>
         </View>
