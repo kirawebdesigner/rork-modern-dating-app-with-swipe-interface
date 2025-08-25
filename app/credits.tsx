@@ -110,12 +110,14 @@ export default function Credits() {
           </View>
         </View>
 
-        <View style={styles.limitBanner} testID="tier-limits">
-          <Info size={16} color={Colors.text.white} />
-          <Text style={styles.limitText}>
-            Plan: {tier.toUpperCase()} • Messages {tierLimits.msg} • Swipes {tierLimits.swipes} • Views {tierLimits.views}
-          </Text>
-        </View>
+        {(tier === 'gold' || tier === 'silver') && (
+          <View style={styles.limitBanner} testID="tier-limits">
+            <Info size={16} color={Colors.text.white} />
+            <Text style={styles.limitText}>
+              Plan: {tier.toUpperCase()} • Messages {tierLimits.msg} • Swipes {tierLimits.swipes} • Views {tierLimits.views}
+            </Text>
+          </View>
+        )}
 
         {tier === 'free' && (
           <TouchableOpacity 
