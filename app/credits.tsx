@@ -1,13 +1,15 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useMembership } from '@/hooks/membership-context';
-import { Plus, ArrowLeft, MessageCircle, Zap, Unlock, Crown } from 'lucide-react-native';
+import { Plus, ArrowLeft, MessageCircle, Zap, Unlock, Crown, Info } from 'lucide-react-native';
+import { trpc } from '@/lib/trpc';
 
 export default function Credits() {
   const router = useRouter();
-  const { credits, addCredits, tier } = useMembership();
+  const { credits, addCredits, tier, features } = useMembership();
+  const buyMutation = trpc.credits.buy.useMutation();
 
   const buyPack = async (type: 'messages' | 'boosts' | 'unlocks', amount: number, price: string) => {
     Alert.alert(
@@ -18,7 +20,14 @@ export default function Credits() {
         { 
           text: 'Buy', 
           onPress: async () => {
-            await addCredits(type, amount);
+            try {
+              if (type === 'boosts') {
+                await buyMutation.mutateAsync({ kind: 'boosts', amount });
+              }
+            } catch (e: any) {
+              console.warn('[Credits] server buy failed, falling back local', e?.message || e);
+            }
+            await addCredits(type as any, amount);
             Alert.alert('Success', `Added ${amount} ${type} to your account!`);
           }
         }
@@ -62,10 +71,17 @@ export default function Credits() {
     },
   ];
 
+  const tierLimits = useMemo(() => {
+    const msg = features.dailyMessages === 99999 ? 'Unlimited' : `${features.dailyMessages}/day`;
+    const swipes = features.dailyRightSwipes === 'unlimited' ? 'Unlimited' : `${features.dailyRightSwipes}/day`;
+    const views = features.profileViews === 'unlimited' ? 'Unlimited' : `${features.profileViews}/day`;
+    return { msg, swipes, views };
+  }, [features.dailyMessages, features.dailyRightSwipes, features.profileViews]);
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+        <TouchableOpacity onPress={() => router.back()} style={styles.backButton} testID="back-btn">
           <ArrowLeft size={24} color={Colors.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>Credits Store</Text>
@@ -76,17 +92,17 @@ export default function Credits() {
         <View style={styles.currentCreditsSection}>
           <Text style={styles.sectionTitle}>Your Credits</Text>
           <View style={styles.creditsGrid}>
-            <View style={styles.creditCard}>
+            <View style={styles.creditCard} testID="credits-messages">
               <MessageCircle size={24} color={Colors.primary} />
               <Text style={styles.creditValue}>{credits.messages}</Text>
               <Text style={styles.creditLabel}>Messages</Text>
             </View>
-            <View style={styles.creditCard}>
+            <View style={styles.creditCard} testID="credits-boosts">
               <Zap size={24} color={Colors.primary} />
               <Text style={styles.creditValue}>{credits.boosts}</Text>
               <Text style={styles.creditLabel}>Boosts</Text>
             </View>
-            <View style={styles.creditCard}>
+            <View style={styles.creditCard} testID="credits-unlocks">
               <Unlock size={24} color={Colors.primary} />
               <Text style={styles.creditValue}>{credits.unlocks}</Text>
               <Text style={styles.creditLabel}>Unlocks</Text>
@@ -94,13 +110,21 @@ export default function Credits() {
           </View>
         </View>
 
+        <View style={styles.limitBanner} testID="tier-limits">
+          <Info size={16} color={Colors.text.white} />
+          <Text style={styles.limitText}>
+            Plan: {tier.toUpperCase()} • Messages {tierLimits.msg} • Swipes {tierLimits.swipes} • Views {tierLimits.views}
+          </Text>
+        </View>
+
         {tier === 'free' && (
           <TouchableOpacity 
             style={styles.premiumBanner}
             onPress={() => router.push('/premium' as any)}
+            testID="upgrade-banner"
           >
             <Crown size={20} color={Colors.text.white} />
-            <Text style={styles.premiumText}>Upgrade to Premium for unlimited credits!</Text>
+            <Text style={styles.premiumText}>Upgrade to Premium for higher limits</Text>
           </TouchableOpacity>
         )}
 
@@ -122,6 +146,7 @@ export default function Credits() {
                     key={index}
                     style={styles.packCard}
                     onPress={() => buyPack(category.type, pack.amount, pack.price)}
+                    testID={`buy-${category.type}-${pack.amount}`}
                   >
                     <Text style={styles.packAmount}>+{pack.amount}</Text>
                     <Text style={styles.packPrice}>{pack.price}</Text>
@@ -232,6 +257,22 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginBottom: 24,
     gap: 12,
+  },
+  limitBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 12,
+    marginBottom: 16,
+  },
+  limitText: {
+    flex: 1,
+    color: Colors.text.white,
+    fontSize: 12,
+    fontWeight: '600',
   },
   premiumText: {
     color: Colors.text.white,
