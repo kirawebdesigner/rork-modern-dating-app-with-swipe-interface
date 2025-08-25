@@ -95,7 +95,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('id,name,age,gender,bio,photos,interests,city,verified,last_active,profile_theme,owned_themes')
+        .select('id,name,age,gender,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
         .limit(100);
       if (error) {
         console.log('[App] load profiles error', error.message);
@@ -109,7 +109,9 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           bio: String(row.bio ?? ''),
           photos: Array.isArray(row.photos) ? (row.photos as string[]) : [],
           interests: Array.isArray(row.interests) ? (row.interests as string[]) : [],
-          location: { city: String(row.city ?? '') },
+          location: { city: String(row.city ?? ''), latitude: row.latitude ? Number(row.latitude) : undefined, longitude: row.longitude ? Number(row.longitude) : undefined },
+          heightCm: typeof row.height_cm === 'number' ? Number(row.height_cm) : undefined,
+          education: row.education ? String(row.education) : undefined,
           verified: Boolean(row.verified),
           lastActive: row.last_active ? new Date(String(row.last_active)) : undefined,
           ownedThemes: Array.isArray(row.owned_themes) ? (row.owned_themes as ThemeId[]) : [],
@@ -179,6 +181,10 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         photos: normalized.photos,
         interests: normalized.interests,
         city: normalized.location.city,
+        latitude: normalized.location.latitude ?? null,
+        longitude: normalized.location.longitude ?? null,
+        height_cm: normalized.heightCm ?? null,
+        education: normalized.education ?? null,
         verified: normalized.verified ?? false,
         last_active: new Date().toISOString(),
         profile_theme: normalized.profileTheme ?? null,
@@ -214,6 +220,10 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             photos: next.photos,
             interests: next.interests,
             city: next.location.city,
+            latitude: next.location.latitude ?? null,
+            longitude: next.location.longitude ?? null,
+            height_cm: next.heightCm ?? null,
+            education: next.education ?? null,
             verified: next.verified ?? false,
             last_active: new Date().toISOString(),
             profile_theme: next.profileTheme ?? null,
@@ -333,6 +343,10 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               photos: next.photos,
               interests: next.interests,
               city: next.location.city,
+              latitude: next.location.latitude ?? null,
+              longitude: next.location.longitude ?? null,
+              height_cm: next.heightCm ?? null,
+              education: next.education ?? null,
               verified: next.verified ?? false,
               last_active: new Date().toISOString(),
               profile_theme: next.profileTheme ?? null,

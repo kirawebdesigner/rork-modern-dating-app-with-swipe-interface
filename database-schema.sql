@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   city TEXT,
   latitude DECIMAL,
   longitude DECIMAL,
+  height_cm INTEGER,
+  education TEXT,
   distance_preference INTEGER DEFAULT 50,
   verified BOOLEAN DEFAULT FALSE,
   last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW(),

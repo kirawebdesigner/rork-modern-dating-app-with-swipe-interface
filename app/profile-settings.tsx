@@ -362,7 +362,7 @@ export default function ProfileSettings() {
         <GradientButton
           title="Save Changes"
           onPress={async () => {
-            await updateProfile({ name, age: Number(age) || currentProfile.age, photos, bio, interests, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
+            await updateProfile({ name, age: Number(age) || currentProfile.age, photos, bio, interests, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
             await setFilters({ ...filters, distanceKm: radius });
             Alert.alert('Success', 'Profile updated successfully!');
             if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
