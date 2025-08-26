@@ -330,7 +330,27 @@ export default function ProfileSetup() {
             onChangeText={(text) => setProfileData(prev => ({ ...prev, education: text }))}
             placeholder={t('Education (e.g., Bachelor in CS)')}
             placeholderTextColor={colors.text.light}
+            testID="education-input"
           />
+          <View style={styles.quickRow}>
+            {['High school','Bachelor','Master','PhD'].map((level) => (
+              <TouchableOpacity
+                key={level}
+                onPress={() => setProfileData(prev => ({ ...prev, education: level }))}
+                style={[styles.chip, (profileData.education ?? '') === level && styles.chipActive]}
+                testID={`edu-${level.toLowerCase().replace(/\s+/g,'-')}`}
+              >
+                <Text style={[styles.chipText, (profileData.education ?? '') === level && styles.chipTextActive]}>{t(level)}</Text>
+              </TouchableOpacity>
+            ))}
+            <TouchableOpacity
+              onPress={() => setProfileData(prev => ({ ...prev, education: t('Prefer not to answer') }))}
+              style={[styles.chip, (profileData.education ?? '') === t('Prefer not to answer') && styles.chipActive]}
+              testID="edu-prefer-not"
+            >
+              <Text style={[styles.chipText, (profileData.education ?? '') === t('Prefer not to answer') && styles.chipTextActive]}>{t('Prefer not to answer')}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </ScrollView>
       <View style={styles.bottomContainer}>
@@ -530,6 +550,11 @@ const styles = StyleSheet.create({
   bottomContainer: { paddingBottom: Platform.OS === 'ios' ? 34 : 24 },
   confirmButton: { marginTop: 16 },
   bottomSpacing: { height: 100 },
+  quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
+  chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary },
+  chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
+  chipText: { color: colors.text.primary, fontWeight: '600' },
+  chipTextActive: { color: colors.text.white },
   modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
   datePickerContainer: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 34 : 24, minHeight: 500 },
   datePickerHeader: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 20 },

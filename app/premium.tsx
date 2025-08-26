@@ -103,7 +103,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
 export default function PremiumScreen() {
   const router = useRouter();
   const { tier, upgradeTier, addCredits, resetDailyLimits, grantMonthlyAllowancesIfNeeded } = useMembership();
-  const { unlockTheme, setTier: setAppTier } = useApp();
+  const { unlockTheme, setTier: setAppTier, currentProfile } = useApp();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
@@ -176,8 +176,6 @@ export default function PremiumScreen() {
 
   useEffect(() => {
     try {
-      const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en-US';
-      const region = (locale.split('-')[1] || 'US').toUpperCase();
       const regionToCurrency: Record<string, string> = {
         ET: 'ETB',
         US: 'USD',
@@ -217,11 +215,81 @@ export default function PremiumScreen() {
         KE: 'KES',
         ZA: 'ZAR',
       };
+
+      const countryToCurrency: Record<string, string> = {
+        ethiopia: 'ETB',
+        usa: 'USD',
+        'united states': 'USD',
+        'united kingdom': 'GBP',
+        uk: 'GBP',
+        england: 'GBP',
+        germany: 'EUR',
+        france: 'EUR',
+        italy: 'EUR',
+        spain: 'EUR',
+        netherlands: 'EUR',
+        belgium: 'EUR',
+        portugal: 'EUR',
+        ireland: 'EUR',
+        austria: 'EUR',
+        finland: 'EUR',
+        greece: 'EUR',
+        luxembourg: 'EUR',
+        malta: 'EUR',
+        cyprus: 'EUR',
+        slovakia: 'EUR',
+        slovenia: 'EUR',
+        latvia: 'EUR',
+        lithuania: 'EUR',
+        estonia: 'EUR',
+        czechia: 'CZK',
+        'czech republic': 'CZK',
+        poland: 'PLN',
+        sweden: 'SEK',
+        norway: 'NOK',
+        denmark: 'DKK',
+        switzerland: 'CHF',
+        canada: 'CAD',
+        australia: 'AUD',
+        'new zealand': 'NZD',
+        japan: 'JPY',
+        china: 'CNY',
+        india: 'INR',
+        nigeria: 'NGN',
+        kenya: 'KES',
+        'south africa': 'ZAR',
+      };
+
+      const rawLocation = currentProfile?.location?.city ?? '';
+      const fromProfile = (() => {
+        const text = String(rawLocation || '').toLowerCase();
+        if (!text) return null;
+        const parts = text.split(',').map(p => p.trim()).filter(Boolean);
+        const candidates = [...parts].reverse();
+        for (const c of candidates) {
+          if (countryToCurrency[c]) return countryToCurrency[c];
+          const iso2 = c.length === 2 ? c.toUpperCase() : '';
+          if (iso2 && regionToCurrency[iso2]) return regionToCurrency[iso2];
+        }
+        // keyword search
+        for (const key of Object.keys(countryToCurrency)) {
+          if (text.includes(key)) return countryToCurrency[key];
+        }
+        return null;
+      })();
+
+      if (fromProfile) {
+        setCurrency(fromProfile);
+        return;
+      }
+
+      const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en-US';
+      const region = (locale.split('-')[1] || 'US').toUpperCase();
       setCurrency(regionToCurrency[region] ?? 'USD');
     } catch (e) {
       setCurrency('USD');
     }
-  }, []);
+  }, [currentProfile?.location?.city]);
 
   const formatPrice = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
 
