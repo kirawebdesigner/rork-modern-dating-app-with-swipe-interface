@@ -71,7 +71,7 @@ export function useRealtimeMessages(matchId: string | null, currentUserId: strin
       const msg = mapRow(row);
       setMessages(prev => [...prev, msg]);
     });
-    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed messages'); }).on('error', (e) => console.log('[Chat] subscribe error', e));
+    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed messages'); });
     channelRef.current = channel;
 
     return () => {
@@ -87,6 +87,19 @@ export function useRealtimeMessages(matchId: string | null, currentUserId: strin
     if (!matchId || !currentUserId) throw new Error('Missing identifiers');
     const trimmed = text.trim();
     if (!trimmed) return;
+
+    const patterns: RegExp[] = [
+      /\b(?:\+?\d[\s-]?){7,}\d\b/g, // phone-like
+      /@/g, // email indicator
+      /(?:whats?app|telegram|tg\.?|insta(?:gram)?|snap(?:chat)?)/gi,
+      /https?:\/\/[\w.-]+/gi,
+      /\b(?:t\.me|wa\.me|bit\.ly|linktr\.ee|ig\.me)\/[\w-]+/gi,
+    ];
+    let sanitized = trimmed;
+    for (const re of patterns) {
+      sanitized = sanitized.replace(re, '###');
+    }
+
     const { data: matchRow, error: matchErr } = await supabase
       .from('matches')
       .select('user1_id, user2_id')
@@ -98,7 +111,7 @@ export function useRealtimeMessages(matchId: string | null, currentUserId: strin
       match_id: matchId,
       sender_id: currentUserId,
       receiver_id: receiver as string,
-      content: trimmed,
+      content: sanitized,
     };
     const { error } = await supabase.from('messages').insert(insert);
     if (error) throw error;
@@ -194,7 +207,7 @@ export function useUserMatches(userId: string | null) {
     channel.on('postgres_changes', { event: '*', schema: 'public', table: 'matches', filter: `user1_id=eq.${userId}` }, () => load());
     channel.on('postgres_changes', { event: '*', schema: 'public', table: 'matches', filter: `user2_id=eq.${userId}` }, () => load());
     channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => load());
-    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed matches'); }).on('error', (e) => console.log('[Chat] matches subscribe error', e));
+    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed matches'); });
 
     return () => { try { channel.unsubscribe(); } catch {} };
   }, [userId]);

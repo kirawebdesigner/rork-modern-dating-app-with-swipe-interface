@@ -1,14 +1,17 @@
 import React from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
-import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2, Mail } from 'lucide-react-native';
+import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2, Mail, LogOut } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
 import * as Linking from 'expo-linking';
+
+import { useAuth } from '@/hooks/auth-context';
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useI18n();
+  const { logout } = useAuth();
 
   return (
     <SafeAreaView style={styles.container}>
@@ -50,6 +53,19 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('App')}</Text>
         <Item icon={<Globe size={18} color={Colors.text.primary} />} label={t('Language')} onPress={() => router.push('/language' as any)} testID="settings-language" />
+      </View>
+
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>{t('Session')}</Text>
+        <Item icon={<LogOut size={18} color={'#EF4444'} />} label={t('Logout')} onPress={async () => {
+          try {
+            await logout();
+            Alert.alert(t('Signed out'), t('You have been signed out.'));
+            router.replace('/(auth)/login' as any);
+          } catch (e) {
+            Alert.alert(t('Error'), t('Failed to sign out'));
+          }
+        }} testID="settings-logout" />
       </View>
     </SafeAreaView>
   );
