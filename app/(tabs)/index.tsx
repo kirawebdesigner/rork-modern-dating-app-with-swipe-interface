@@ -12,6 +12,7 @@ import {
 } from 'react-native';
 import { X, Heart, Star, MapPin, Filter, Rocket, Undo2 } from 'lucide-react-native';
 import ColorsConst from '@/constants/colors';
+import { useI18n } from '@/hooks/i18n-context';
 import { useTheme } from '@/hooks/theme-context';
 import SwipeCard from '@/components/SwipeCard';
 import { useApp } from '@/hooks/app-context';
@@ -23,6 +24,7 @@ const SWIPE_THRESHOLD = screenWidth * 0.25;
 
 export default function DiscoverScreen() {
   const { potentialMatches, swipeUser, filters } = useApp();
+  const { t } = useI18n();
   const { colors } = useTheme();
   const { tier, features, remainingProfileViews, useDaily, remainingRightSwipes, useSuperLike } = useMembership();
   const router = useRouter();
@@ -195,7 +197,7 @@ export default function DiscoverScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.titleWrap}>
-          <Text style={styles.title} testID="discover-title">Discover</Text>
+          <Text style={styles.title} testID="discover-title">{t('Discover')}</Text>
           <View style={styles.locationRow}>
             <MapPin size={16} color={colors.text.secondary} testID="icon-location" />
             <Text style={styles.subtitle} numberOfLines={1} testID="discover-location">{filters.locationLabel}</Text>
@@ -208,7 +210,7 @@ export default function DiscoverScreen() {
             testID="be-seen"
           >
             <Rocket size={16} color={colors.text.white} testID="icon-boost" />
-            <Text style={[styles.beSeenText, { color: colors.text.white }]}>Be seen</Text>
+            <Text style={[styles.beSeenText, { color: colors.text.white }]}>{t('Be seen')}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.filterButton}
@@ -227,19 +229,19 @@ export default function DiscoverScreen() {
           testID="limits-banner"
         >
           <Text style={[styles.limitsText, { color: colors.text.white }]}>
-            Free plan: swipes left today {typeof remainingRightSwipes === 'number' ? remainingRightSwipes : '∞'} • views {viewsLeftText}
+            {t('Free plan')}: {t('swipes left today')} {typeof remainingRightSwipes === 'number' ? remainingRightSwipes : '∞'} • {t('views')} {viewsLeftText}
           </Text>
-          <Text style={[styles.upgradePrompt, { color: colors.text.white }]}>Tap to upgrade</Text>
+          <Text style={[styles.upgradePrompt, { color: colors.text.white }]}>{t('Tap to upgrade')}</Text>
         </TouchableOpacity>
       )}
 
       {!currentUser ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>No more profiles!</Text>
-          <Text style={styles.emptySubtext}>Check back later for more matches</Text>
+          <Text style={styles.emptyText}>{t('No more profiles!')}</Text>
+          <Text style={styles.emptySubtext}>{t('Check back later for more matches')}</Text>
           <TouchableOpacity style={[styles.beSeenButton, { marginTop: 12 }]} onPress={() => router.push('/premium' as any)} testID="empty-upgrade">
             <Rocket size={16} color={colors.text.white} />
-            <Text style={styles.beSeenText}>Boost visibility</Text>
+            <Text style={styles.beSeenText}>{t('Boost visibility')}</Text>
           </TouchableOpacity>
         </View>
       ) : (

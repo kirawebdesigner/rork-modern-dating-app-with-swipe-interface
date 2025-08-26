@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -107,6 +107,7 @@ export default function PremiumScreen() {
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
+  const [currency, setCurrency] = useState<string>('USD');
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
   const buyCreditsMutation = trpc.credits.buy.useMutation();
@@ -173,11 +174,62 @@ export default function PremiumScreen() {
     Alert.alert('Purchased', `Added ${amount} ${type}.`);
   };
 
+  useEffect(() => {
+    try {
+      const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en-US';
+      const region = (locale.split('-')[1] || 'US').toUpperCase();
+      const regionToCurrency: Record<string, string> = {
+        ET: 'ETB',
+        US: 'USD',
+        GB: 'GBP',
+        DE: 'EUR',
+        FR: 'EUR',
+        IT: 'EUR',
+        ES: 'EUR',
+        NL: 'EUR',
+        BE: 'EUR',
+        PT: 'EUR',
+        IE: 'EUR',
+        AT: 'EUR',
+        FI: 'EUR',
+        GR: 'EUR',
+        LU: 'EUR',
+        MT: 'EUR',
+        CY: 'EUR',
+        SK: 'EUR',
+        SI: 'EUR',
+        LV: 'EUR',
+        LT: 'EUR',
+        EE: 'EUR',
+        CZ: 'CZK',
+        PL: 'PLN',
+        SE: 'SEK',
+        NO: 'NOK',
+        DK: 'DKK',
+        CH: 'CHF',
+        CA: 'CAD',
+        AU: 'AUD',
+        NZ: 'NZD',
+        JP: 'JPY',
+        CN: 'CNY',
+        IN: 'INR',
+        NG: 'NGN',
+        KE: 'KES',
+        ZA: 'ZAR',
+      };
+      setCurrency(regionToCurrency[region] ?? 'USD');
+    } catch (e) {
+      setCurrency('USD');
+    }
+  }, []);
+
+  const formatPrice = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
+
   const selectedPriceLabel = useMemo(() => {
     const info = tierData[selectedTier];
-    if (billingPeriod === 'monthly') return `${info.priceMonthly.toFixed(2)}/month`;
-    return `${(info.priceMonthly * 6).toFixed(2)}/year (-50%)`;
-  }, [selectedTier, billingPeriod]);
+    if (billingPeriod === 'monthly') return `${formatPrice(info.priceMonthly)}/month`;
+    return `${formatPrice(info.priceMonthly * 6)}/year (-50%)`;
+  }, [selectedTier, billingPeriod, currency]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -235,8 +287,8 @@ export default function PremiumScreen() {
             const priceText = showPrice
               ? (billingPeriod === 'monthly'
                 ? `${tierInfo.priceMonthly.toFixed(2)}/mo`
-                : `${(tierInfo.priceMonthly * 6).toFixed(2)}/yr`)
-              : '$0';
+                : `${formatPrice(tierInfo.priceMonthly * 6)}/yr`)
+              : formatPrice(0);
             
             return (
               <TouchableOpacity
@@ -271,7 +323,7 @@ export default function PremiumScreen() {
                         <Text style={styles.offPillText}>-50%</Text>
                       </View>
                     )}
-                    <Text style={styles.tierPrice}>{priceText}</Text>
+                    <Text style={styles.tierPrice}>{billingPeriod === 'monthly' && tierKey !== 'free' ? `${formatPrice(tierInfo.priceMonthly)}/mo` : priceText}</Text>
                   </View>
                 </View>
 

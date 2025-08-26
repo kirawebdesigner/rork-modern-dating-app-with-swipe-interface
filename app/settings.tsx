@@ -2,8 +2,9 @@ import React from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
-import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2 } from 'lucide-react-native';
+import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2, Mail } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
+import * as Linking from 'expo-linking';
 
 export default function SettingsScreen() {
   const router = useRouter();
@@ -43,6 +44,7 @@ export default function SettingsScreen() {
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>{t('Growth')}</Text>
         <Item icon={<Share2 size={18} color={Colors.text.primary} />} label={t('Share & Get Gold')} onPress={() => router.push('/referrals' as any)} testID="settings-referrals" />
+        <Item icon={<Mail size={18} color={Colors.text.primary} />} label={t('Share via Email')} onPress={() => Linking.openURL('mailto:zewijuna1@gmail.com?subject=Feedback&body=Hi,%0D%0A')} testID="settings-share-email" />
       </View>
 
       <View style={styles.section}>

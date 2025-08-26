@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
+import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, Alert, Modal, TextInput, Dimensions } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -7,10 +7,13 @@ import { useApp } from '@/hooks/app-context';
 import { MapPin, CheckCircle2, ArrowLeft, Heart, Zap, MessageCircle, Shield, MoreVertical } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useI18n } from '@/hooks/i18n-context';
+import { supabase } from '@/lib/supabase';
 import { User } from '@/types';
 
 export default function ProfileDetails() {
   const [complimentOpen, setComplimentOpen] = useState<boolean>(false);
+  const [reportOpen, setReportOpen] = useState<boolean>(false);
+  const [reportReason, setReportReason] = useState<string>('');
   const [compliment, setCompliment] = useState<string>('');
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
@@ -91,9 +94,10 @@ export default function ProfileDetails() {
               </TouchableOpacity>
               <View style={styles.topRight}>
                 <TouchableOpacity onPress={() => {
-                  Alert.alert('Profile options', undefined, [
-                    { text: 'Block user', onPress: async () => { await blockUser(user.id); Alert.alert('Blocked', `${user.name} has been blocked.`); router.back(); } },
-                    { text: 'Cancel', style: 'cancel' },
+                  Alert.alert(t('Profile options'), undefined, [
+                    { text: t('Block user'), onPress: async () => { await blockUser(user.id); Alert.alert(t('Blocked'), `${user.name} ${t('has been blocked')}.`); router.back(); } },
+                    { text: t('Report user'), onPress: () => setReportOpen(true) },
+                    { text: t('Cancel'), style: 'cancel' },
                   ]);
                 }} style={styles.menuBtn} accessibilityLabel="More options">
                   <MoreVertical size={22} color={Colors.text.white} />
@@ -151,21 +155,56 @@ export default function ProfileDetails() {
                     maxLength={120}
                   />
                   <View style={styles.modalActions}>
-                    <TouchableOpacity onPress={() => setComplimentOpen(false)} style={styles.modalBtnSecondary}><Text style={styles.modalBtnText}>Cancel</Text></TouchableOpacity>
+                    <TouchableOpacity onPress={() => setComplimentOpen(false)} style={styles.modalBtnSecondary}><Text style={styles.modalBtnText}>{t('Cancel')}</Text></TouchableOpacity>
                     <TouchableOpacity
                       onPress={async () => {
                         const ok = await useDaily('compliments');
                         if (!ok) {
-                          Alert.alert('Limit reached', tier === 'free' ? 'Free users can send 1 compliment/day. Upgrade to Gold for more.' : 'Limit reached');
+                          Alert.alert(t('Limit reached'), tier === 'free' ? t('Free users can send 1 compliment/day. Upgrade to Gold for more.') : t('Limit reached'));
                           return;
                         }
-                        Alert.alert('Sent', 'Your compliment was sent.');
+                        Alert.alert(t('Sent'), t('Your compliment was sent.'));
                         setCompliment('');
                         setComplimentOpen(false);
                       }}
                       style={styles.modalBtn}
                     >
-                      <Text style={styles.modalBtnTextPrimary}>Send</Text>
+                      <Text style={styles.modalBtnTextPrimary}>{t('Send')}</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              </View>
+            </Modal>
+
+            <Modal visible={reportOpen} animationType="fade" transparent>
+              <View style={styles.modalWrap}>
+                <View style={styles.modalCard}>
+                  <Text style={styles.modalTitle}>{t('Report user')}</Text>
+                  <TextInput
+                    style={[styles.input, { height: 80 }]}
+                    multiline
+                    placeholder={t('Describe the issue (spam, fake, harassment, etc.)')}
+                    placeholderTextColor={Colors.text.light}
+                    value={reportReason}
+                    onChangeText={setReportReason}
+                    maxLength={300}
+                  />
+                  <View style={styles.modalActions}>
+                    <TouchableOpacity onPress={() => setReportOpen(false)} style={styles.modalBtnSecondary}><Text style={styles.modalBtnText}>{t('Cancel')}</Text></TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        try {
+                          await supabase.from('reports').insert({ reported_id: user.id, reason: reportReason || 'n/a', created_at: new Date().toISOString() });
+                          setReportReason('');
+                          setReportOpen(false);
+                          Alert.alert(t('Thank you'), t('Your report has been submitted.'));
+                        } catch (e) {
+                          Alert.alert(t('Error'), t('Could not send report. Please try again.'));
+                        }
+                      }}
+                      style={styles.modalBtn}
+                    >
+                      <Text style={styles.modalBtnTextPrimary}>{t('Submit')}</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

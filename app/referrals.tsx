@@ -1,13 +1,16 @@
 import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
 import Colors from '@/constants/colors';
-import { ArrowLeft, Gift, Link as LinkIcon, CheckCircle2 } from 'lucide-react-native';
+import { ArrowLeft, Gift, Link as LinkIcon, CheckCircle2, Mail } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
+import { useI18n } from '@/hooks/i18n-context';
 
 export default function ReferralsScreen() {
   const router = useRouter();
+  const { t } = useI18n();
   const [refLink, setRefLink] = useState<string>('');
   const [referredCount, setReferredCount] = useState<number>(0);
 
@@ -34,6 +37,17 @@ export default function ReferralsScreen() {
       Alert.alert('Copied', 'Your referral link is copied. Share it with friends!');
     } catch (e) {
       console.log('[Referral] copy error', e);
+    }
+  }, [refLink]);
+
+  const onShareEmail = useCallback(async () => {
+    try {
+      const subject = encodeURIComponent('Referral Progress & Feedback');
+      const body = encodeURIComponent(`Hi,\n\nHere is my referral link: ${refLink}\n\nPlease check my progress and any feedback.\n\nThanks!`);
+      const url = `mailto:zewijuna1@gmail.com?subject=${subject}&body=${body}`;
+      await Linking.openURL(url);
+    } catch (e) {
+      console.log('[Referral] email open failed', e);
     }
   }, [refLink]);
 
@@ -72,10 +86,22 @@ export default function ReferralsScreen() {
           <Text style={styles.linkText} numberOfLines={1}>{refLink}</Text>
           <LinkIcon size={16} color={Colors.text.primary} />
         </TouchableOpacity>
-        <TouchableOpacity style={styles.checkBtn} onPress={checkEligibility}>
-          <CheckCircle2 size={18} color={Colors.text.white} />
-          <Text style={styles.checkText}>Check my progress</Text>
-        </TouchableOpacity>
+        <View style={styles.progressWrap}>
+          <View style={styles.progressBar}>
+            <View style={[styles.progressFill, { width: `${Math.min(100, (referredCount / 5) * 100)}%` }]} />
+          </View>
+          <Text style={styles.progressText}>{referredCount}/5</Text>
+        </View>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.checkBtn} onPress={checkEligibility} testID="check-ref-progress">
+            <CheckCircle2 size={18} color={Colors.text.white} />
+            <Text style={styles.checkText}>Check my progress</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.emailBtn} onPress={onShareEmail} testID="share-email">
+            <Mail size={18} color={Colors.primary} />
+            <Text style={styles.emailText}>{t('Share via Email')}</Text>
+          </TouchableOpacity>
+        </View>
         <Text style={styles.note}>We track signups from your link. When it reaches 5, your account is upgraded automatically.</Text>
       </View>
     </SafeAreaView>
@@ -91,7 +117,14 @@ const styles = StyleSheet.create({
   headline: { color: Colors.text.primary, fontWeight: '700', fontSize: 16, textAlign: 'center' },
   linkRow: { width: '100%', backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, borderRadius: 10, paddingHorizontal: 12, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 8 },
   linkText: { color: Colors.text.primary, flex: 1, marginRight: 8 },
-  checkBtn: { marginTop: 8, backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  progressWrap: { width: '100%', marginTop: 8, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  progressBar: { flex: 1, height: 8, backgroundColor: Colors.border, borderRadius: 999, overflow: 'hidden' },
+  progressFill: { height: '100%', backgroundColor: Colors.primary },
+  progressText: { color: Colors.text.primary, fontWeight: '700', minWidth: 40, textAlign: 'right' },
+  actionsRow: { flexDirection: 'row', gap: 8, width: '100%', marginTop: 8, alignItems: 'center', justifyContent: 'space-between' },
+  checkBtn: { flex: 1, backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 10, flexDirection: 'row', alignItems: 'center', gap: 8, justifyContent: 'center' },
   checkText: { color: Colors.text.white, fontWeight: '700' },
+  emailBtn: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 10, backgroundColor: Colors.card, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', alignItems: 'center', gap: 8 },
+  emailText: { color: Colors.primary, fontWeight: '700' },
   note: { color: Colors.text.secondary, fontSize: 12, textAlign: 'center' },
 });
