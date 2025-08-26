@@ -7,6 +7,7 @@ import colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { categorizedInterests } from '@/mocks/interests';
 import { useApp } from '@/hooks/app-context';
+import { useI18n } from '@/hooks/i18n-context';
 import { User } from '@/types';
 import { supabase } from '@/lib/supabase';
 
@@ -41,6 +42,7 @@ export default function ProfileSetup() {
   });
 
   const { setCurrentProfile } = useApp();
+  const { t } = useI18n();
 
   const handleBack = () => {
     if (currentStep === 'details') {
@@ -167,7 +169,7 @@ export default function ProfileSetup() {
     try {
       const permission = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!permission.granted) {
-        Alert.alert('Permission required', 'We need access to your photos to set a profile picture.');
+        Alert.alert(t('Permission required'), t('We need access to your photos to set a profile picture.'));
         return;
       }
       const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1,1], quality: 0.9 });
@@ -177,7 +179,7 @@ export default function ProfileSetup() {
       }
     } catch (e) {
       console.log('[ProfileSetup] Image pick error', e);
-      Alert.alert('Error', 'Could not select image.');
+      Alert.alert(t('Error'), 'Could not select image.');
     }
   };
 
@@ -187,7 +189,7 @@ export default function ProfileSetup() {
         <ArrowLeft size={24} color={colors.primary} />
       </TouchableOpacity>
       <TouchableOpacity onPress={handleSkip}>
-        <Text style={styles.skipText}>Skip</Text>
+        <Text style={styles.skipText}>{t('Continue')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -195,7 +197,7 @@ export default function ProfileSetup() {
   const renderProfileDetails = () => (
     <View style={styles.container}>
       {renderHeader()}
-      <Text style={styles.title}>Profile details</Text>
+      <Text style={styles.title}>{t('Profile details')}</Text>
 
       <View style={styles.profileImageContainer}>
         <TouchableOpacity style={styles.profileImagePlaceholder} onPress={pickImage} testID="pick-photo">
@@ -211,23 +213,23 @@ export default function ProfileSetup() {
       </View>
 
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>First name</Text>
+        <Text style={styles.inputLabel}>{t('First name')}</Text>
         <TextInput
           style={styles.textInput}
           value={profileData.firstName}
           onChangeText={(text) => setProfileData(prev => ({ ...prev, firstName: text }))}
-          placeholder="Enter your first name"
+          placeholder={t('Enter your first name')}
           placeholderTextColor={colors.text.light}
         />
       </View>
 
       <View style={styles.inputContainer}>
-        <Text style={styles.inputLabel}>Last name</Text>
+        <Text style={styles.inputLabel}>{t('Last name')}</Text>
         <TextInput
           style={styles.textInput}
           value={profileData.lastName}
           onChangeText={(text) => setProfileData(prev => ({ ...prev, lastName: text }))}
-          placeholder="Enter your last name"
+          placeholder={t('Enter your last name')}
           placeholderTextColor={colors.text.light}
         />
       </View>
@@ -235,12 +237,12 @@ export default function ProfileSetup() {
       <TouchableOpacity style={styles.birthdayButton} onPress={() => setShowDatePicker(true)} testID="open-birthday">
         <Calendar size={20} color={colors.primary} />
         <Text style={styles.birthdayButtonText}>
-          {profileData.birthday ? `${formatDate(profileData.birthday)} (${calculateAge(profileData.birthday)} yrs)` : 'Choose birthday date'}
+          {profileData.birthday ? `${formatDate(profileData.birthday)} (${calculateAge(profileData.birthday)} yrs)` : t('Choose birthday date')}
         </Text>
       </TouchableOpacity>
 
       <View style={styles.bottomContainer}>
-        <GradientButton title="Confirm" onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Confirm')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
   );
@@ -248,14 +250,14 @@ export default function ProfileSetup() {
   const renderGenderSelection = () => (
     <View style={styles.container}>
       {renderHeader()}
-      <Text style={styles.title}>I am a</Text>
+      <Text style={styles.title}>{t('I am a')}</Text>
       <View style={styles.genderContainer}>
         <TouchableOpacity
           style={[styles.genderOption, profileData.gender === 'girl' && styles.genderOptionSelected]}
           onPress={() => setProfileData(prev => ({ ...prev, gender: 'girl' }))}
           testID="gender-girl"
         >
-          <Text style={[styles.genderOptionText, profileData.gender === 'girl' && styles.genderOptionTextSelected]}>Girl</Text>
+          <Text style={[styles.genderOptionText, profileData.gender === 'girl' && styles.genderOptionTextSelected]}>{t('Girl')}</Text>
           {profileData.gender === 'girl' && (<Check size={20} color={colors.text.white} />)}
         </TouchableOpacity>
 
@@ -264,13 +266,13 @@ export default function ProfileSetup() {
           onPress={() => setProfileData(prev => ({ ...prev, gender: 'boy' }))}
           testID="gender-boy"
         >
-          <Text style={[styles.genderOptionText, profileData.gender === 'boy' && styles.genderOptionTextSelected]}>Boy</Text>
+          <Text style={[styles.genderOptionText, profileData.gender === 'boy' && styles.genderOptionTextSelected]}>{t('Boy')}</Text>
           {profileData.gender === 'boy' && (<Check size={20} color={colors.text.white} />)}
         </TouchableOpacity>
       </View>
 
       <View style={styles.bottomContainer}>
-        <GradientButton title="Continue" onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
   );
@@ -298,41 +300,41 @@ export default function ProfileSetup() {
     <View style={styles.container}>
       {renderHeader()}
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>More about you</Text>
+        <Text style={styles.title}>{t('More about you')}</Text>
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Location</Text>
+          <Text style={styles.inputLabel}>{t('Location')}</Text>
           <TextInput
             style={styles.textInput}
             value={profileData.city ?? ''}
             onChangeText={(text) => setProfileData(prev => ({ ...prev, city: text }))}
-            placeholder="City, Country"
+            placeholder={t('City, Country')}
             placeholderTextColor={colors.text.light}
           />
         </View>
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Height (cm)</Text>
+          <Text style={styles.inputLabel}>{t('Height (cm)')}</Text>
           <TextInput
             style={styles.textInput}
             value={profileData.heightCm ?? ''}
             onChangeText={(text) => setProfileData(prev => ({ ...prev, heightCm: text.replace(/[^0-9]/g,'') }))}
-            placeholder="e.g., 175"
+            placeholder={t('Height (cm) placeholder')}
             placeholderTextColor={colors.text.light}
             inputMode="numeric"
           />
         </View>
         <View style={styles.inputContainer}>
-          <Text style={styles.inputLabel}>Education</Text>
+          <Text style={styles.inputLabel}>{t('Education')}</Text>
           <TextInput
             style={styles.textInput}
             value={profileData.education ?? ''}
             onChangeText={(text) => setProfileData(prev => ({ ...prev, education: text }))}
-            placeholder="e.g., Bachelor in CS"
+            placeholder={t('Education (e.g., Bachelor in CS)')}
             placeholderTextColor={colors.text.light}
           />
         </View>
       </ScrollView>
       <View style={styles.bottomContainer}>
-        <GradientButton title="Continue" onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
   );
@@ -341,8 +343,8 @@ export default function ProfileSetup() {
     <View style={styles.container}>
       {renderHeader()}
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        <Text style={styles.title}>Your interests</Text>
-        <Text style={styles.subtitle}>Select a few of your interests and let everyone know what you&apos;re passionate about.</Text>
+        <Text style={styles.title}>{t('Your interests')}</Text>
+        <Text style={styles.subtitle}>{t("Select a few of your interests and let everyone know what you're passionate about.")}</Text>
         {categorizedInterests.map((category) => (
           <View key={category.name} style={styles.categoryContainer}>
             <Text style={styles.categoryTitle}>{category.name}</Text>
@@ -354,7 +356,7 @@ export default function ProfileSetup() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
       <View style={styles.bottomContainer}>
-        <GradientButton title="Continue" onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
   );
@@ -392,7 +394,7 @@ export default function ProfileSetup() {
       const age = calculateAge(newDate);
       if (age < 18) {
         console.log('[ProfileSetup] Age validation failed', { age, newDate: newDate.toISOString() });
-        Alert.alert('Age restriction', 'You must be at least 18 years old.');
+        Alert.alert(t('Age restriction'), t('You must be at least 18 years old.'));
         return;
       }
       setProfileData(prev => ({ ...prev, birthday: newDate }));
@@ -458,7 +460,7 @@ export default function ProfileSetup() {
                 placeholder="YYYY"
                 placeholderTextColor={colors.text.light}
               />
-              <Text style={styles.monthText}>{months[selectedMonth]}</Text>
+              <Text style={styles.monthText}>{t(months[selectedMonth]) ?? months[selectedMonth]}</Text>
             </View>
             <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavButton} testID="next-month">
               <ChevronRight size={24} color={colors.text.primary} />
