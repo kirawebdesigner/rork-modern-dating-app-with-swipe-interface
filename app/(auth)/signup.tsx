@@ -16,10 +16,12 @@ import { ArrowLeft } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/hooks/auth-context';
+import { useI18n } from '@/hooks/i18n-context';
 
 export default function SignupScreen() {
   const router = useRouter();
   const { signup } = useAuth();
+  const { t } = useI18n();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -27,7 +29,7 @@ export default function SignupScreen() {
 
   const handleSignup = async () => {
     if (!name || !email || !password) {
-      alert('Please fill in all fields');
+      alert(t('Error') + ': ' + t('Please fill in all fields'));
       return;
     }
 
@@ -36,7 +38,7 @@ export default function SignupScreen() {
       await signup(email, password, name);
       router.replace('/profile-setup' as any);
     } catch {
-      alert('Signup failed. Please try again.');
+      alert(t('Error') + ': Signup failed. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -70,18 +72,18 @@ export default function SignupScreen() {
               accessibilityLabel="Brand logo"
               testID="signup-logo"
             />
-            <Text style={styles.title}>Create Account</Text>
+            <Text style={styles.title}>{t('Create Account')}</Text>
             <Text style={styles.subtitle}>
-              Sign up to start finding your perfect match
+              {t('Sign up to start finding your perfect match')}
             </Text>
           </View>
 
           <View style={styles.form}>
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Name</Text>
+              <Text style={styles.label}>{t('Name')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your name"
+                placeholder={t('Your name')}
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
@@ -89,10 +91,10 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Email</Text>
+              <Text style={styles.label}>{t('Email')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Enter your email"
+                placeholder={t('Email')}
                 value={email}
                 onChangeText={setEmail}
                 keyboardType="email-address"
@@ -101,10 +103,10 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>Password</Text>
+              <Text style={styles.label}>{t('Password')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder="Create a password"
+                placeholder={t('Password')}
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
@@ -112,7 +114,7 @@ export default function SignupScreen() {
             </View>
 
             <GradientButton
-              title="Sign Up"
+              title={t('Sign Up')}
               onPress={handleSignup}
               loading={loading}
               style={styles.button}
@@ -134,9 +136,9 @@ export default function SignupScreen() {
           </View>
 
           <View style={styles.footer}>
-            <Text style={styles.footerText}>Already have an account? </Text>
+            <Text style={styles.footerText}>{t('Already have an account?')} </Text>
             <TouchableOpacity onPress={() => router.push('/(auth)/login' as any)}>
-              <Text style={styles.footerLink}>Sign In</Text>
+              <Text style={styles.footerLink}>{t('Sign In')}</Text>
             </TouchableOpacity>
           </View>
         </ScrollView>

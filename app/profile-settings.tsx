@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, Alert, SafeAreaView } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
+import { useI18n } from '@/hooks/i18n-context';
 import { useApp } from '@/hooks/app-context';
 import { useMembership } from '@/hooks/membership-context';
 import { ThemeId } from '@/types';
@@ -13,6 +14,7 @@ import GradientButton from '@/components/GradientButton';
 export default function ProfileSettings() {
   const router = useRouter();
   const { currentProfile, updateProfile, filters, setFilters } = useApp();
+  const { t } = useI18n();
   const { tier } = useMembership();
   const [bio, setBio] = useState<string>(currentProfile?.bio ?? '');
   const [photos, setPhotos] = useState<string[]>(currentProfile?.photos ?? []);
@@ -157,7 +159,7 @@ export default function ProfileSettings() {
   if (!currentProfile) {
     return (
       <SafeAreaView style={styles.center}>
-        <Text style={styles.title}>Create profile first</Text>
+        <Text style={styles.title}>{t('Create profile first')}</Text>
       </SafeAreaView>
     );
   }
@@ -168,20 +170,20 @@ export default function ProfileSettings() {
         <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); } }} style={styles.backButton}>
           <ArrowLeft size={24} color={Colors.primary} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile Settings</Text>
+        <Text style={styles.headerTitle}>{t('Profile Settings')}</Text>
         <View style={styles.placeholder} />
       </View>
 
       
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Basic Info</Text>
+          <Text style={styles.sectionTitle}>{t('Basic Info')}</Text>
           <View style={styles.rowInputs}>
             <TextInput
               style={styles.textInput}
               value={name}
               onChangeText={setName}
-              placeholder="Your name"
+              placeholder={t('Your name')}
               placeholderTextColor={Colors.text.secondary}
             />
             <TextInput
@@ -189,7 +191,7 @@ export default function ProfileSettings() {
               value={age}
               onChangeText={setAge}
               inputMode="numeric"
-              placeholder="Age"
+              placeholder={t('Age')}
               placeholderTextColor={Colors.text.secondary}
             />
           </View>
@@ -198,7 +200,7 @@ export default function ProfileSettings() {
               style={styles.textInput}
               value={city}
               onChangeText={setCity}
-              placeholder="City, Country"
+              placeholder={t('City, Country')}
               placeholderTextColor={Colors.text.secondary}
             />
             <TextInput
@@ -206,7 +208,7 @@ export default function ProfileSettings() {
               value={heightCm}
               onChangeText={(t) => setHeightCm(t.replace(/[^0-9]/g, ''))}
               inputMode="numeric"
-              placeholder="Height (cm)"
+              placeholder={t('Height (cm) placeholder')}
               placeholderTextColor={Colors.text.secondary}
             />
           </View>
@@ -215,26 +217,26 @@ export default function ProfileSettings() {
               style={styles.textInput}
               value={education}
               onChangeText={setEducation}
-              placeholder="Education (e.g., Bachelor in CS)"
+              placeholder={t('Education (e.g., Bachelor in CS)')}
               placeholderTextColor={Colors.text.secondary}
             />
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Photo Gallery</Text>
-          <Text style={styles.sectionSubtitle}>Add up to 6 photos to showcase yourself</Text>
+          <Text style={styles.sectionTitle}>{t('Photo Gallery')}</Text>
+          <Text style={styles.sectionSubtitle}>{t('Add up to 6 photos to showcase yourself')}</Text>
           <View style={{ flexDirection: 'row', gap: 12 }}>
-            <GradientButton title="Add from Camera" onPress={capturePhoto} style={{ flex: 1 }} />
-            <GradientButton title="Add from Gallery" variant="secondary" onPress={addPhoto} style={{ flex: 1 }} />
+            <GradientButton title={t('Add from Camera')} onPress={capturePhoto} style={{ flex: 1 }} />
+            <GradientButton title={t('Add from Gallery')} variant="secondary" onPress={addPhoto} style={{ flex: 1 }} />
           </View>
           <View style={{ height: 12 }} />
           {renderPhotoGrid()}
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Customize Profile</Text>
-          <Text style={styles.sectionSubtitle}>Choose a theme for your info panel. Purchased themes stay unlocked.</Text>
+          <Text style={styles.sectionTitle}>{t('Customize Profile')}</Text>
+          <Text style={styles.sectionSubtitle}>{t('Choose a theme for your info panel. Purchased themes stay unlocked.')}</Text>
           <View style={styles.themesRow}>
             {(['midnight','sunset','geometric'] as ThemeId[]).map((th) => {
               const owned = ownedThemes.includes(th);
@@ -245,9 +247,9 @@ export default function ProfileSettings() {
                   style={[styles.themeCard, isSelected && styles.themeCardActive, !owned && styles.themeCardLocked]}
                   onPress={async () => {
                     console.log('[ProfileSettings] theme press', { th, owned });
-                    if (!owned) { Alert.alert('Theme locked', 'Buy this theme in the Store (Premium page).'); return; }
+                    if (!owned) { Alert.alert(t('Upgrade needed'), 'Buy this theme in the Store (Premium page).'); return; }
                     await updateProfile({ profileTheme: th });
-                    Alert.alert('Applied', `${th === 'midnight' ? 'Midnight' : th === 'sunset' ? 'Sunset' : 'Geometric'} applied to your info panel.`);
+                    Alert.alert(t('Applied'), `${th === 'midnight' ? 'Midnight' : th === 'sunset' ? 'Sunset' : 'Geometric'} applied to your info panel.`);
                   }}
                   accessibilityRole="button"
                   accessibilityState={{ selected: isSelected, disabled: !owned }}
@@ -268,18 +270,18 @@ export default function ProfileSettings() {
               testID="theme-option-none"
             >
               <View style={[styles.themePreview, styles.nonePreview]} />
-              <Text style={styles.themeLabel}>None</Text>
+              <Text style={styles.themeLabel}>{t('None')}</Text>
             </TouchableOpacity>
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>About Me</Text>
+          <Text style={styles.sectionTitle}>{t('About Me')}</Text>
           <TextInput
             style={styles.bioInput}
             value={bio}
             onChangeText={setBio}
-            placeholder="Tell others about yourself..."
+            placeholder={t('Tell others about yourself...')}
             placeholderTextColor={Colors.text.secondary}
             multiline
             maxLength={500}
@@ -289,8 +291,8 @@ export default function ProfileSettings() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Interests</Text>
-          <Text style={styles.sectionSubtitle}>Select your interests to find better matches</Text>
+          <Text style={styles.sectionTitle}>{t('InterestsTitle')}</Text>
+          <Text style={styles.sectionSubtitle}>{t('Select your interests to find better matches')}</Text>
           {categorizedInterests.map((category) => (
             <View key={category.name} style={styles.categoryContainer}>
               <Text style={styles.categoryTitle}>{category.name}</Text>
@@ -304,8 +306,8 @@ export default function ProfileSettings() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Location & Distance</Text>
-          <Text style={styles.label}>Search radius {canAdvanced ? '' : '(Gold+ feature)'}</Text>
+          <Text style={styles.sectionTitle}>{t('Location & Distance')}</Text>
+          <Text style={styles.label}>{t('Search radius')} {canAdvanced ? '' : '(Gold+ feature)'}</Text>
           <View style={styles.radiusContainer}>
             <TouchableOpacity
               style={[styles.radiusButton, !canAdvanced && styles.disabled]}
@@ -326,9 +328,9 @@ export default function ProfileSettings() {
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Privacy Settings</Text>
+          <Text style={styles.sectionTitle}>{t('Privacy settings')}</Text>
           
-          <Text style={styles.label}>Profile Visibility</Text>
+          <Text style={styles.label}>{t('Profile Visibility')}</Text>
           <View style={styles.privacyRow}>
             {(['everyone','matches','nobody'] as const).map(v => (
               <TouchableOpacity key={v} onPress={() => setPrivacy(v)} style={[styles.privacyChip, privacy === v && styles.privacyChipActive]}>
@@ -344,14 +346,14 @@ export default function ProfileSettings() {
             <TouchableOpacity onPress={() => setHideOnline(!hideOnline)} style={[styles.toggle, hideOnline && styles.toggleOn]}>
               <View style={[styles.knob, hideOnline && styles.knobOn]} />
             </TouchableOpacity>
-            <Text style={styles.toggleLabel}>Hide online status</Text>
+            <Text style={styles.toggleLabel}>{t('Hide online status')}</Text>
           </View>
 
           <View style={styles.toggleRow}>
             <TouchableOpacity onPress={() => setIncognito(!incognito)} style={[styles.toggle, incognito && styles.toggleOn]}>
               <View style={[styles.knob, incognito && styles.knobOn]} />
             </TouchableOpacity>
-            <Text style={styles.toggleLabel}>Incognito mode (VIP feature)</Text>
+            <Text style={styles.toggleLabel}>{t('Incognito mode (VIP feature)')}</Text>
           </View>
         </View>
 
@@ -360,11 +362,13 @@ export default function ProfileSettings() {
 
       <View style={styles.footer}>
         <GradientButton
-          title="Save Changes"
+          title={t('Save Changes')}
           onPress={async () => {
-            await updateProfile({ name, age: Number(age) || currentProfile.age, photos, bio, interests, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
+            const nextAge = Number(age) || currentProfile.age;
+            if (nextAge < 18) { Alert.alert(t('Age restriction'), t('You must be at least 18 years old.')); return; }
+            await updateProfile({ name, age: nextAge, photos, bio, interests, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
             await setFilters({ ...filters, distanceKm: radius });
-            Alert.alert('Success', 'Profile updated successfully!');
+            Alert.alert(t('Applied'), t('Profile updated successfully!'));
             if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
           }}
           style={styles.saveButton}

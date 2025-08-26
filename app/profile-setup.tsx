@@ -68,13 +68,22 @@ export default function ProfileSetup() {
   const handleContinue = async () => {
     if (currentStep === 'details') {
       if (!profileData.firstName.trim()) {
-        Alert.alert('Error', 'Please enter your first name');
+        Alert.alert(t('Error'), t('Please enter your first name'));
+        return;
+      }
+      if (!profileData.birthday) {
+        Alert.alert(t('Age restriction'), t('Choose birthday date'));
+        return;
+      }
+      const ageNow = calculateAge(profileData.birthday);
+      if (ageNow < 18) {
+        Alert.alert(t('Age restriction'), t('You must be at least 18 years old.'));
         return;
       }
       setCurrentStep('gender');
     } else if (currentStep === 'gender') {
       if (!profileData.gender) {
-        Alert.alert('Error', 'Please select your gender');
+        Alert.alert(t('Error'), t('Please select your gender'));
         return;
       }
       setCurrentStep('extras');
@@ -424,10 +433,10 @@ export default function ProfileSetup() {
         <View style={styles.datePickerContainer}>
           <View style={styles.datePickerHeader}>
             <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-              <Text style={styles.skipText}>Skip</Text>
+              <Text style={styles.skipText}>{t('Continue')}</Text>
             </TouchableOpacity>
           </View>
-          <Text style={styles.datePickerTitle}>Birthday</Text>
+          <Text style={styles.datePickerTitle}>{t('Birthday')}</Text>
           <View style={styles.monthYearContainer}>
             <TouchableOpacity onPress={handlePreviousMonth} style={styles.monthNavButton} testID="prev-month">
               <ChevronLeft size={24} color={colors.text.primary} />
@@ -468,7 +477,7 @@ export default function ProfileSetup() {
             ))}
           </View>
           <CalendarGrid />
-          <GradientButton title="Save" onPress={handleSaveDate} style={[styles.saveButton, !selectedDay && styles.saveButtonDisabled]} disabled={!selectedDay} testID="save-date" />
+          <GradientButton title={t('Save')} onPress={handleSaveDate} style={[styles.saveButton, !selectedDay && styles.saveButtonDisabled]} disabled={!selectedDay} testID="save-date" />
         </View>
       </View>
     </Modal>
