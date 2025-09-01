@@ -366,7 +366,7 @@ export default function ProfileSettings() {
           onPress={async () => {
             const nextAge = Number(age) || currentProfile.age;
             if (nextAge < 18) { Alert.alert(t('Age restriction'), t('You must be at least 18 years old.')); return; }
-            await updateProfile({ name, age: nextAge, photos, bio, interests, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
+            await updateProfile({ name, age: nextAge, photos, bio, interests, instagram: instagram || undefined, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
             await setFilters({ ...filters, distanceKm: radius });
             Alert.alert(t('Applied'), t('Profile updated successfully!'));
             if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }

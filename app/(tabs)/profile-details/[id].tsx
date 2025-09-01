@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
-import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, Alert, Modal, TextInput, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, Alert, Modal, TextInput, Dimensions, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useMembership } from '@/hooks/membership-context';
@@ -126,6 +126,12 @@ export default function ProfileDetails() {
 
             <Text style={styles.sectionTitle}>{t('About')}</Text>
             <Text style={styles.bio}>{user.bio}</Text>
+
+            {user.instagram ? (
+              <TouchableOpacity style={styles.igButton} onPress={() => Linking.openURL(`https://instagram.com/${user.instagram}`)} testID="open-instagram">
+                <Text style={styles.igText}>Instagram @{user.instagram}</Text>
+              </TouchableOpacity>
+            ) : null}
 
             {user.interests?.length ? (
               <View style={{ marginTop: 16 }}>
@@ -267,6 +273,8 @@ const styles = StyleSheet.create({
 
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text.primary, marginBottom: 8 },
   bio: { fontSize: 16, color: Colors.text.secondary, lineHeight: 24 },
+  igButton: { marginTop: 12, backgroundColor: Colors.backgroundSecondary, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 },
+  igText: { color: Colors.primary, fontWeight: '700' }
 
   interestsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   interestChip: { backgroundColor: Colors.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },

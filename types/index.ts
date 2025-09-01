@@ -25,6 +25,7 @@ export interface User {
   };
   heightCm?: number;
   education?: string;
+  instagram?: string;
   verified?: boolean;
   isPremium?: boolean;
   lastActive?: Date;

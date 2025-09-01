@@ -22,15 +22,15 @@ const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
   },
   silver: {
     dailyMessages: 30,
-    dailyCompliments: 2,
-    dailyRightSwipes: 150,
+    dailyCompliments: 1,
+    dailyRightSwipes: 100,
     profileViews: 50,
-    advancedFilters: true,
+    advancedFilters: false,
     priorityMatching: false,
     seeWhoLikedYou: true,
     incognitoMode: false,
     profileBoost: true,
-    rewind: true,
+    rewind: false,
     travelMode: false,
     hideLocation: false,
   },
@@ -38,7 +38,7 @@ const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
     dailyMessages: 100,
     dailyCompliments: 5,
     dailyRightSwipes: 'unlimited',
-    profileViews: 200,
+    profileViews: 100,
     advancedFilters: true,
     priorityMatching: true,
     seeWhoLikedYou: true,
@@ -286,9 +286,9 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     if (!shouldGrant) return;
 
     const base: MonthlyAllowances =
-      tier === 'vip' ? { monthlyBoosts: 2, monthlySuperLikes: 15 } :
-      tier === 'gold' ? { monthlyBoosts: 1, monthlySuperLikes: 5 } :
-      tier === 'silver' ? { monthlyBoosts: 1, monthlySuperLikes: 2 } :
+      tier === 'vip' ? { monthlyBoosts: 5, monthlySuperLikes: 20 } :
+      tier === 'gold' ? { monthlyBoosts: 2, monthlySuperLikes: 10 } :
+      tier === 'silver' ? { monthlyBoosts: 1, monthlySuperLikes: 5 } :
       { monthlyBoosts: 0, monthlySuperLikes: 0 };
     setAllowances(base);
     setLastAllowanceGrantISO(now.toISOString());

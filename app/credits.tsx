@@ -1,20 +1,52 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useMembership } from '@/hooks/membership-context';
+import { useApp } from '@/hooks/app-context';
 import { Plus, ArrowLeft, MessageCircle, Zap, Unlock, Crown, Info } from 'lucide-react-native';
 import { trpc } from '@/lib/trpc';
 
 export default function Credits() {
   const router = useRouter();
   const { credits, addCredits, tier, features } = useMembership();
+  const { currentProfile } = useApp();
+  const [currency, setCurrency] = useState<string>('USD');
+
+  useEffect(() => {
+    try {
+      const regionToCurrency: Record<string, string> = { ET: 'ETB', US: 'USD', GB: 'GBP', DE: 'EUR', FR: 'EUR', IT: 'EUR', ES: 'EUR', NL: 'EUR', BE: 'EUR', PT: 'EUR', IE: 'EUR', AT: 'EUR', FI: 'EUR', GR: 'EUR', LU: 'EUR', MT: 'EUR', CY: 'EUR', SK: 'EUR', SI: 'EUR', LV: 'EUR', LT: 'EUR', EE: 'EUR', CZ: 'CZK', PL: 'PLN', SE: 'SEK', NO: 'NOK', DK: 'DKK', CH: 'CHF', CA: 'CAD', AU: 'AUD', NZ: 'NZD', JP: 'JPY', CN: 'CNY', IN: 'INR', NG: 'NGN', KE: 'KES', ZA: 'ZAR' };
+      const countryToCurrency: Record<string, string> = { ethiopia: 'ETB', usa: 'USD', 'united states': 'USD', 'united kingdom': 'GBP', uk: 'GBP', england: 'GBP', germany: 'EUR', france: 'EUR', italy: 'EUR', spain: 'EUR', netherlands: 'EUR', belgium: 'EUR', portugal: 'EUR', ireland: 'EUR', austria: 'EUR', finland: 'EUR', greece: 'EUR', luxembourg: 'EUR', malta: 'EUR', cyprus: 'EUR', slovakia: 'EUR', slovenia: 'EUR', latvia: 'EUR', lithuania: 'EUR', estonia: 'EUR', czechia: 'CZK', 'czech republic': 'CZK', poland: 'PLN', sweden: 'SEK', norway: 'NOK', denmark: 'DKK', switzerland: 'CHF', canada: 'CAD', australia: 'AUD', 'new zealand': 'NZD', japan: 'JPY', china: 'CNY', india: 'INR', nigeria: 'NGN', kenya: 'KES', 'south africa': 'ZAR' };
+      const rawLocation = currentProfile?.location?.city ?? '';
+      const fromProfile = (() => {
+        const text = String(rawLocation || '').toLowerCase();
+        if (!text) return null;
+        const parts = text.split(',').map(p => p.trim()).filter(Boolean);
+        const candidates = [...parts].reverse();
+        for (const c of candidates) {
+          if (countryToCurrency[c]) return countryToCurrency[c];
+          const iso2 = c.length === 2 ? c.toUpperCase() : '';
+          if (iso2 && regionToCurrency[iso2]) return regionToCurrency[iso2];
+        }
+        for (const key of Object.keys(countryToCurrency)) {
+          if (text.includes(key)) return countryToCurrency[key];
+        }
+        return null;
+      })();
+      if (fromProfile) { setCurrency(fromProfile); return; }
+      const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en-US';
+      const region = (locale.split('-')[1] || 'US').toUpperCase();
+      setCurrency(regionToCurrency[region] ?? 'USD');
+    } catch { setCurrency('USD'); }
+  }, [currentProfile?.location?.city]);
   const buyMutation = trpc.credits.buy.useMutation();
 
-  const buyPack = async (type: 'messages' | 'boosts' | 'unlocks', amount: number, price: string) => {
+  const formatPrice = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
+
+  const buyPack = async (type: 'messages' | 'boosts' | 'unlocks', amount: number, priceAmount: number) => {
     Alert.alert(
       'Purchase Credits',
-      `Buy ${amount} ${type} for ${price}?`,
+      `Buy ${amount} ${type} for ${formatPrice(priceAmount)}?`,
       [
         { text: 'Cancel', style: 'cancel' },
         { 
@@ -42,9 +74,9 @@ export default function Credits() {
       title: 'Message Credits',
       description: 'Send messages to your matches',
       packs: [
-        { amount: 10, price: '$2.99' },
-        { amount: 25, price: '$5.99' },
-        { amount: 50, price: '$9.99' },
+        { amount: 10, priceAmount: 2.99 },
+        { amount: 25, priceAmount: 5.99 },
+        { amount: 50, priceAmount: 9.99 },
       ]
     },
     {
@@ -53,9 +85,9 @@ export default function Credits() {
       title: 'Profile Boosts',
       description: 'Get more visibility and matches',
       packs: [
-        { amount: 1, price: '$3.99' },
-        { amount: 3, price: '$9.99' },
-        { amount: 5, price: '$14.99' },
+        { amount: 1, priceAmount: 3.99 },
+        { amount: 3, priceAmount: 9.99 },
+        { amount: 5, priceAmount: 14.99 },
       ]
     },
     {
@@ -64,9 +96,9 @@ export default function Credits() {
       title: 'Profile Unlocks',
       description: 'See who liked your profile',
       packs: [
-        { amount: 5, price: '$1.99' },
-        { amount: 15, price: '$4.99' },
-        { amount: 30, price: '$7.99' },
+        { amount: 5, priceAmount: 1.99 },
+        { amount: 15, priceAmount: 4.99 },
+        { amount: 30, priceAmount: 7.99 },
       ]
     },
   ];
@@ -147,11 +179,11 @@ export default function Credits() {
                   <TouchableOpacity
                     key={index}
                     style={styles.packCard}
-                    onPress={() => buyPack(category.type, pack.amount, pack.price)}
+                    onPress={() => buyPack(category.type, pack.amount, pack.priceAmount)}
                     testID={`buy-${category.type}-${pack.amount}`}
                   >
                     <Text style={styles.packAmount}>+{pack.amount}</Text>
-                    <Text style={styles.packPrice}>{pack.price}</Text>
+                    <Text style={styles.packPrice}>{formatPrice(pack.priceAmount)}</Text>
                     <View style={styles.packButton}>
                       <Plus size={16} color={Colors.text.white} />
                       <Text style={styles.packButtonText}>Buy</Text>
