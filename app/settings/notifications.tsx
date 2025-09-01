@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, Switch, TouchableOpacity } from 'react-native';
+import { SafeAreaView, View, Text, StyleSheet, Switch, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { ArrowLeft } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
+import GradientButton from '@/components/GradientButton';
 
 export default function NotificationSettingsScreen() {
   const router = useRouter();
@@ -34,6 +35,18 @@ export default function NotificationSettingsScreen() {
             <Row label={t('Messages')} value={messages} onValueChange={setMessages} />
           </View>
         </View>
+
+        <View style={{ height: 120 }} />
+      </View>
+
+      <View style={styles.footer} testID="save-bar-notifications">
+        <GradientButton
+          title={t('Save Changes')}
+          onPress={() => {
+            Alert.alert(t('Saved'), t('Notification preferences updated'));
+          }}
+          style={styles.saveButton}
+        />
       </View>
     </SafeAreaView>
   );
@@ -61,4 +74,6 @@ const styles = StyleSheet.create({
   cardBody: { backgroundColor: Colors.card, borderRadius: 16, shadowColor: Colors.shadow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4, overflow: 'hidden', paddingHorizontal: 12 },
   row: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: Colors.border },
   rowLabel: { color: Colors.text.primary },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: Platform.OS === 'web' ? 20 : 34, backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border, shadowColor: Colors.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 6 },
+  saveButton: { marginTop: 8 },
 });

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Image } from 'react-native';
+import { SafeAreaView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { ArrowLeft, Mail, KeyRound, Trash2, FileDown } from 'lucide-react-native';
@@ -7,6 +7,7 @@ import { useI18n } from '@/hooks/i18n-context';
 import { supabase } from '@/lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/hooks/auth-context';
+import GradientButton from '@/components/GradientButton';
 
 export default function AccountSettingsScreen() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function AccountSettingsScreen() {
   const [password, setPassword] = useState<string>('');
   const [loadingEmail, setLoadingEmail] = useState<boolean>(false);
   const [loadingPassword, setLoadingPassword] = useState<boolean>(false);
+  const [loadingAll, setLoadingAll] = useState<boolean>(false);
   const canUpdateEmail = useMemo(() => email.trim().length > 5 && email.includes('@'), [email]);
   const canUpdatePassword = useMemo(() => password.trim().length >= 6, [password]);
   const displayName = useMemo(() => user?.name ?? 'You', [user?.name]);
@@ -162,6 +164,33 @@ export default function AccountSettingsScreen() {
             </TouchableOpacity>
           </View>
         </View>
+
+        <View style={{ height: 120 }} />
+      </View>
+
+      <View style={styles.footer} testID="save-bar-account">
+        <GradientButton
+          title={loadingAll ? t('Saving...') : t('Save Changes')}
+          onPress={async () => {
+            try {
+              setLoadingAll(true);
+              if (canUpdateEmail) {
+                await supabase.auth.updateUser({ email: email.trim() });
+                setEmail('');
+              }
+              if (canUpdatePassword) {
+                await supabase.auth.updateUser({ password: password.trim() });
+                setPassword('');
+              }
+              Alert.alert(t('Saved'), t('Your changes have been saved'));
+            } catch (e: any) {
+              Alert.alert(t('Error'), e?.message ?? t('Failed to save changes'));
+            } finally {
+              setLoadingAll(false);
+            }
+          }}
+          style={styles.saveButton}
+        />
       </View>
     </SafeAreaView>
   );
@@ -192,4 +221,6 @@ const styles = StyleSheet.create({
   secondaryBtnText: { color: Colors.text.primary, fontWeight: '700' },
   dangerBtn: { flexDirection: 'row', gap: 8, backgroundColor: '#EF4444', height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   dangerBtnText: { color: Colors.text.white, fontWeight: '700' },
+  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: Platform.OS === 'web' ? 20 : 34, backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border, shadowColor: Colors.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 6 },
+  saveButton: { marginTop: 8 },
 });
