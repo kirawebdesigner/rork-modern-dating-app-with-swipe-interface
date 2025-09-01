@@ -14,18 +14,26 @@ export default function NotificationSettingsScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/settings' as any); } }} style={styles.backBtn} accessibilityLabel={t('Back')} testID="notifications-back">
-          <ArrowLeft size={20} color={Colors.text.primary} />
-        </TouchableOpacity>
-        <Text style={styles.title}>{t('Notifications')}</Text>
-        <View style={{ width: 20 }} />
+      <View style={styles.headerWrap}>
+        <View style={styles.headerBg} />
+        <View style={styles.headerRow}>
+          <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/settings' as any); } }} style={styles.backBtn} accessibilityLabel={t('Back')} testID="notifications-back">
+            <ArrowLeft size={20} color={Colors.text.white} />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('Notifications')}</Text>
+          <View style={{ width: 28 }} />
+        </View>
       </View>
 
-      <View style={styles.section}>
-        <Row label={t('Likes')} value={likes} onValueChange={setLikes} />
-        <Row label={t('Matches')} value={matches} onValueChange={setMatches} />
-        <Row label={t('Messages')} value={messages} onValueChange={setMessages} />
+      <View style={styles.content}>
+        <View style={styles.card}>
+          <Text style={styles.sectionTitle}>{t('Push alerts')}</Text>
+          <View style={styles.cardBody}>
+            <Row label={t('Likes')} value={likes} onValueChange={setLikes} />
+            <Row label={t('Matches')} value={matches} onValueChange={setMatches} />
+            <Row label={t('Messages')} value={messages} onValueChange={setMessages} />
+          </View>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -41,11 +49,16 @@ function Row({ label, value, onValueChange }: { label: string; value: boolean; o
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
-  header: { paddingHorizontal: 20, paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: Colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  backBtn: { padding: 4 },
-  title: { fontSize: 20, fontWeight: '700', color: Colors.text.primary },
-  section: { paddingHorizontal: 20, paddingTop: 20 },
+  container: { flex: 1, backgroundColor: Colors.backgroundSecondary },
+  headerWrap: { backgroundColor: 'transparent' },
+  headerBg: { height: 140, backgroundColor: Colors.primary },
+  headerRow: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  headerTitle: { color: Colors.text.white, fontSize: 18, fontWeight: '700' },
+  backBtn: { padding: 6 },
+  content: { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 24 },
+  sectionTitle: { fontSize: 12, color: Colors.text.secondary, marginBottom: 8 },
+  card: { marginBottom: 16 },
+  cardBody: { backgroundColor: Colors.card, borderRadius: 16, shadowColor: Colors.shadow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4, overflow: 'hidden', paddingHorizontal: 12 },
   row: { height: 56, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderBottomWidth: 1, borderBottomColor: Colors.border },
   rowLabel: { color: Colors.text.primary },
 });
