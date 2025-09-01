@@ -34,6 +34,7 @@ import {
   Slash,
 } from 'lucide-react-native';
 import Colors from '@/constants/colors';
+import { LinearGradient } from 'expo-linear-gradient';
 import { useApp } from '@/hooks/app-context';
 import { useAuth } from '@/hooks/auth-context';
 import GradientButton from '@/components/GradientButton';
@@ -132,25 +133,32 @@ export default function ProfileScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scrollContent} testID="profile-scroll">
-        <View style={styles.header}>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push('/settings' as any)}
-            accessibilityLabel="Open settings"
-            testID="settings-button"
-          >
-            <Settings size={24} color={Colors.text.primary} />
-          </TouchableOpacity>
-          <Text style={styles.title}>Profile</Text>
-          <TouchableOpacity
-            style={styles.headerButton}
-            onPress={() => router.push('/profile-settings' as any)}
-            accessibilityLabel="Edit profile"
-            testID="edit-profile-button"
-          >
-            <Edit3 size={24} color={Colors.text.primary} />
-          </TouchableOpacity>
-        </View>
+        <LinearGradient
+          colors={[Colors.gradient.start, Colors.gradient.middle, Colors.gradient.end]}
+          start={{ x: 0, y: 0 }}
+          end={{ x: 1, y: 1 }}
+          style={styles.headerWrap}
+        >
+          <View style={styles.headerRow}>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => router.push('/settings' as any)}
+              accessibilityLabel="Open settings"
+              testID="settings-button"
+            >
+              <Settings size={24} color={Colors.text.white} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>Profile</Text>
+            <TouchableOpacity
+              style={styles.headerButton}
+              onPress={() => router.push('/profile-settings' as any)}
+              accessibilityLabel="Edit profile"
+              testID="edit-profile-button"
+            >
+              <Edit3 size={24} color={Colors.text.white} />
+            </TouchableOpacity>
+          </View>
+        </LinearGradient>
 
         <View style={styles.profileSection}>
           <ScrollView
@@ -387,20 +395,25 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingBottom: 32,
   },
-  header: {
+  headerWrap: {
+    paddingTop: 16,
+    paddingBottom: 24,
+    paddingHorizontal: 20,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+  },
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
   },
   headerButton: {
     padding: 8,
   },
-  title: {
+  headerTitle: {
     fontSize: 20,
-    fontWeight: '600',
-    color: Colors.text.primary,
+    fontWeight: '700',
+    color: Colors.text.white,
   },
   profileSection: {
     alignItems: 'center',
@@ -504,8 +517,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   section: {
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+    marginHorizontal: 20,
+    marginVertical: 10,
+    padding: 16,
+    backgroundColor: Colors.card,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   sectionTitle: {
     fontSize: 18,
