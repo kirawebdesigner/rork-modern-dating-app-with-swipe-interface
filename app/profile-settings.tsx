@@ -30,6 +30,7 @@ export default function ProfileSettings() {
   const [education, setEducation] = useState<string>(currentProfile?.education ?? '');
   const ownedThemes = (currentProfile?.ownedThemes ?? []) as ThemeId[];
   const selectedTheme = (currentProfile?.profileTheme ?? null) as ThemeId | null;
+  const [instagram, setInstagram] = useState<string>(currentProfile?.instagram ?? '');
 
   const canAdvanced = useMemo(() => tier === 'gold' || tier === 'vip', [tier]);
 
@@ -185,6 +186,8 @@ export default function ProfileSettings() {
               onChangeText={setName}
               placeholder={t('Your name')}
               placeholderTextColor={Colors.text.secondary}
+              autoCapitalize="words"
+              testID="input-name"
             />
             <TextInput
               style={styles.textInput}
@@ -193,6 +196,7 @@ export default function ProfileSettings() {
               inputMode="numeric"
               placeholder={t('Age')}
               placeholderTextColor={Colors.text.secondary}
+              testID="input-age"
             />
           </View>
           <View style={[styles.rowInputs, { marginTop: 12 }]}> 
@@ -202,14 +206,17 @@ export default function ProfileSettings() {
               onChangeText={setCity}
               placeholder={t('City, Country')}
               placeholderTextColor={Colors.text.secondary}
+              autoCapitalize="words"
+              testID="input-location"
             />
             <TextInput
               style={styles.textInput}
               value={heightCm}
-              onChangeText={(t) => setHeightCm(t.replace(/[^0-9]/g, ''))}
+              onChangeText={(txt) => setHeightCm(txt.replace(/[^0-9]/g, ''))}
               inputMode="numeric"
               placeholder={t('Height (cm) placeholder')}
               placeholderTextColor={Colors.text.secondary}
+              testID="input-height"
             />
           </View>
           <View style={{ marginTop: 12 }}>
@@ -219,6 +226,26 @@ export default function ProfileSettings() {
               onChangeText={setEducation}
               placeholder={t('Education (e.g., Bachelor in CS)')}
               placeholderTextColor={Colors.text.secondary}
+              autoCapitalize="sentences"
+              testID="input-education"
+            />
+          </View>
+          <View style={{ marginTop: 12 }}>
+            <TextInput
+              style={styles.textInput}
+              value={instagram}
+              onChangeText={(val) => {
+                const cleaned = String(val ?? '')
+                  .replace(/^https?:\/\/(?:www\.)?instagram\.com\//i, '')
+                  .replace(/^@+/, '')
+                  .trim();
+                setInstagram(cleaned);
+              }}
+              placeholder={t('Instagram username (optional)')}
+              placeholderTextColor={Colors.text.secondary}
+              autoCapitalize="none"
+              autoCorrect={false}
+              testID="input-instagram"
             />
           </View>
         </View>
@@ -366,7 +393,8 @@ export default function ProfileSettings() {
           onPress={async () => {
             const nextAge = Number(age) || currentProfile.age;
             if (nextAge < 18) { Alert.alert(t('Age restriction'), t('You must be at least 18 years old.')); return; }
-            await updateProfile({ name, age: nextAge, photos, bio, interests, instagram: instagram || undefined, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
+            const ig = instagram.trim() || undefined;
+            await updateProfile({ name, age: nextAge, photos, bio, interests, instagram: ig, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
             await setFilters({ ...filters, distanceKm: radius });
             Alert.alert(t('Applied'), t('Profile updated successfully!'));
             if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
