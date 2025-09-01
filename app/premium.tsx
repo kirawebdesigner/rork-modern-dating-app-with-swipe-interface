@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -103,11 +103,10 @@ const tierData: Record<MembershipTier, TierInfo> = {
 export default function PremiumScreen() {
   const router = useRouter();
   const { tier, upgradeTier, addCredits, resetDailyLimits, grantMonthlyAllowancesIfNeeded } = useMembership();
-  const { unlockTheme, setTier: setAppTier, currentProfile } = useApp();
+  const { unlockTheme, setTier: setAppTier } = useApp();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
-  const [currency, setCurrency] = useState<string>('USD');
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
   const buyCreditsMutation = trpc.credits.buy.useMutation();
@@ -147,8 +146,8 @@ export default function PremiumScreen() {
       }
 
       const priceLabel = billingPeriod === 'monthly'
-        ? `${tierData[selectedTier].priceMonthly.toFixed(2)}/month`
-        : `${(tierData[selectedTier].priceMonthly * 6).toFixed(2)}/year (-50%)`;
+        ? `${formatDual(tierData[selectedTier].priceMonthly)}/month`
+        : `${formatDual(tierData[selectedTier].priceMonthly * 6)}/year (-50%)`;
 
       Alert.alert(
         'Upgrade Membership',
@@ -174,130 +173,17 @@ export default function PremiumScreen() {
     Alert.alert('Purchased', `Added ${amount} ${type}.`);
   };
 
-  useEffect(() => {
-    try {
-      const regionToCurrency: Record<string, string> = {
-        ET: 'ETB',
-        US: 'USD',
-        GB: 'GBP',
-        DE: 'EUR',
-        FR: 'EUR',
-        IT: 'EUR',
-        ES: 'EUR',
-        NL: 'EUR',
-        BE: 'EUR',
-        PT: 'EUR',
-        IE: 'EUR',
-        AT: 'EUR',
-        FI: 'EUR',
-        GR: 'EUR',
-        LU: 'EUR',
-        MT: 'EUR',
-        CY: 'EUR',
-        SK: 'EUR',
-        SI: 'EUR',
-        LV: 'EUR',
-        LT: 'EUR',
-        EE: 'EUR',
-        CZ: 'CZK',
-        PL: 'PLN',
-        SE: 'SEK',
-        NO: 'NOK',
-        DK: 'DKK',
-        CH: 'CHF',
-        CA: 'CAD',
-        AU: 'AUD',
-        NZ: 'NZD',
-        JP: 'JPY',
-        CN: 'CNY',
-        IN: 'INR',
-        NG: 'NGN',
-        KE: 'KES',
-        ZA: 'ZAR',
-      };
 
-      const countryToCurrency: Record<string, string> = {
-        ethiopia: 'ETB',
-        usa: 'USD',
-        'united states': 'USD',
-        'united kingdom': 'GBP',
-        uk: 'GBP',
-        england: 'GBP',
-        germany: 'EUR',
-        france: 'EUR',
-        italy: 'EUR',
-        spain: 'EUR',
-        netherlands: 'EUR',
-        belgium: 'EUR',
-        portugal: 'EUR',
-        ireland: 'EUR',
-        austria: 'EUR',
-        finland: 'EUR',
-        greece: 'EUR',
-        luxembourg: 'EUR',
-        malta: 'EUR',
-        cyprus: 'EUR',
-        slovakia: 'EUR',
-        slovenia: 'EUR',
-        latvia: 'EUR',
-        lithuania: 'EUR',
-        estonia: 'EUR',
-        czechia: 'CZK',
-        'czech republic': 'CZK',
-        poland: 'PLN',
-        sweden: 'SEK',
-        norway: 'NOK',
-        denmark: 'DKK',
-        switzerland: 'CHF',
-        canada: 'CAD',
-        australia: 'AUD',
-        'new zealand': 'NZD',
-        japan: 'JPY',
-        china: 'CNY',
-        india: 'INR',
-        nigeria: 'NGN',
-        kenya: 'KES',
-        'south africa': 'ZAR',
-      };
-
-      const rawLocation = currentProfile?.location?.city ?? '';
-      const fromProfile = (() => {
-        const text = String(rawLocation || '').toLowerCase();
-        if (!text) return null;
-        const parts = text.split(',').map(p => p.trim()).filter(Boolean);
-        const candidates = [...parts].reverse();
-        for (const c of candidates) {
-          if (countryToCurrency[c]) return countryToCurrency[c];
-          const iso2 = c.length === 2 ? c.toUpperCase() : '';
-          if (iso2 && regionToCurrency[iso2]) return regionToCurrency[iso2];
-        }
-        // keyword search
-        for (const key of Object.keys(countryToCurrency)) {
-          if (text.includes(key)) return countryToCurrency[key];
-        }
-        return null;
-      })();
-
-      if (fromProfile) {
-        setCurrency(fromProfile);
-        return;
-      }
-
-      const locale = Intl.DateTimeFormat().resolvedOptions().locale || 'en-US';
-      const region = (locale.split('-')[1] || 'US').toUpperCase();
-      setCurrency(regionToCurrency[region] ?? 'USD');
-    } catch (e) {
-      setCurrency('USD');
-    }
-  }, [currentProfile?.location?.city]);
-
-  const formatPrice = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
+  const USD_TO_ETB = 160;
+  const formatUSD = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(amount);
+  const formatETB = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'ETB', maximumFractionDigits: 0 }).format(amount);
+  const formatDual = useCallback((usdAmount: number) => `${formatUSD(usdAmount)} • ${formatETB(usdAmount * USD_TO_ETB)}`, []);
 
   const selectedPriceLabel = useMemo(() => {
     const info = tierData[selectedTier];
-    if (billingPeriod === 'monthly') return `${formatPrice(info.priceMonthly)}/month`;
-    return `${formatPrice(info.priceMonthly * 6)}/year (-50%)`;
-  }, [selectedTier, billingPeriod, currency]);
+    if (billingPeriod === 'monthly') return `${formatDual(info.priceMonthly)}/month`;
+    return `${formatDual(info.priceMonthly * 6)}/year (-50%)`;
+  }, [selectedTier, billingPeriod, formatDual]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -354,9 +240,9 @@ export default function PremiumScreen() {
             const showPrice = tierKey !== 'free';
             const priceText = showPrice
               ? (billingPeriod === 'monthly'
-                ? `${tierInfo.priceMonthly.toFixed(2)}/mo`
-                : `${formatPrice(tierInfo.priceMonthly * 6)}/yr`)
-              : formatPrice(0);
+                ? `${formatDual(tierInfo.priceMonthly)}/mo`
+                : `${formatDual(tierInfo.priceMonthly * 6)}/yr`)
+              : 'Free';
             
             return (
               <TouchableOpacity
@@ -391,7 +277,7 @@ export default function PremiumScreen() {
                         <Text style={styles.offPillText}>-50%</Text>
                       </View>
                     )}
-                    <Text style={styles.tierPrice}>{billingPeriod === 'monthly' && tierKey !== 'free' ? `${formatPrice(tierInfo.priceMonthly)}/mo` : priceText}</Text>
+                    <Text style={styles.tierPrice}>{billingPeriod === 'monthly' && tierKey !== 'free' ? `${formatDual(tierInfo.priceMonthly)}/mo` : priceText}</Text>
                   </View>
                 </View>
 
