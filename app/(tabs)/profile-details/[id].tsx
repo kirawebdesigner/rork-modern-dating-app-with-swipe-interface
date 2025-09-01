@@ -274,7 +274,7 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 18, fontWeight: '700', color: Colors.text.primary, marginBottom: 8 },
   bio: { fontSize: 16, color: Colors.text.secondary, lineHeight: 24 },
   igButton: { marginTop: 12, backgroundColor: Colors.backgroundSecondary, paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10 },
-  igText: { color: Colors.primary, fontWeight: '700' }
+  igText: { color: Colors.primary, fontWeight: '700' },
 
   interestsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 },
   interestChip: { backgroundColor: Colors.backgroundSecondary, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 18 },
