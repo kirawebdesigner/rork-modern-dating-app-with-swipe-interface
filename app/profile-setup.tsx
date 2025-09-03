@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert, Platform, Image } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
-import { ArrowLeft, Camera, Calendar, Check, ChevronLeft, ChevronRight } from 'lucide-react-native';
+import { ArrowLeft, Camera, Calendar, Check, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
@@ -26,8 +27,9 @@ interface ProfileData {
 }
 
 export default function ProfileSetup() {
+  const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState<ProfileStep>('details');
-  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showDatePicker, setShowDatePicker] = useState<boolean>(false);
   const [selectedYear, setSelectedYear] = useState<number>(1995);
   const [selectedMonth, setSelectedMonth] = useState<number>(6);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
@@ -241,7 +243,7 @@ export default function ProfileSetup() {
         </Text>
       </TouchableOpacity>
 
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Confirm')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -271,7 +273,7 @@ export default function ProfileSetup() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -353,7 +355,7 @@ export default function ProfileSetup() {
           </View>
         </View>
       </ScrollView>
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -375,7 +377,7 @@ export default function ProfileSetup() {
         ))}
         <View style={styles.bottomSpacing} />
       </ScrollView>
-      <View style={styles.bottomContainer}>
+      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -425,23 +427,41 @@ export default function ProfileSetup() {
   const CalendarGrid = () => {
     const daysInMonth = getDaysInMonth(selectedYear, selectedMonth);
     const firstDay = getFirstDayOfMonth(selectedYear, selectedMonth);
-    
+    const today = new Date();
+
     return (
       <View style={styles.calendarGrid}>
         {Array.from({ length: firstDay }, (_, i) => (
-          <View key={`empty-${i}`} style={styles.calendarDay} />
+          <View key={`empty-${i}`} style={[styles.calendarDayCell, styles.calendarDay]} />
         ))}
         {Array.from({ length: daysInMonth }, (_, i) => {
           const day = i + 1;
-          const isSelected = selectedDay === day;
+          const thisDate = new Date(selectedYear, selectedMonth, day);
+          const isFuture = thisDate > today;
+          const isSelected = selectedDay === day && !isFuture;
           return (
             <TouchableOpacity
               key={`day-${day}`}
               testID={`day-${day}`}
-              style={[styles.calendarDay, styles.calendarDayButton, isSelected && styles.calendarDaySelected]}
-              onPress={() => handleDaySelect(day)}
+              disabled={isFuture}
+              style={[
+                styles.calendarDayCell,
+                styles.calendarDay,
+                styles.calendarDayButton,
+                isSelected && styles.calendarDaySelected,
+                isFuture && styles.calendarDayDisabled,
+              ]}
+              onPress={() => !isFuture && handleDaySelect(day)}
             >
-              <Text style={[styles.calendarDayText, isSelected && styles.calendarDayTextSelected]}>{day}</Text>
+              <Text
+                style={[
+                  styles.calendarDayText,
+                  isSelected && styles.calendarDayTextSelected,
+                  isFuture && styles.calendarDayTextDisabled,
+                ]}
+              >
+                {day}
+              </Text>
             </TouchableOpacity>
           );
         })}
@@ -452,7 +472,7 @@ export default function ProfileSetup() {
   const renderDatePickerModal = () => (
     <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
       <View style={styles.modalOverlay}>
-        <View style={styles.datePickerContainer}>
+        <View style={[styles.datePickerContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
           <View style={styles.datePickerHeader}>
             <TouchableOpacity onPress={() => setShowDatePicker(false)}>
               <Text style={styles.skipText}>{t('Continue')}</Text>
@@ -464,22 +484,52 @@ export default function ProfileSetup() {
               <ChevronLeft size={24} color={colors.text.primary} />
             </TouchableOpacity>
             <View style={styles.monthYearDisplay}>
-              <TextInput
-                testID="year-input"
-                style={styles.yearInput}
-                value={typedYear}
-                onChangeText={(text) => {
-                  const normalized = text.replace(/[^0-9]/g, '');
-                  const limited = normalized.slice(0, 4);
-                  setTypedYear(limited);
-                  const parsed = parseInt(limited, 10);
-                  if (!Number.isNaN(parsed)) setSelectedYear(parsed);
-                }}
-                keyboardType={Platform.OS === 'web' ? 'default' : 'number-pad'}
-                maxLength={4}
-                placeholder="YYYY"
-                placeholderTextColor={colors.text.light}
-              />
+              <View style={styles.yearRow}>
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  testID="year-minus-10"
+                  onPress={() => {
+                    const next = selectedYear - 10;
+                    setSelectedYear(next);
+                    setTypedYear(String(next));
+                  }}
+                  style={styles.yearMiniBtn}
+                >
+                  <Minus size={16} color={colors.primary} />
+                  <Text style={styles.yearMiniBtnText}>10</Text>
+                </TouchableOpacity>
+                <TextInput
+                  testID="year-input"
+                  style={styles.yearInput}
+                  value={typedYear}
+                  onChangeText={(text) => {
+                    const normalized = text.replace(/[^0-9]/g, '');
+                    const limited = normalized.slice(0, 4);
+                    setTypedYear(limited);
+                    const parsed = parseInt(limited, 10);
+                    if (!Number.isNaN(parsed)) setSelectedYear(parsed);
+                  }}
+                  keyboardType={Platform.OS === 'web' ? 'default' : 'number-pad'}
+                  maxLength={4}
+                  placeholder="YYYY"
+                  placeholderTextColor={colors.text.light}
+                />
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  testID="year-plus-10"
+                  onPress={() => {
+                    const next = selectedYear + 10;
+                    const yearToday = new Date().getFullYear();
+                    const clamped = Math.min(next, yearToday);
+                    setSelectedYear(clamped);
+                    setTypedYear(String(clamped));
+                  }}
+                  style={styles.yearMiniBtn}
+                >
+                  <Plus size={16} color={colors.primary} />
+                  <Text style={styles.yearMiniBtnText}>10</Text>
+                </TouchableOpacity>
+              </View>
               <Text style={styles.monthText}>{t(months[selectedMonth]) ?? months[selectedMonth]}</Text>
             </View>
             <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavButton} testID="next-month">
@@ -547,7 +597,7 @@ const styles = StyleSheet.create({
   interestIcon: { fontSize: 16, marginRight: 8 },
   interestText: { fontSize: 14, fontWeight: '500', color: colors.text.primary },
   interestTextSelected: { color: colors.text.white },
-  bottomContainer: { paddingBottom: Platform.OS === 'ios' ? 34 : 24 },
+  bottomContainer: { paddingBottom: 16 },
   confirmButton: { marginTop: 16 },
   bottomSpacing: { height: 100 },
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
@@ -556,27 +606,33 @@ const styles = StyleSheet.create({
   chipText: { color: colors.text.primary, fontWeight: '600' },
   chipTextActive: { color: colors.text.white },
   modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  datePickerContainer: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: Platform.OS === 'ios' ? 34 : 24, minHeight: 500 },
+  datePickerContainer: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, minHeight: 500 },
   datePickerHeader: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 20 },
   datePickerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.text.primary, textAlign: 'center', marginBottom: 32 },
   monthYearContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingHorizontal: 20 },
   monthNavButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
   monthYearDisplay: { alignItems: 'center' },
-  yearInput: { fontSize: 28, fontWeight: '700', color: colors.primary, textAlign: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, minWidth: 110, marginBottom: 6, backgroundColor: colors.background },
+  yearRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  yearMiniBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary },
+  yearMiniBtnText: { color: colors.primary, fontWeight: '700' },
+  yearInput: { fontSize: 28, fontWeight: '700', color: colors.primary, textAlign: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, minWidth: 110, backgroundColor: colors.background },
   monthText: { fontSize: 18, fontWeight: '600', color: colors.primary },
   monthsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 12 },
   monthChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border, marginBottom: 6, minWidth: 48, alignItems: 'center' },
   monthChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   monthChipText: { color: colors.text.primary, fontWeight: '600' },
   monthChipTextActive: { color: colors.text.white, fontWeight: '700' },
-  weekDaysContainer: { flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16, paddingHorizontal: 8 },
-  weekDayText: { fontSize: 14, fontWeight: '600', color: colors.text.secondary, width: 40, textAlign: 'center' },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'space-around', marginBottom: 32, paddingHorizontal: 8 },
-  calendarDay: { width: 40, height: 40, marginBottom: 8 },
-  calendarDayButton: { justifyContent: 'center', alignItems: 'center', borderRadius: 20 },
+  weekDaysContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 8 },
+  weekDayText: { fontSize: 14, fontWeight: '600', color: colors.text.secondary, width: '14.2857%', textAlign: 'center' },
+  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginBottom: 32, paddingHorizontal: 8 },
+  calendarDayCell: { width: '14.2857%' },
+  calendarDay: { height: 44, marginBottom: 8 },
+  calendarDayButton: { justifyContent: 'center', alignItems: 'center', borderRadius: 22 },
   calendarDaySelected: { backgroundColor: colors.primary },
+  calendarDayDisabled: { opacity: 0.35 },
   calendarDayText: { fontSize: 16, fontWeight: '500', color: colors.text.primary },
   calendarDayTextSelected: { color: colors.text.white, fontWeight: 'bold' },
+  calendarDayTextDisabled: { color: colors.text.secondary },
   saveButton: { marginTop: 16 },
   saveButtonDisabled: { opacity: 0.5 },
 });
