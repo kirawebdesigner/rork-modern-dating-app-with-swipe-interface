@@ -119,6 +119,16 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     if (error) throw error;
     const u = data.user;
     if (!u) return;
+
+    try {
+      const { error: upsertErr } = await supabase
+        .from('profiles')
+        .upsert({ id: u.id, name }, { onConflict: 'id' });
+      if (upsertErr) console.log('[Auth] profile upsert error', upsertErr);
+    } catch (e) {
+      console.log('[Auth] profile upsert exception', e);
+    }
+
     try {
       const code = await AsyncStorage.getItem('referrer_code');
       if (code) {
@@ -134,6 +144,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
         }
       }
     } catch {}
+
     const profile = await fetchProfile(u.id);
     const next: AuthUser = {
       id: u.id,
