@@ -63,7 +63,7 @@ export default function ProfileSetup() {
 
   const handleSkip = () => {
     if (currentStep === 'interests') {
-      router.replace('/permissions/contacts' as any);
+      router.replace('/(tabs)' as any);
     } else {
       setCurrentStep(currentStep === 'details' ? 'gender' : 'interests');
     }
@@ -148,7 +148,7 @@ export default function ProfileSetup() {
       } catch (e) {
         console.log('[ProfileSetup] Final save error', e);
       }
-      router.replace('/permissions/contacts' as any);
+      router.replace('/(tabs)' as any);
     }
   };
 

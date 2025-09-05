@@ -66,12 +66,12 @@ export default function OnboardingScreen() {
         animated: true,
       });
     } else {
-      router.push('/(auth)' as any);
+      router.push('/(auth)/signup' as any);
     }
   };
 
   const handleSkip = () => {
-    router.push('/(auth)' as any);
+    router.push('/(auth)/signup' as any);
   };
 
   return (
