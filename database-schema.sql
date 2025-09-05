@@ -39,6 +39,7 @@ CREATE TABLE IF NOT EXISTS public.memberships (
   message_credits INTEGER DEFAULT 0,
   boost_credits INTEGER DEFAULT 0,
   unlock_credits INTEGER DEFAULT 0,
+  compliment_credits INTEGER DEFAULT 0,
   remaining_daily_messages INTEGER DEFAULT 5,
   remaining_profile_views INTEGER DEFAULT 10,
   last_reset DATE DEFAULT CURRENT_DATE,
@@ -115,7 +116,7 @@ CREATE TABLE IF NOT EXISTS public.user_interests (
 CREATE TABLE IF NOT EXISTS public.credit_transactions (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  type TEXT CHECK (type IN ('messages', 'boosts', 'unlocks')) NOT NULL,
+  type TEXT CHECK (type IN ('messages', 'boosts', 'unlocks', 'compliments')) NOT NULL,
   amount INTEGER NOT NULL,
   transaction_type TEXT CHECK (transaction_type IN ('purchase', 'earned', 'used')) NOT NULL,
   description TEXT,
