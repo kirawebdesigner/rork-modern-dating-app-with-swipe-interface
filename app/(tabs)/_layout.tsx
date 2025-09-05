@@ -1,11 +1,17 @@
-import { Tabs } from 'expo-router';
+import { Redirect, Tabs } from 'expo-router';
 import { User, Sparkles, Diamond, MessageCircle } from 'lucide-react-native';
 import React from 'react';
 import Colors from '@/constants/colors';
 import { useI18n } from '@/hooks/i18n-context';
+import { useAuth } from '@/hooks/auth-context';
 
 export default function TabLayout() {
   const { t, lang } = useI18n() as { t: (k: string) => string; lang: 'en' | 'am' };
+  const { isAuthenticated, isLoading } = useAuth();
+
+  if (isLoading) return null;
+  if (!isAuthenticated) return <Redirect href="/onboarding" />;
+
   return (
     <Tabs
       key={lang}
