@@ -1,9 +1,10 @@
-import React, { useState, useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
+  FlatList,
+  ListRenderItemInfo,
   Dimensions,
   TouchableOpacity,
   SafeAreaView,
@@ -12,8 +13,9 @@ import {
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
+import { Platform } from 'react-native';
 
-const { width: screenWidth } = Dimensions.get('window');
+const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 
 const slides = [
   {
@@ -48,23 +50,24 @@ const slides = [
   },
 ];
 
+type Slide = { id: string; title: string; description: string; image: string };
+
 export default function OnboardingScreen() {
   const router = useRouter();
-  const scrollViewRef = useRef<ScrollView>(null);
-  const [currentIndex, setCurrentIndex] = useState(0);
+  const listRef = useRef<FlatList<Slide>>(null);
+  const [currentIndex, setCurrentIndex] = useState<number>(0);
 
-  const handleScroll = (event: any) => {
-    const contentOffset = event.nativeEvent.contentOffset.x;
-    const index = Math.round(contentOffset / screenWidth);
-    setCurrentIndex(index);
-  };
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
+    const idx = viewableItems?.[0]?.index ?? 0;
+    console.log('[Onboarding] viewable index', idx);
+    setCurrentIndex(idx ?? 0);
+  }).current;
+
+  const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 60 });
 
   const handleNext = () => {
     if (currentIndex < slides.length - 1) {
-      scrollViewRef.current?.scrollTo({
-        x: (currentIndex + 1) * screenWidth,
-        animated: true,
-      });
+      listRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
     } else {
       router.push('/(auth)/signup' as any);
     }
@@ -76,30 +79,36 @@ export default function OnboardingScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <TouchableOpacity style={styles.skipButton} onPress={handleSkip}>
+      <TouchableOpacity style={styles.skipButton} onPress={handleSkip} testID="skip-button">
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
 
-      <ScrollView
-        ref={scrollViewRef}
+      <FlatList
+        ref={listRef}
+        data={slides as Slide[]}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }: ListRenderItemInfo<Slide>) => (
+          <View style={styles.slide} testID={`slide-${item.id}`}>
+            <View style={styles.imageContainer}>
+              <Image source={{ uri: item.image }} style={styles.image} accessibilityIgnoresInvertColors />
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.description}>{item.description}</Text>
+            </View>
+          </View>
+        )}
         horizontal
         pagingEnabled
         showsHorizontalScrollIndicator={false}
-        onScroll={handleScroll}
-        scrollEventThrottle={16}
-      >
-        {slides.map((slide) => (
-          <View key={slide.id} style={styles.slide}>
-            <View style={styles.imageContainer}>
-              <Image source={{ uri: slide.image }} style={styles.image} />
-            </View>
-            <View style={styles.textContainer}>
-              <Text style={styles.title}>{slide.title}</Text>
-              <Text style={styles.description}>{slide.description}</Text>
-            </View>
-          </View>
-        ))}
-      </ScrollView>
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewConfigRef.current}
+        getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+        initialNumToRender={1}
+        windowSize={3}
+        removeClippedSubviews={Platform.OS !== 'web'}
+        contentContainerStyle={styles.listContent}
+      />
 
       <View style={styles.footer}>
         <View style={styles.pagination}>
@@ -121,7 +130,7 @@ export default function OnboardingScreen() {
         />
 
         {currentIndex < slides.length - 1 && (
-          <TouchableOpacity onPress={() => router.push('/(auth)/login' as any)}>
+          <TouchableOpacity onPress={() => router.push('/(auth)/login' as any)} testID="signin-link">
             <Text style={styles.loginText}>
               Already have an account? <Text style={styles.loginLink}>Sign In</Text>
             </Text>
@@ -139,57 +148,65 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     position: 'absolute',
-    top: 60,
-    right: 20,
-    zIndex: 1,
+    top: 12,
+    right: 16,
+    zIndex: 10,
+    padding: 8,
   },
   skipText: {
     color: Colors.primary,
     fontSize: 16,
     fontWeight: '600',
   },
+  listContent: {
+    alignItems: 'stretch',
+  },
   slide: {
     width: screenWidth,
-    flex: 1,
     paddingHorizontal: 20,
+    justifyContent: 'flex-start',
   },
   imageContainer: {
-    flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 40,
+    paddingTop: 32,
   },
   image: {
     width: screenWidth - 80,
-    height: (screenWidth - 80) * 1.3,
+    aspectRatio: 4 / 5,
     borderRadius: 20,
+    resizeMode: 'cover',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
   },
   textContainer: {
-    paddingVertical: 40,
+    paddingVertical: 24,
     alignItems: 'center',
   },
   title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 26,
+    fontWeight: '700',
     color: Colors.primary,
-    marginBottom: 16,
+    marginBottom: 12,
   },
   description: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text.secondary,
     textAlign: 'center',
-    paddingHorizontal: 20,
-    lineHeight: 24,
+    paddingHorizontal: 12,
+    lineHeight: 22,
   },
   footer: {
     paddingHorizontal: 20,
-    paddingBottom: 40,
+    paddingBottom: 16,
     alignItems: 'center',
   },
   pagination: {
     flexDirection: 'row',
     gap: 8,
-    marginBottom: 30,
+    marginBottom: 20,
   },
   dot: {
     width: 8,
