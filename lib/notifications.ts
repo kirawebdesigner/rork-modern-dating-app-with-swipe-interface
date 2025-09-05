@@ -1,10 +1,18 @@
-import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 export type PushPayload = { title: string; body: string };
 
 export async function registerForPushNotificationsAsync(): Promise<string | null> {
   try {
+    if (Platform.OS === 'android') {
+      console.log(
+        '[Push] Skipping push registration on Android in Expo Go (SDK 53). Use a development build instead.'
+      );
+      return null;
+    }
+
+    const Notifications = await import('expo-notifications');
+
     const { status: existingStatus } = await Notifications.getPermissionsAsync();
     let finalStatus = existingStatus;
     if (existingStatus !== 'granted') {
@@ -15,13 +23,14 @@ export async function registerForPushNotificationsAsync(): Promise<string | null
       console.log('[Push] Permission not granted');
       return null;
     }
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
-    if (Platform.OS === 'android') {
-      await Notifications.setNotificationChannelAsync('default', {
-        name: 'default',
-        importance: Notifications.AndroidImportance.MAX,
-      });
+
+    const tokenResp = await Notifications.getExpoPushTokenAsync();
+    const token = tokenResp?.data ?? null;
+
+    if (Platform.OS === 'ios') {
+      await Notifications.setNotificationCategoryAsync?.('default', []);
     }
+
     return token;
   } catch (e) {
     console.log('[Push] register error', e);

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Notifications from 'expo-notifications';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 
@@ -15,11 +14,19 @@ export default function NotificationsPermission() {
       setLoading(true);
       if (Platform.OS === 'web') {
         setGranted(true);
-      } else {
-        const settings = await Notifications.requestPermissionsAsync();
-        const isGranted = settings.granted || settings.ios?.status === Notifications.IosAuthorizationStatus.PROVISIONAL;
-        setGranted(!!isGranted);
+        return;
       }
+      if (Platform.OS === 'android') {
+        console.log('[NotificationsPermission] Skipping on Android in Expo Go (SDK 53)');
+        setGranted(false);
+        return;
+      }
+      const Notifications = await import('expo-notifications');
+      const settings = await Notifications.requestPermissionsAsync();
+      const isGranted =
+        (settings as any).granted ||
+        (settings as any).ios?.status === (Notifications as any).IosAuthorizationStatus?.PROVISIONAL;
+      setGranted(!!isGranted);
     } catch (e) {
       console.log('[NotificationsPermission] error', e);
       setGranted(false);

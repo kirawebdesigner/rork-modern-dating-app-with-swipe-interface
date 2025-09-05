@@ -33,8 +33,10 @@ export default function LoginScreen() {
     try {
       await login(email, password);
       router.replace('/profile-setup');
-    } catch {
-      alert('Login failed. Please try again.');
+    } catch (e: any) {
+      const msg = (e?.message as string | undefined) ?? 'Login failed. Please try again.';
+      alert(msg);
+      console.log('[Login] error', e);
     } finally {
       setLoading(false);
     }
