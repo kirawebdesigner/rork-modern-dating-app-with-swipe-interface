@@ -251,7 +251,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Trigger to automatically create profile and membership on user signup
 CREATE OR REPLACE TRIGGER on_auth_user_created
@@ -298,7 +298,7 @@ BEGIN
   
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Trigger to check for matches after swipe
 CREATE OR REPLACE TRIGGER on_swipe_check_match
