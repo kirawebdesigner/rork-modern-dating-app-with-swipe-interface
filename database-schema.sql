@@ -49,6 +49,14 @@ CREATE TABLE IF NOT EXISTS public.memberships (
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Ensure memberships has all required columns used by the app
+ALTER TABLE public.memberships
+  ADD COLUMN IF NOT EXISTS superlike_credits INTEGER DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS remaining_right_swipes INTEGER,
+  ADD COLUMN IF NOT EXISTS remaining_compliments INTEGER,
+  ADD COLUMN IF NOT EXISTS monthly_allowances JSONB DEFAULT '{"monthlyBoosts":0,"monthlySuperLikes":0}'::jsonb,
+  ADD COLUMN IF NOT EXISTS last_allowance_grant TIMESTAMPTZ;
+
 -- Referrals table
 CREATE TABLE IF NOT EXISTS public.referrals (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
