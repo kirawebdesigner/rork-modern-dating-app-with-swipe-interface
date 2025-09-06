@@ -117,7 +117,16 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       options: { data: { name } },
     });
     if (error) throw error;
-    const u = data.user;
+
+    let u = data.user;
+    if (!data.session) {
+      try {
+        const { data: signInData } = await supabase.auth.signInWithPassword({ email, password });
+        if (signInData.user) u = signInData.user;
+      } catch (e) {
+        console.log('[Auth] auto sign-in after signup failed', e);
+      }
+    }
     if (!u) return;
 
     try {
