@@ -26,6 +26,8 @@ interface ProfileData {
   education?: string;
 }
 
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'] as const;
+
 export default function ProfileSetup() {
   const insets = useSafeAreaInsets();
   const [currentStep, setCurrentStep] = useState<ProfileStep>('details');
@@ -157,8 +159,7 @@ export default function ProfileSetup() {
   };
 
   const formatDate = (date: Date) => {
-    const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
-    return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+    return `${MONTHS[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
   };
 
   const calculateAge = (birthDate: Date) => {
@@ -387,7 +388,7 @@ export default function ProfileSetup() {
     </View>
   );
 
-  const months = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
@@ -534,14 +535,14 @@ export default function ProfileSetup() {
                   <Text style={styles.yearMiniBtnText}>10</Text>
                 </TouchableOpacity>
               </View>
-              <Text style={styles.monthText}>{t(months[selectedMonth]) ?? months[selectedMonth]}</Text>
+              <Text style={styles.monthText}>{t(MONTHS[selectedMonth]) ?? MONTHS[selectedMonth]}</Text>
             </View>
             <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavButton} testID="next-month">
               <ChevronRight size={24} color={colors.text.primary} />
             </TouchableOpacity>
           </View>
           <View style={styles.monthsGrid}>
-            {months.map((m, idx) => (
+            {MONTHS.map((m: string, idx: number) => (
               <TouchableOpacity key={m} testID={`month-${idx}`} onPress={() => setSelectedMonth(idx)} style={[styles.monthChip, selectedMonth === idx && styles.monthChipActive]}>
                 <Text style={[styles.monthChipText, selectedMonth === idx && styles.monthChipTextActive]}>{m.slice(0,3)}</Text>
               </TouchableOpacity>
