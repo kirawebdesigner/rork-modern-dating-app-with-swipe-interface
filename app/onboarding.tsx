@@ -21,15 +21,15 @@ const { width: screenWidth } = Dimensions.get('window');
 const slides = [
   {
     id: '1',
-    title: "Search friend's",
-    description: 'You can find friends from your contact lists to connected',
-    image: 'https://r2-pub.rork.com/attachments/48prg5ifrlilhe4fkttv9',
+    title: 'Search friends',
+    description: 'Find friends from your contacts and get connected.',
+    image: 'https://img.icons8.com/fluency/240/find-user-male.png',
   },
   {
     id: '2',
-    title: "Enable notification's",
-    description: 'Get push-notification when you get the match or receive a message.',
-    image: 'https://r2-pub.rork.com/attachments/5cgj7bmljeznja9ffy0mr',
+    title: 'Enable notifications',
+    description: 'Get notified when you get a match or receive a message.',
+    image: 'https://img.icons8.com/fluency/240/appointment-reminders--v2.png',
   },
   {
     id: '3',
@@ -46,7 +46,7 @@ const slides = [
   {
     id: '5',
     title: 'Algorithm',
-    description: 'Users going through a vetting process to ensure you never match with bots.',
+    description: 'Users go through a vetting process to help prevent matching with bots.',
     image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800',
   },
 ];
@@ -69,15 +69,21 @@ export default function OnboardingScreen() {
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 60 });
 
   const handleNext = () => {
+    console.log('[Onboarding] CTA pressed at index', currentIndex);
     if (currentIndex < slides.length - 1) {
-      listRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
+      try {
+        listRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
+      } catch (e) {
+        console.log('[Onboarding] scrollToIndex failed', e);
+      }
     } else {
-      router.push('/(auth)/signup' as any);
+      router.replace('/(auth)/signup' as any);
     }
   };
 
   const handleSkip = () => {
-    router.push('/(auth)/signup' as any);
+    console.log('[Onboarding] Skip pressed');
+    router.replace('/(auth)/signup' as any);
   };
 
   return (
@@ -93,7 +99,14 @@ export default function OnboardingScreen() {
         renderItem={({ item }: ListRenderItemInfo<Slide>) => (
           <View style={[styles.slide, { width }]} testID={`slide-${item.id}`}>
             <View style={styles.imageContainer}>
-              <Image source={{ uri: item.image }} style={[styles.image, { width: width - 80 }]} accessibilityIgnoresInvertColors />
+              <Image
+                source={{ uri: item.image }}
+                style={[styles.image, { width: width - 80 }]}
+                accessibilityIgnoresInvertColors
+                accessible
+                accessibilityLabel={item.title}
+                testID={`slide-image-${item.id}`}
+              />
             </View>
             <View style={styles.textContainer}>
               <Text style={styles.title}>{item.title}</Text>
@@ -114,7 +127,7 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.listContent}
       />
 
-      <View style={styles.footer}>
+      <View style={styles.footer} pointerEvents="box-none">
         <View style={styles.pagination}>
           {slides.map((s, index) => (
             <View
@@ -168,6 +181,7 @@ const styles = StyleSheet.create({
   },
   listContent: {
     alignItems: 'stretch',
+    paddingBottom: 140,
   },
   slide: {
     paddingHorizontal: 20,
@@ -208,6 +222,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 16,
     alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    zIndex: 5,
   },
   pagination: {
     flexDirection: 'row',

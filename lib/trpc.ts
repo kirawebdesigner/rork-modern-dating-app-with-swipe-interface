@@ -3,6 +3,7 @@ import { httpLink } from "@trpc/client";
 import type { AppRouter } from "@/backend/trpc/app-router";
 import superjson from "superjson";
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 export const trpc = createTRPCReact<AppRouter>();
 
@@ -14,11 +15,18 @@ const getBaseUrl = () => {
   const fromExtra = extra.EXPO_PUBLIC_RORK_API_BASE_URL || extra.RORK_API_BASE_URL;
   if (fromExtra) return String(fromExtra);
 
-  if (typeof globalThis !== "undefined" && (globalThis as any).location?.origin) {
-    return (globalThis as any).location.origin as string;
+  if (Platform.OS === 'web' && typeof location !== 'undefined') {
+    return location.origin;
   }
 
-  return "http://localhost:3000";
+  const hostUri = (Constants as any)?.expoGo?.hostUri as string | undefined;
+  if (hostUri) {
+    const sanitized = hostUri.startsWith('http') ? hostUri : `http://${hostUri}`;
+    const url = new URL(sanitized);
+    return `${url.protocol}//${url.host}`;
+  }
+
+  return 'http://localhost:3000';
 };
 
 export const trpcClient = trpc.createClient({

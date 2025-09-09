@@ -8,8 +8,13 @@ const envUrl = (process.env as Record<string, string | undefined>)?.NEXT_PUBLIC_
 const envAnon = (process.env as Record<string, string | undefined>)?.NEXT_PUBLIC_SUPABASE_ANON_KEY
   ?? (Constants.expoConfig?.extra as Record<string, any> | undefined)?.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const supabaseUrl = envUrl ?? 'https://nizdrhdfhddtrukeemhp.supabase.co';
-const supabaseAnonKey = envAnon ?? 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg';
+const DEFAULT_URL = 'https://nizdrhdfhddtrukeemhp.supabase.co';
+const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg';
+
+const supabaseUrl = envUrl ?? DEFAULT_URL;
+const supabaseAnonKey = envAnon ?? DEFAULT_ANON;
+
+export const isSupabaseConfigured = !!envUrl && !!envAnon;
 
 const storage = Platform.OS === 'web' ? undefined : AsyncStorage;
 
@@ -21,5 +26,9 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     detectSessionInUrl: Platform.OS === 'web',
   },
 });
+
+if (!isSupabaseConfigured) {
+  console.warn('[Supabase] Using default placeholder credentials. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable live data.');
+}
 
 console.log('[Supabase] Client initialized for', Platform.OS, 'with URL:', supabaseUrl);
