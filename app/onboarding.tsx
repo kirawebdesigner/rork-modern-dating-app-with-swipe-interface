@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   FlatList,
   ListRenderItemInfo,
   Dimensions,
+  useWindowDimensions,
   TouchableOpacity,
   SafeAreaView,
   Image,
@@ -15,7 +16,7 @@ import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { Platform } from 'react-native';
 
-const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
+const { width: screenWidth } = Dimensions.get('window');
 
 const slides = [
   {
@@ -54,6 +55,8 @@ type Slide = { id: string; title: string; description: string; image: string };
 
 export default function OnboardingScreen() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const itemLayout = useMemo(() => ({ length: width, offset: 0, index: 0 }), [width]);
   const listRef = useRef<FlatList<Slide>>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
 
@@ -88,9 +91,9 @@ export default function OnboardingScreen() {
         data={slides as Slide[]}
         keyExtractor={(item) => item.id}
         renderItem={({ item }: ListRenderItemInfo<Slide>) => (
-          <View style={styles.slide} testID={`slide-${item.id}`}>
+          <View style={[styles.slide, { width }]} testID={`slide-${item.id}`}>
             <View style={styles.imageContainer}>
-              <Image source={{ uri: item.image }} style={styles.image} accessibilityIgnoresInvertColors />
+              <Image source={{ uri: item.image }} style={[styles.image, { width: width - 80 }]} accessibilityIgnoresInvertColors />
             </View>
             <View style={styles.textContainer}>
               <Text style={styles.title}>{item.title}</Text>
@@ -100,10 +103,11 @@ export default function OnboardingScreen() {
         )}
         horizontal
         pagingEnabled
+        style={styles.list}
         showsHorizontalScrollIndicator={false}
         onViewableItemsChanged={onViewableItemsChanged}
         viewabilityConfig={viewConfigRef.current}
-        getItemLayout={(_, index) => ({ length: screenWidth, offset: screenWidth * index, index })}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
         initialNumToRender={1}
         windowSize={3}
         removeClippedSubviews={Platform.OS !== 'web'}
@@ -112,9 +116,9 @@ export default function OnboardingScreen() {
 
       <View style={styles.footer}>
         <View style={styles.pagination}>
-          {slides.map((_, index) => (
+          {slides.map((s, index) => (
             <View
-              key={index}
+              key={s.id}
               style={[
                 styles.dot,
                 index === currentIndex && styles.activeDot,
@@ -127,6 +131,7 @@ export default function OnboardingScreen() {
           title={currentIndex === slides.length - 1 ? 'Get Started' : 'Create an account'}
           onPress={handleNext}
           style={styles.button}
+          testID="cta-button"
         />
 
         {currentIndex < slides.length - 1 && (
@@ -158,11 +163,13 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
   },
+  list: {
+    flex: 1,
+  },
   listContent: {
     alignItems: 'stretch',
   },
   slide: {
-    width: screenWidth,
     paddingHorizontal: 20,
     justifyContent: 'flex-start',
   },
@@ -172,7 +179,6 @@ const styles = StyleSheet.create({
     paddingTop: 32,
   },
   image: {
-    width: screenWidth - 80,
     aspectRatio: 4 / 5,
     borderRadius: 20,
     resizeMode: 'cover',
