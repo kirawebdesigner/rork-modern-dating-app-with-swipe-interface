@@ -247,7 +247,7 @@ export default function ProfileSetup() {
         </Text>
       </TouchableOpacity>
 
-      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Confirm')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -277,7 +277,7 @@ export default function ProfileSetup() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -359,7 +359,7 @@ export default function ProfileSetup() {
           </View>
         </View>
       </ScrollView>
-      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -381,7 +381,7 @@ export default function ProfileSetup() {
         ))}
         <View style={styles.bottomSpacing} />
       </ScrollView>
-      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
