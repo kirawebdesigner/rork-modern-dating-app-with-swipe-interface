@@ -62,10 +62,14 @@ export default function ProfileSetup() {
   };
 
   const handleSkip = () => {
-    if (currentStep === 'interests') {
-      router.replace('/(tabs)' as any);
+    if (currentStep === 'details') {
+      setCurrentStep('gender');
+    } else if (currentStep === 'gender') {
+      setCurrentStep('extras');
+    } else if (currentStep === 'extras') {
+      setCurrentStep('interests');
     } else {
-      setCurrentStep(currentStep === 'details' ? 'gender' : 'interests');
+      router.replace('/(tabs)' as any);
     }
   };
 
@@ -190,8 +194,8 @@ export default function ProfileSetup() {
       <TouchableOpacity onPress={handleBack} style={styles.backButton}>
         <ArrowLeft size={24} color={colors.primary} />
       </TouchableOpacity>
-      <TouchableOpacity onPress={handleSkip}>
-        <Text style={styles.skipText}>{t('Continue')}</Text>
+      <TouchableOpacity onPress={handleSkip} testID="skip-top">
+        <Text style={styles.skipText}>{t('Skip')}</Text>
       </TouchableOpacity>
     </View>
   );
@@ -243,7 +247,7 @@ export default function ProfileSetup() {
         </Text>
       </TouchableOpacity>
 
-      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
         <GradientButton title={t('Confirm')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -273,7 +277,7 @@ export default function ProfileSetup() {
         </TouchableOpacity>
       </View>
 
-      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -355,7 +359,7 @@ export default function ProfileSetup() {
           </View>
         </View>
       </ScrollView>
-      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -377,7 +381,7 @@ export default function ProfileSetup() {
         ))}
         <View style={styles.bottomSpacing} />
       </ScrollView>
-      <View style={[styles.bottomContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
+      <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
     </View>
@@ -474,8 +478,8 @@ export default function ProfileSetup() {
       <View style={styles.modalOverlay}>
         <View style={[styles.datePickerContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
           <View style={styles.datePickerHeader}>
-            <TouchableOpacity onPress={() => setShowDatePicker(false)}>
-              <Text style={styles.skipText}>{t('Continue')}</Text>
+            <TouchableOpacity onPress={() => setShowDatePicker(false)} testID="close-date-picker">
+              <Text style={styles.skipText}>{t('Close')}</Text>
             </TouchableOpacity>
           </View>
           <Text style={styles.datePickerTitle}>{t('Birthday')}</Text>
@@ -598,8 +602,9 @@ const styles = StyleSheet.create({
   interestText: { fontSize: 14, fontWeight: '500', color: colors.text.primary },
   interestTextSelected: { color: colors.text.white },
   bottomContainer: { paddingBottom: 16 },
+  bottomContainerFixed: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
   confirmButton: { marginTop: 16 },
-  bottomSpacing: { height: 100 },
+  bottomSpacing: { height: 120 },
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
   chip: { paddingHorizontal: 12, paddingVertical: 8, borderRadius: 16, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary },
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
