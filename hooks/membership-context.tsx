@@ -85,6 +85,15 @@ interface MembershipContextType {
 
 export const [MembershipProvider, useMembership] = createContextHook<MembershipContextType>(() => {
   const { user: authUser } = useAuth();
+  const isoToday = useCallback(() => new Date().toISOString().slice(0, 10), []);
+  const normalizeISODate = useCallback((value: string | null | undefined): string => {
+    if (!value) return isoToday();
+    const trimmed = String(value).trim();
+    if (/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) return trimmed;
+    const d = new Date(trimmed);
+    if (Number.isNaN(d.getTime())) return isoToday();
+    return d.toISOString().slice(0, 10);
+  }, [isoToday]);
   const [tier, setTier] = useState<MembershipTier>('free');
   const [credits, setCredits] = useState<UserCredits>({ messages: 0, boosts: 0, superLikes: 0, compliments: 0, unlocks: 0 });
   const [allowances, setAllowances] = useState<MonthlyAllowances>({ monthlyBoosts: 0, monthlySuperLikes: 0 });
@@ -92,7 +101,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   const [remainingProfileViews, setRemainingProfileViews] = useState<number | 'unlimited'>(TIER_FEATURES.free.profileViews);
   const [remainingRightSwipes, setRemainingRightSwipes] = useState<number | 'unlimited'>(TIER_FEATURES.free.dailyRightSwipes);
   const [remainingCompliments, setRemainingCompliments] = useState<number | 'unlimited'>(TIER_FEATURES.free.dailyCompliments);
-  const [lastReset, setLastReset] = useState<string>(new Date().toDateString());
+  const [lastReset, setLastReset] = useState<string>(isoToday());
   const [lastAllowanceGrantISO, setLastAllowanceGrantISO] = useState<string>('');
 
   const loadFromLocalStorage = useCallback(async () => {
@@ -115,9 +124,9 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       if (storedViews) setRemainingProfileViews(JSON.parse(storedViews));
       if (storedRightSwipes) setRemainingRightSwipes(JSON.parse(storedRightSwipes));
       if (storedCompliments) setRemainingCompliments(JSON.parse(storedCompliments));
-      if (storedReset) setLastReset(JSON.parse(storedReset));
+      if (storedReset) setLastReset(normalizeISODate(JSON.parse(storedReset)));
       if (storedAllowances) setAllowances(JSON.parse(storedAllowances));
-      if (storedAllowanceGrant) setLastAllowanceGrantISO(JSON.parse(storedAllowanceGrant));
+      if (storedAllowanceGrant) setLastAllowanceGrantISO(String(JSON.parse(storedAllowanceGrant) ?? ''));
     } catch (error: any) {
       console.error('Error loading from local storage:', error.message || error);
     }
@@ -161,9 +170,9 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         remaining_profile_views: remainingProfileViews === 'unlimited' ? null : remainingProfileViews,
         remaining_right_swipes: remainingRightSwipes === 'unlimited' ? null : remainingRightSwipes,
         remaining_compliments: remainingCompliments === 'unlimited' ? null : remainingCompliments,
-        last_reset: lastReset,
+        last_reset: normalizeISODate(lastReset),
         monthly_allowances: allowances,
-        last_allowance_grant: lastAllowanceGrantISO,
+        last_allowance_grant: lastAllowanceGrantISO && lastAllowanceGrantISO.trim().length > 0 ? new Date(lastAllowanceGrantISO).toISOString() : null,
       } as const;
       const { error } = await supabase.from('memberships').upsert(payload, { onConflict: 'user_id' });
       if (error) {
@@ -209,7 +218,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         setRemainingCompliments((data.remaining_compliments ?? TIER_FEATURES[serverTier].dailyCompliments) as number | 'unlimited');
         setAllowances((data.monthly_allowances as MonthlyAllowances) ?? { monthlyBoosts: 0, monthlySuperLikes: 0 });
         setLastAllowanceGrantISO(String(data.last_allowance_grant ?? ''));
-        setLastReset(String(data.last_reset ?? new Date().toDateString()));
+        setLastReset(normalizeISODate((data as any).last_reset ?? null));
       } else {
         await loadFromLocalStorage();
         await syncToServer();
@@ -226,7 +235,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     setRemainingProfileViews(f.profileViews);
     setRemainingRightSwipes(f.dailyRightSwipes);
     setRemainingCompliments(f.dailyCompliments);
-    setLastReset(new Date().toDateString());
+    setLastReset(isoToday());
   }, [tier]);
 
   const upgradeTier = useCallback(async (newTier: MembershipTier) => {
@@ -299,8 +308,8 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   }, [loadFromServer]);
 
   useEffect(() => {
-    const today = new Date().toDateString();
-    if (lastReset !== today) {
+    const today = isoToday();
+    if (normalizeISODate(lastReset) !== today) {
       resetDailyLimits();
     }
   }, [lastReset, resetDailyLimits]);
