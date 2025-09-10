@@ -85,15 +85,45 @@ CREATE TABLE IF NOT EXISTS public.matches (
   UNIQUE(user1_id, user2_id)
 );
 
--- Messages table
+-- If an old messages table exists (match-based), rename it to match_messages to avoid conflicts
+DO $
+BEGIN
+  IF EXISTS (
+    SELECT 1 FROM information_schema.tables 
+    WHERE table_schema = 'public' AND table_name = 'messages'
+  ) THEN
+    -- Check if it looks like the old structure by presence of match_id
+    IF EXISTS (
+      SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'match_id'
+    ) THEN
+      ALTER TABLE public.messages RENAME TO match_messages;
+    END IF;
+  END IF;
+END $;
+
+-- Conversations table
+CREATE TABLE IF NOT EXISTS public.conversations (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  name TEXT,
+  created_by UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+-- Conversation participants
+CREATE TABLE IF NOT EXISTS public.conversation_participants (
+  conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE,
+  user_id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
+  PRIMARY KEY (conversation_id, user_id)
+);
+
+-- New messages table (conversation-based)
 CREATE TABLE IF NOT EXISTS public.messages (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  match_id UUID REFERENCES public.matches(id) ON DELETE CASCADE NOT NULL,
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE NOT NULL,
   sender_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
-  receiver_id UUID REFERENCES auth.users(id) ON DELETE CASCADE NOT NULL,
   content TEXT NOT NULL,
-  read BOOLEAN DEFAULT FALSE,
-  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+  created_at TIMESTAMPTZ DEFAULT now()
 );
 
 -- Profile views table
@@ -141,9 +171,8 @@ CREATE INDEX IF NOT EXISTS idx_swipes_swiper_id ON public.swipes(swiper_id);
 CREATE INDEX IF NOT EXISTS idx_swipes_swiped_id ON public.swipes(swiped_id);
 CREATE INDEX IF NOT EXISTS idx_matches_user1_id ON public.matches(user1_id);
 CREATE INDEX IF NOT EXISTS idx_matches_user2_id ON public.matches(user2_id);
-CREATE INDEX IF NOT EXISTS idx_messages_match_id ON public.messages(match_id);
+CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON public.messages(conversation_id);
 CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON public.messages(sender_id);
-CREATE INDEX IF NOT EXISTS idx_messages_receiver_id ON public.messages(receiver_id);
 CREATE INDEX IF NOT EXISTS idx_profile_views_viewer_id ON public.profile_views(viewer_id);
 CREATE INDEX IF NOT EXISTS idx_profile_views_viewed_id ON public.profile_views(viewed_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON public.referrals(referrer_id);
@@ -158,6 +187,8 @@ ALTER TABLE public.profile_views ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_interests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.conversation_participants ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies
 
@@ -202,15 +233,41 @@ CREATE POLICY "Users can view own matches" ON public.matches
 CREATE POLICY "System can insert matches" ON public.matches
   FOR INSERT WITH CHECK (true);
 
--- Messages policies
-CREATE POLICY "Users can view own messages" ON public.messages
-  FOR SELECT USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+-- Conversation-based messages policies
+CREATE POLICY "Participants can select messages" ON public.messages
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.conversation_participants cp
+      WHERE cp.conversation_id = messages.conversation_id
+        AND cp.user_id = auth.uid()
+    )
+  );
 
-CREATE POLICY "Users can insert own messages" ON public.messages
-  FOR INSERT WITH CHECK (auth.uid() = sender_id);
+CREATE POLICY "Participants can insert messages" ON public.messages
+  FOR INSERT WITH CHECK (
+    EXISTS (
+      SELECT 1 FROM public.conversation_participants cp
+      WHERE cp.conversation_id = messages.conversation_id
+        AND cp.user_id = auth.uid()
+    )
+  );
 
-CREATE POLICY "Users can update own messages" ON public.messages
-  FOR UPDATE USING (auth.uid() = sender_id OR auth.uid() = receiver_id);
+-- Conversations policies
+CREATE POLICY "Participants can select conversations" ON public.conversations
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.conversation_participants cp
+      WHERE cp.conversation_id = conversations.id
+        AND cp.user_id = auth.uid()
+    )
+  );
+
+CREATE POLICY "Users can insert conversations" ON public.conversations
+  FOR INSERT WITH CHECK (auth.uid() = created_by);
+
+-- Conversation participants policies
+CREATE POLICY "Users can manage own participation" ON public.conversation_participants
+  FOR ALL USING (user_id = auth.uid());
 
 -- Profile views policies
 CREATE POLICY "Users can view own profile views" ON public.profile_views

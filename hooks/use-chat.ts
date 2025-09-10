@@ -4,31 +4,32 @@ import { Message } from '@/types';
 
 interface DbMessageRow {
   id: string;
-  match_id: string;
+  conversation_id: string;
   sender_id: string;
-  receiver_id: string;
   content: string;
-  read: boolean | null;
   created_at: string;
 }
 
-export function useRealtimeMessages(matchId: string | null, currentUserId: string | null) {
+export function useRealtimeMessages(conversationId: string | null, currentUserId: string | null, otherUserId?: string | null) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
-  const mapRow = useCallback((row: DbMessageRow): Message => ({
-    id: row.id,
-    senderId: row.sender_id,
-    receiverId: row.receiver_id,
-    text: row.content,
-    timestamp: new Date(row.created_at),
-    read: Boolean(row.read),
-  }), []);
+  const mapRow = useCallback((row: DbMessageRow): Message => {
+    const receiverId = row.sender_id === (currentUserId ?? '') ? (otherUserId ?? '') : (currentUserId ?? '');
+    return {
+      id: row.id,
+      senderId: row.sender_id,
+      receiverId,
+      text: row.content,
+      timestamp: new Date(row.created_at),
+      read: true,
+    };
+  }, [currentUserId, otherUserId]);
 
   useEffect(() => {
-    if (!matchId) {
+    if (!conversationId) {
       setMessages([]);
       setLoading(false);
       return;
@@ -40,8 +41,8 @@ export function useRealtimeMessages(matchId: string | null, currentUserId: strin
         setError(null);
         const { data, error } = await supabase
           .from('messages')
-          .select('*')
-          .eq('match_id', matchId)
+          .select('id, conversation_id, sender_id, content, created_at')
+          .eq('conversation_id', conversationId)
           .order('created_at', { ascending: true });
         if (error) throw error;
         if (!active) return;
@@ -60,12 +61,12 @@ export function useRealtimeMessages(matchId: string | null, currentUserId: strin
       try { channelRef.current.unsubscribe(); } catch {}
     }
 
-    const channel = supabase.channel(`messages-match-${matchId}`);
+    const channel = supabase.channel(`messages-conv-${conversationId}`);
     channel.on('postgres_changes', {
       event: 'INSERT',
       schema: 'public',
       table: 'messages',
-      filter: `match_id=eq.${matchId}`,
+      filter: `conversation_id=eq.${conversationId}`,
     }, (payload) => {
       const row = payload.new as unknown as DbMessageRow;
       const msg = mapRow(row);
@@ -81,16 +82,16 @@ export function useRealtimeMessages(matchId: string | null, currentUserId: strin
         channelRef.current = null;
       }
     };
-  }, [matchId, mapRow]);
+  }, [conversationId, mapRow]);
 
   const sendMessage = useCallback(async (text: string) => {
-    if (!matchId || !currentUserId) throw new Error('Missing identifiers');
+    if (!conversationId || !currentUserId) throw new Error('Missing identifiers');
     const trimmed = text.trim();
     if (!trimmed) return;
 
     const patterns: RegExp[] = [
-      /\b(?:\+?\d[\s-]?){7,}\d\b/g, // phone-like
-      /@/g, // email indicator
+      /\b(?:\+?\d[\s-]?){7,}\d\b/g,
+      /@/g,
       /(?:whats?app|telegram|tg\.?|insta(?:gram)?|snap(?:chat)?)/gi,
       /https?:\/\/[\w.-]+/gi,
       /\b(?:t\.me|wa\.me|bit\.ly|linktr\.ee|ig\.me)\/[\w-]+/gi,
@@ -100,22 +101,14 @@ export function useRealtimeMessages(matchId: string | null, currentUserId: strin
       sanitized = sanitized.replace(re, '###');
     }
 
-    const { data: matchRow, error: matchErr } = await supabase
-      .from('matches')
-      .select('user1_id, user2_id')
-      .eq('id', matchId)
-      .maybeSingle();
-    if (matchErr || !matchRow) throw matchErr ?? new Error('Match not found');
-    const receiver = (matchRow.user1_id === currentUserId) ? matchRow.user2_id : matchRow.user1_id;
     const insert = {
-      match_id: matchId,
+      conversation_id: conversationId,
       sender_id: currentUserId,
-      receiver_id: receiver as string,
       content: sanitized,
     };
     const { error } = await supabase.from('messages').insert(insert);
     if (error) throw error;
-  }, [matchId, currentUserId]);
+  }, [conversationId, currentUserId]);
 
   return { messages, loading, error, sendMessage };
 }
@@ -144,58 +137,80 @@ export function useUserMatches(userId: string | null) {
       try {
         setLoading(true);
         setError(null);
-        const { data: matches, error: mErr } = await supabase
-          .from('matches')
-          .select('*')
-          .or(`user1_id.eq.${userId},user2_id.eq.${userId}`)
-          .order('matched_at', { ascending: false });
-        if (mErr) throw mErr;
-        const matchIds = (matches ?? []).map((m: any) => m.id as string);
-        const otherIds = (matches ?? []).map((m: any) => (m.user1_id === userId ? m.user2_id : m.user1_id) as string);
-
-        const [{ data: profiles, error: pErr }, { data: msgs, error: msgErr }] = await Promise.all([
-          supabase.from('profiles').select('id,name,photos').in('id', otherIds),
-          matchIds.length ? supabase
-            .from('messages')
-            .select('id, match_id, sender_id, receiver_id, content, read, created_at')
-            .in('match_id', matchIds) : Promise.resolve({ data: [], error: null } as any),
-        ]);
+        const { data: parts, error: pErr } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', userId);
         if (pErr) throw pErr;
-        if (msgErr) throw msgErr;
+        const conversationIds = (parts ?? []).map((p: any) => p.conversation_id as string);
 
-        const latestByMatch = new Map<string, DbMessageRow>();
+        if (conversationIds.length === 0) {
+          setItems([]);
+          setLoading(false);
+          return;
+        }
+
+        const [{ data: convParts, error: cpErr }, { data: msgs, error: mErr }] = await Promise.all([
+          supabase
+            .from('conversation_participants')
+            .select('conversation_id, user_id')
+            .in('conversation_id', conversationIds),
+          supabase
+            .from('messages')
+            .select('id, conversation_id, sender_id, content, created_at')
+            .in('conversation_id', conversationIds),
+        ]);
+        if (cpErr) throw cpErr;
+        if (mErr) throw mErr;
+
+        const otherByConv = new Map<string, string>();
+        (convParts as any[]).forEach((r) => {
+          if (r.user_id !== userId) otherByConv.set(r.conversation_id as string, r.user_id as string);
+        });
+        const otherIds = Array.from(new Set(Array.from(otherByConv.values())));
+        const { data: profiles, error: profErr } = await supabase
+          .from('profiles')
+          .select('id,name,photos')
+          .in('id', otherIds);
+        if (profErr) throw profErr;
+
+        const latestByConv = new Map<string, DbMessageRow>();
         (msgs as DbMessageRow[]).forEach((m) => {
-          const prev = latestByMatch.get(m.match_id);
+          const prev = latestByConv.get(m.conversation_id);
           if (!prev || new Date(m.created_at).getTime() > new Date(prev.created_at).getTime()) {
-            latestByMatch.set(m.match_id, m);
+            latestByConv.set(m.conversation_id, m);
           }
         });
 
-        const itemsNext: MatchListItem[] = (matches ?? []).map((m: any) => {
-          const otherId = m.user1_id === userId ? (m.user2_id as string) : (m.user1_id as string);
+        const itemsNext: MatchListItem[] = conversationIds.map((cid) => {
+          const otherId = otherByConv.get(cid) as string;
           const prof = (profiles as any[]).find((p) => p.id === otherId);
-          const latest = latestByMatch.get(m.id as string);
+          const latest = latestByConv.get(cid);
           return {
-            id: m.id as string,
+            id: cid,
             otherUserId: otherId,
             otherUserName: prof?.name ?? 'User',
             otherUserAvatar: Array.isArray(prof?.photos) && prof.photos.length ? prof.photos[0] : null,
             lastMessage: latest ? {
               id: latest.id,
               senderId: latest.sender_id,
-              receiverId: latest.receiver_id,
+              receiverId: latest.sender_id === userId ? otherId : userId,
               text: latest.content,
               timestamp: new Date(latest.created_at),
-              read: Boolean(latest.read),
+              read: true,
             } : undefined,
           };
         });
 
         if (!active) return;
-        setItems(itemsNext);
+        setItems(itemsNext.sort((a, b) => {
+          const at = a.lastMessage?.timestamp?.getTime() ?? 0;
+          const bt = b.lastMessage?.timestamp?.getTime() ?? 0;
+          return bt - at;
+        }));
       } catch (e: any) {
-        console.error('[Chat] load matches error', e);
-        setError(e?.message ?? 'Failed to load matches');
+        console.error('[Chat] load conversations error', e);
+        setError(e?.message ?? 'Failed to load conversations');
       } finally {
         if (active) setLoading(false);
       }
@@ -203,11 +218,13 @@ export function useUserMatches(userId: string | null) {
 
     load();
 
-    const channel = supabase.channel(`matches-of-${userId}`);
-    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'matches', filter: `user1_id=eq.${userId}` }, () => load());
-    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'matches', filter: `user2_id=eq.${userId}` }, () => load());
-    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => load());
-    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed matches'); });
+    const channel = supabase.channel(`conversations-of-${userId}`);
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${userId}` }, () => load());
+    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
+      const row = payload.new as DbMessageRow;
+      void load();
+    });
+    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed conversations'); });
 
     return () => { try { channel.unsubscribe(); } catch {} };
   }, [userId]);

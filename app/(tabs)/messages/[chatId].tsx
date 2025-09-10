@@ -40,7 +40,7 @@ export default function ChatScreen() {
   const [sending, setSending] = useState<boolean>(false);
   const listRef = useRef<FlatList<Message>>(null);
 
-  const { messages, loading, error, sendMessage } = useRealtimeMessages(chatId ?? null, uid);
+  const { messages, loading, error, sendMessage } = useRealtimeMessages(chatId ?? null, uid, otherId);
 
   const [otherName, setOtherName] = useState<string>('Chat');
   const [otherId, setOtherId] = useState<string | null>(null);
@@ -51,14 +51,13 @@ export default function ChatScreen() {
     const load = async () => {
       if (!chatId || !uid) { setInitLoading(false); return; }
       try {
-        const { data: matchRow, error: mErr } = await supabase
-          .from('matches')
-          .select('id, user1_id, user2_id')
-          .eq('id', chatId)
-          .maybeSingle();
-        if (mErr) throw mErr;
-        if (!matchRow) throw new Error('Match not found');
-        const other = matchRow.user1_id === uid ? (matchRow.user2_id as string) : (matchRow.user1_id as string);
+        const { data: convParts, error: cpErr } = await supabase
+          .from('conversation_participants')
+          .select('conversation_id, user_id')
+          .eq('conversation_id', chatId);
+        if (cpErr) throw cpErr;
+        const other = (convParts as any[]).find(p => p.user_id !== uid)?.user_id as string | undefined;
+        if (!other) throw new Error('Participant not found');
         setOtherId(other);
         const { data: prof, error: pErr } = await supabase
           .from('profiles')
