@@ -93,6 +93,40 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (storedFilters) setFiltersState(JSON.parse(storedFilters));
       if (storedBlocked) setBlockedIds(JSON.parse(storedBlocked));
 
+      try {
+        const { data: authUser } = await supabase.auth.getUser();
+        const uid = authUser?.user?.id ?? null;
+        if (!profile && uid) {
+          const { data: me, error: meErr } = await supabase
+            .from('profiles')
+            .select('id,name,age,gender,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
+            .eq('id', uid)
+            .maybeSingle();
+          if (!meErr && me) {
+            const mappedMe: User = {
+              id: String(me.id),
+              name: String(me.name ?? 'Me'),
+              age: Number(me.age ?? 0),
+              gender: (me.gender as 'boy' | 'girl') ?? 'boy',
+              bio: String(me.bio ?? ''),
+              photos: Array.isArray(me.photos) ? (me.photos as string[]) : [],
+              interests: Array.isArray(me.interests) ? (me.interests as string[]) : [],
+              location: { city: String(me.city ?? ''), latitude: me.latitude ? Number(me.latitude) : undefined, longitude: me.longitude ? Number(me.longitude) : undefined },
+              heightCm: typeof me.height_cm === 'number' ? Number(me.height_cm) : undefined,
+              education: me.education ? String(me.education) : undefined,
+              verified: Boolean(me.verified),
+              lastActive: me.last_active ? new Date(String(me.last_active)) : undefined,
+              ownedThemes: Array.isArray(me.owned_themes) ? (me.owned_themes as ThemeId[]) : [],
+              profileTheme: (me.profile_theme as ThemeId | null) ?? null,
+            } as User;
+            setCurrentProfileState(mappedMe);
+            await AsyncStorage.setItem('user_profile', JSON.stringify(mappedMe));
+          }
+        }
+      } catch (meLoadErr) {
+        console.log('[App] load self profile failed', meLoadErr);
+      }
+
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('id,name,age,gender,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
