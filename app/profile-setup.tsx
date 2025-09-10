@@ -120,6 +120,28 @@ export default function ProfileSetup() {
           isPremium: false,
           lastActive: new Date(),
         } as User;
+        try {
+          if (authId) {
+            const payload = {
+              id: authId,
+              name: user.name,
+              age: user.age,
+              birthday: new Date(birthday).toISOString().slice(0,10),
+              gender: user.gender,
+              bio: user.bio,
+              photos: user.photos,
+              interests: user.interests,
+              city: user.location?.city ?? null,
+              height_cm: user.heightCm ?? null,
+              education: user.education ?? null,
+              last_active: new Date().toISOString(),
+            } as const;
+            const { error: upErr } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+            if (upErr) console.log('[ProfileSetup] Supabase upsert (extras) error', upErr.message);
+          }
+        } catch (dbErr) {
+          console.log('[ProfileSetup] Supabase upsert (extras) exception', dbErr);
+        }
         await setCurrentProfile(user);
         console.log('[ProfileSetup] Saved partial profile (extras)');
       } catch (e) {
@@ -149,6 +171,28 @@ export default function ProfileSetup() {
           isPremium: false,
           lastActive: new Date(),
         } as User;
+        try {
+          if (authId) {
+            const payload = {
+              id: authId,
+              name: user.name,
+              age: user.age,
+              birthday: new Date(birthday).toISOString().slice(0,10),
+              gender: user.gender,
+              bio: user.bio,
+              photos: user.photos,
+              interests: user.interests,
+              city: user.location?.city ?? null,
+              height_cm: user.heightCm ?? null,
+              education: user.education ?? null,
+              last_active: new Date().toISOString(),
+            } as const;
+            const { error: upErr } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+            if (upErr) console.log('[ProfileSetup] Supabase upsert (final) error', upErr.message);
+          }
+        } catch (dbErr) {
+          console.log('[ProfileSetup] Supabase upsert (final) exception', dbErr);
+        }
         await setCurrentProfile(user);
         console.log('[ProfileSetup] Saved profile on interests');
       } catch (e) {
