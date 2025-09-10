@@ -57,6 +57,13 @@ export default function ProfileScreen() {
         if (!confirmed) return;
         await logout();
         router.replace('/onboarding' as any);
+        if (typeof window !== 'undefined') {
+          setTimeout(() => {
+            try {
+              window.location.assign('/');
+            } catch {}
+          }, 50);
+        }
       } catch (e) {
         console.error('[ProfileScreen] Logout error (web)', e);
         alert('Failed to logout. Please try again.');
@@ -391,7 +398,7 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} testID="logout-btn">
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} testID="logout-btn" accessibilityRole="button" accessibilityLabel="Logout">
           <LogOut size={20} color={Colors.error} />
           <Text style={styles.logoutText}>Logout</Text>
         </TouchableOpacity>
