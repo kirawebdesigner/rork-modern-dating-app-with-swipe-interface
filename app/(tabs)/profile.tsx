@@ -51,6 +51,19 @@ export default function ProfileScreen() {
 
   const handleLogout = async () => {
     console.log('[ProfileScreen] Logout pressed');
+    if (Platform.OS === 'web') {
+      try {
+        const confirmed = typeof window !== 'undefined' && window.confirm ? window.confirm('Are you sure you want to logout?') : true;
+        if (!confirmed) return;
+        await logout();
+        router.replace('/onboarding' as any);
+      } catch (e) {
+        console.error('[ProfileScreen] Logout error (web)', e);
+        alert('Failed to logout. Please try again.');
+      }
+      return;
+    }
+
     Alert.alert('Logout', 'Are you sure you want to logout?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -59,7 +72,7 @@ export default function ProfileScreen() {
         onPress: async () => {
           try {
             await logout();
-            router.replace('/(auth)' as any);
+            router.replace('/onboarding' as any);
           } catch (e) {
             console.error('[ProfileScreen] Logout error', e);
             Alert.alert('Error', 'Failed to logout. Please try again.');
