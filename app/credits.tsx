@@ -53,9 +53,8 @@ export default function Credits() {
           text: 'Buy', 
           onPress: async () => {
             try {
-              if (type === 'boosts') {
-                await buyMutation.mutateAsync({ kind: 'boosts', amount });
-              }
+              const kind = type === 'messages' ? 'messages' : type === 'boosts' ? 'boosts' : 'unlocks';
+              await buyMutation.mutateAsync({ kind: kind as any, amount });
             } catch (e: any) {
               console.warn('[Credits] server buy failed, falling back local', e?.message || e);
             }

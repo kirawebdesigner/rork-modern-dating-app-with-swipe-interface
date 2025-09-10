@@ -64,6 +64,8 @@ const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
   },
 };
 
+const TIER_RANK: Record<MembershipTier, number> = { free: 0, silver: 1, gold: 2, vip: 3 } as const;
+
 interface MembershipContextType {
   tier: MembershipTier;
   features: MembershipFeatures;
@@ -203,8 +205,10 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         return;
       }
       if (data) {
-        const serverTier = (data.tier as MembershipTier) ?? 'free';
-        setTier(serverTier);
+        const serverTier = (data.tier as MembershipTier | null) ?? null;
+        const currentTier: MembershipTier = tier;
+        const resolvedTier: MembershipTier = serverTier ? (TIER_RANK[serverTier] >= TIER_RANK[currentTier] ? serverTier : currentTier) : currentTier;
+        setTier(resolvedTier);
         setCredits({
           messages: Number((data as any).message_credits ?? 0),
           boosts: Number((data as any).boost_credits ?? 0),
@@ -212,10 +216,12 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
           compliments: Number((data as any).compliment_credits ?? 0),
           unlocks: Number((data as any).unlock_credits ?? 0),
         });
-        setRemainingDailyMessages(Number(data.remaining_daily_messages ?? TIER_FEATURES[serverTier].dailyMessages));
-        setRemainingProfileViews((data.remaining_profile_views ?? TIER_FEATURES[serverTier].profileViews) as number | 'unlimited');
-        setRemainingRightSwipes((data.remaining_right_swipes ?? TIER_FEATURES[serverTier].dailyRightSwipes) as number | 'unlimited');
-        setRemainingCompliments((data.remaining_compliments ?? TIER_FEATURES[serverTier].dailyCompliments) as number | 'unlimited');
+        const f = TIER_FEATURES[resolvedTier];
+        const dailyMessages = Number(data.remaining_daily_messages ?? f.dailyMessages);
+        setRemainingDailyMessages(Number.isFinite(dailyMessages) ? dailyMessages : f.dailyMessages);
+        setRemainingProfileViews((data.remaining_profile_views ?? f.profileViews) as number | 'unlimited');
+        setRemainingRightSwipes((data.remaining_right_swipes ?? f.dailyRightSwipes) as number | 'unlimited');
+        setRemainingCompliments((data.remaining_compliments ?? f.dailyCompliments) as number | 'unlimited');
         setAllowances((data.monthly_allowances as MonthlyAllowances) ?? { monthlyBoosts: 0, monthlySuperLikes: 0 });
         setLastAllowanceGrantISO(String(data.last_allowance_grant ?? ''));
         setLastReset(normalizeISODate((data as any).last_reset ?? null));
@@ -227,7 +233,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       console.error('[Membership] loadFromServer failed:', e?.message || e);
       await loadFromLocalStorage();
     }
-  }, [authUser?.id, loadFromLocalStorage, syncToServer]);
+  }, [authUser?.id, loadFromLocalStorage, syncToServer, tier]);
 
   const resetDailyLimits = useCallback(async () => {
     const f = TIER_FEATURES[tier];
