@@ -90,7 +90,6 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (storedTier) setTierState(JSON.parse(storedTier));
       if (storedCredits) setCredits(JSON.parse(storedCredits));
       if (history) setSwipeHistory(JSON.parse(history));
-      if (storedFilters) setFiltersState(JSON.parse(storedFilters));
       if (storedBlocked) setBlockedIds(JSON.parse(storedBlocked));
 
       try {
@@ -121,6 +120,14 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             } as User;
             setCurrentProfileState(mappedMe);
             await AsyncStorage.setItem('user_profile', JSON.stringify(mappedMe));
+            if (!storedFilters) {
+              const defaultInterestedIn: InterestedIn = mappedMe.gender === 'girl' ? 'boy' : 'girl';
+              setFiltersState(prev => ({ ...prev, interestedIn: defaultInterestedIn }));
+              await AsyncStorage.setItem('filters_state', JSON.stringify({
+                ...(JSON.parse((await AsyncStorage.getItem('filters_state')) ?? '{}') || {}),
+                interestedIn: defaultInterestedIn,
+              }));
+            }
           }
         }
       } catch (meLoadErr) {
@@ -151,7 +158,16 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           ownedThemes: Array.isArray(row.owned_themes) ? (row.owned_themes as ThemeId[]) : [],
           profileTheme: (row.profile_theme as ThemeId | null) ?? null,
         } as User));
-        const filtered = applyFilters(mapped, filters, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'));
+        if (storedFilters) {
+          setFiltersState(JSON.parse(storedFilters));
+        } else if (currentProfile) {
+          const defaultInterestedIn: InterestedIn = (currentProfile.gender === 'girl' ? 'boy' : 'girl');
+          setFiltersState(prev => ({ ...prev, interestedIn: defaultInterestedIn }));
+        }
+        const filtered = applyFilters(mapped, {
+          ...filters,
+          interestedIn: (storedFilters ? JSON.parse(storedFilters).interestedIn : (currentProfile ? (currentProfile.gender === 'girl' ? 'boy' : 'girl') : filters.interestedIn)) as InterestedIn,
+        }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'));
         setPotentialMatches(filtered);
       }
 

@@ -45,7 +45,7 @@ export default function ProfileSetup() {
     photoUri: null,
   });
 
-  const { setCurrentProfile } = useApp();
+  const { setCurrentProfile, setFilters, filters } = useApp();
   const { t } = useI18n();
 
   const handleBack = () => {
@@ -95,6 +95,14 @@ export default function ProfileSetup() {
       if (!profileData.gender) {
         Alert.alert(t('Error'), t('Please select your gender'));
         return;
+      }
+      try {
+        const opposite = profileData.gender === 'girl' ? 'boy' : 'girl';
+        const nextFilters = { ...filters, interestedIn: opposite } as any;
+        await setFilters(nextFilters);
+        console.log('[ProfileSetup] Set interestedIn to', opposite);
+      } catch (e) {
+        console.log('[ProfileSetup] setFilters failed', e);
       }
       setCurrentStep('extras');
     } else if (currentStep === 'extras') {
