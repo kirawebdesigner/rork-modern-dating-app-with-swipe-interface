@@ -192,6 +192,22 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     } catch (e) {
       console.log('[Auth] clear storage failed', e);
     }
+    try {
+      if (typeof window !== 'undefined') {
+        const ls = window.localStorage;
+        const toRemove: string[] = [];
+        for (let i = 0; i < ls.length; i++) {
+          const k = ls.key(i);
+          if (k && (k.startsWith('sb-') || k.includes('supabase'))) {
+            toRemove.push(k);
+          }
+        }
+        toRemove.forEach((k) => ls.removeItem(k));
+        console.log('[Auth] Cleared web localStorage keys', toRemove);
+      }
+    } catch (e) {
+      console.log('[Auth] localStorage clear failed (web)', e);
+    }
     setUser(null);
   }, []);
 

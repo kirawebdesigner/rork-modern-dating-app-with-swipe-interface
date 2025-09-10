@@ -32,7 +32,7 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(email, password);
-      router.replace('/profile-setup');
+      router.replace('/(tabs)');
     } catch (e: any) {
       const msg = (e?.message as string | undefined) ?? 'Login failed. Please try again.';
       alert(msg);
