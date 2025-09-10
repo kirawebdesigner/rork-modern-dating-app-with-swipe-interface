@@ -40,10 +40,11 @@ export default function ChatScreen() {
   const [sending, setSending] = useState<boolean>(false);
   const listRef = useRef<FlatList<Message>>(null);
 
+  const [otherId, setOtherId] = useState<string | null>(null);
+  const [otherName, setOtherName] = useState<string>('Chat');
+
   const { messages, loading, error, sendMessage } = useRealtimeMessages(chatId ?? null, uid, otherId);
 
-  const [otherName, setOtherName] = useState<string>('Chat');
-  const [otherId, setOtherId] = useState<string | null>(null);
   const [initLoading, setInitLoading] = useState<boolean>(true);
 
   useEffect(() => {
