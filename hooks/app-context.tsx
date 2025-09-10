@@ -98,7 +98,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         if (!profile && uid) {
           const { data: me, error: meErr } = await supabase
             .from('profiles')
-            .select('id,name,age,gender,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
+            .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
             .eq('id', uid)
             .maybeSingle();
           if (!meErr && me) {
@@ -107,6 +107,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               name: String(me.name ?? 'Me'),
               age: Number(me.age ?? 0),
               gender: (me.gender as 'boy' | 'girl') ?? 'boy',
+              interestedIn: (me.interested_in as 'boy' | 'girl' | null) ?? undefined,
               bio: String(me.bio ?? ''),
               photos: Array.isArray(me.photos) ? (me.photos as string[]) : [],
               interests: Array.isArray(me.interests) ? (me.interests as string[]) : [],
@@ -136,7 +137,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('id,name,age,gender,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
+        .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
         .limit(100);
       if (error) {
         console.log('[App] load profiles error', error.message);
@@ -147,6 +148,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           name: String(row.name ?? 'User'),
           age: Number(row.age ?? 0),
           gender: (row.gender as 'boy' | 'girl') ?? 'boy',
+          interestedIn: (row.interested_in as 'boy' | 'girl' | null) ?? undefined,
           bio: String(row.bio ?? ''),
           photos: Array.isArray(row.photos) ? (row.photos as string[]) : [],
           interests: Array.isArray(row.interests) ? (row.interests as string[]) : [],
@@ -161,12 +163,12 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         if (storedFilters) {
           setFiltersState(JSON.parse(storedFilters));
         } else if (currentProfile) {
-          const defaultInterestedIn: InterestedIn = (currentProfile.gender === 'girl' ? 'boy' : 'girl');
+          const defaultInterestedIn: InterestedIn = ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl'));
           setFiltersState(prev => ({ ...prev, interestedIn: defaultInterestedIn }));
         }
         const filtered = applyFilters(mapped, {
           ...filters,
-          interestedIn: (storedFilters ? JSON.parse(storedFilters).interestedIn : (currentProfile ? (currentProfile.gender === 'girl' ? 'boy' : 'girl') : filters.interestedIn)) as InterestedIn,
+          interestedIn: (storedFilters ? JSON.parse(storedFilters).interestedIn : (currentProfile ? ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl')) : filters.interestedIn)) as InterestedIn,
         }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'));
         setPotentialMatches(filtered);
       }
@@ -191,6 +193,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (blockedSet.has(u.id)) return false;
       if (f.interestedIn === 'girl' && u.gender !== 'girl') return false;
       if (f.interestedIn === 'boy' && u.gender !== 'boy') return false;
+      if (currentProfile?.gender && u.interestedIn && u.interestedIn !== currentProfile.gender) return false;
       if (u.age < f.ageMin || u.age > f.ageMax) return false;
       if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
       if (f.showVerifiedOnly && !u.verified) return false;
@@ -227,6 +230,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         name: normalized.name,
         age: normalized.age,
         gender: normalized.gender,
+        interested_in: (normalized.interestedIn ?? null) as any,
         bio: normalized.bio,
         photos: normalized.photos,
         interests: normalized.interests,
@@ -266,6 +270,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             name: next.name,
             age: next.age,
             gender: next.gender,
+            interested_in: (next.interestedIn ?? null) as any,
             bio: next.bio,
             photos: next.photos,
             interests: next.interests,

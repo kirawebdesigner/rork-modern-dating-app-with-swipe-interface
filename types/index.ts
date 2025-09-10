@@ -14,6 +14,7 @@ export interface User {
   age: number;
   birthday?: Date;
   gender: Gender;
+  interestedIn?: Gender;
   bio: string;
   photos: string[];
   interests: string[];

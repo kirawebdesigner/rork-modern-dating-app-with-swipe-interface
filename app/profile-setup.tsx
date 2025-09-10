@@ -19,6 +19,7 @@ interface ProfileData {
   lastName: string;
   birthday: Date | null;
   gender: 'girl' | 'boy' | null;
+  interestedIn: 'girl' | 'boy' | null;
   interests: string[];
   photoUri?: string | null;
   city?: string;
@@ -41,6 +42,7 @@ export default function ProfileSetup() {
     lastName: '',
     birthday: null,
     gender: null,
+    interestedIn: null,
     interests: [],
     photoUri: null,
   });
@@ -96,11 +98,14 @@ export default function ProfileSetup() {
         Alert.alert(t('Error'), t('Please select your gender'));
         return;
       }
+      if (!profileData.interestedIn) {
+        Alert.alert(t('Error'), t('Please select who you are interested in'));
+        return;
+      }
       try {
-        const opposite = profileData.gender === 'girl' ? 'boy' : 'girl';
-        const nextFilters = { ...filters, interestedIn: opposite } as any;
+        const nextFilters = { ...filters, interestedIn: profileData.interestedIn } as any;
         await setFilters(nextFilters);
-        console.log('[ProfileSetup] Set interestedIn to', opposite);
+        console.log('[ProfileSetup] Set interestedIn to', profileData.interestedIn);
       } catch (e) {
         console.log('[ProfileSetup] setFilters failed', e);
       }
@@ -118,6 +123,7 @@ export default function ProfileSetup() {
           age,
           birthday,
           gender: (profileData.gender ?? 'girl'),
+          interestedIn: profileData.interestedIn ?? undefined,
           bio: 'Hey there! I am new here.',
           photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
           interests: profileData.interests,
@@ -136,6 +142,7 @@ export default function ProfileSetup() {
               age: user.age,
               birthday: new Date(birthday).toISOString().slice(0,10),
               gender: user.gender,
+              interested_in: profileData.interestedIn ?? null,
               bio: user.bio,
               photos: user.photos,
               interests: user.interests,
@@ -169,6 +176,7 @@ export default function ProfileSetup() {
           age,
           birthday,
           gender: (profileData.gender ?? 'girl'),
+          interestedIn: profileData.interestedIn ?? undefined,
           bio: 'Hey there! I am new here.',
           photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
           interests: profileData.interests,
@@ -187,6 +195,7 @@ export default function ProfileSetup() {
               age: user.age,
               birthday: new Date(birthday).toISOString().slice(0,10),
               gender: user.gender,
+              interested_in: profileData.interestedIn ?? null,
               bio: user.bio,
               photos: user.photos,
               interests: user.interests,
@@ -330,6 +339,27 @@ export default function ProfileSetup() {
         </TouchableOpacity>
       </View>
 
+      <Text style={[styles.title, { marginTop: 12 }]}>{t('I am interested in...')}</Text>
+      <View style={styles.genderContainer}>
+        <TouchableOpacity
+          style={[styles.genderOption, profileData.interestedIn === 'girl' && styles.genderOptionSelected]}
+          onPress={() => setProfileData(prev => ({ ...prev, interestedIn: 'girl' }))}
+          testID="interested-girl"
+        >
+          <Text style={[styles.genderOptionText, profileData.interestedIn === 'girl' && styles.genderOptionTextSelected]}>{t('Girls')}</Text>
+          {profileData.interestedIn === 'girl' && (<Check size={20} color={colors.text.white} />)}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.genderOption, profileData.interestedIn === 'boy' && styles.genderOptionSelected]}
+          onPress={() => setProfileData(prev => ({ ...prev, interestedIn: 'boy' }))}
+          testID="interested-boy"
+        >
+          <Text style={[styles.genderOptionText, profileData.interestedIn === 'boy' && styles.genderOptionTextSelected]}>{t('Boys')}</Text>
+          {profileData.interestedIn === 'boy' && (<Check size={20} color={colors.text.white} />)}
+        </TouchableOpacity>
+      </View>
+
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
       </View>
@@ -439,8 +469,6 @@ export default function ProfileSetup() {
       </View>
     </View>
   );
-
-
 
   const getDaysInMonth = (year: number, month: number) => new Date(year, month + 1, 0).getDate();
   const getFirstDayOfMonth = (year: number, month: number) => new Date(year, month, 1).getDay();
