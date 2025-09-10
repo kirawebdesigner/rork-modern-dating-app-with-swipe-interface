@@ -100,7 +100,8 @@ BEGIN
       ALTER TABLE public.messages RENAME TO match_messages;
     END IF;
   END IF;
-END $;
+END;
+$ LANGUAGE plpgsql;
 
 -- Conversations table
 CREATE TABLE IF NOT EXISTS public.conversations (
