@@ -218,11 +218,25 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     setPotentialMatches(prev => applyFilters(prev, filters, swipeHistory, blockedIds));
   };
 
+  const computeCompleted = (u: User): boolean => {
+    try {
+      const hasName = typeof u.name === 'string' && u.name.trim().length > 0;
+      const hasAge = typeof u.age === 'number' && u.age >= 18;
+      const hasGender = u.gender === 'boy' || u.gender === 'girl';
+      const hasPhoto = Array.isArray(u.photos) && u.photos.length > 0;
+      const hasBio = typeof u.bio === 'string' && u.bio.trim().length > 0;
+      return Boolean(hasName && hasAge && hasGender && hasPhoto && hasBio);
+    } catch {
+      return false;
+    }
+  };
+
   const setCurrentProfile = useCallback(async (profile: User) => {
     const normalized: User = {
       ...profile,
       ownedThemes: profile.ownedThemes ?? [],
       profileTheme: (profile.profileTheme ?? null) as ThemeId | null,
+      completed: computeCompleted(profile),
     } as User;
     await AsyncStorage.setItem('user_profile', JSON.stringify(normalized));
     setCurrentProfileState(normalized);
@@ -245,7 +259,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         last_active: new Date().toISOString(),
         profile_theme: normalized.profileTheme ?? null,
         owned_themes: normalized.ownedThemes ?? [],
-        completed: Boolean((normalized as any).completed ?? false),
+        completed: computeCompleted(normalized),
       } as const;
       const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
       if (error) console.log('[App] profile upsert error', error.message);
@@ -265,6 +279,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         ownedThemes: (hasOwnedThemes ? (patch.ownedThemes as ThemeId[] | undefined) : base.ownedThemes) ?? [],
         profileTheme: (hasProfileTheme ? (patch.profileTheme as ThemeId | null | undefined) : base.profileTheme) ?? null,
       } as User;
+      (next as any).completed = computeCompleted(next);
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
       (async () => {
         try {
@@ -286,7 +301,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             last_active: new Date().toISOString(),
             profile_theme: next.profileTheme ?? null,
             owned_themes: next.ownedThemes ?? [],
-            completed: Boolean((next as any).completed ?? false),
+            completed: computeCompleted(next),
           } as const;
           const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
           if (error) console.log('[App] profile update error', error.message);
