@@ -147,8 +147,10 @@ export default function ProfileSetup() {
               education: user.education ?? null,
               last_active: new Date().toISOString(),
             } as const;
-            const { error: upErr } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-            if (upErr) console.log('[ProfileSetup] Supabase upsert (extras) error', upErr.message);
+            const { error: upErr } = await supabase.from('profiles').upsert({ ...payload, completed: false }, { onConflict: 'id' });
+            if (upErr) {
+              console.log('[ProfileSetup] Supabase upsert (extras) error', upErr.message);
+            }
           }
         } catch (dbErr) {
           console.log('[ProfileSetup] Supabase upsert (extras) exception', dbErr);
@@ -200,8 +202,12 @@ export default function ProfileSetup() {
               education: user.education ?? null,
               last_active: new Date().toISOString(),
             } as const;
-            const { error: upErr } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-            if (upErr) console.log('[ProfileSetup] Supabase upsert (final) error', upErr.message);
+            const { error: upErr } = await supabase.from('profiles').upsert({ ...payload, completed: true }, { onConflict: 'id' });
+            if (upErr) {
+              console.log('[ProfileSetup] Supabase upsert (final) error', upErr.message);
+              Alert.alert(t('Error'), t('Failed to save your profile. Please try again.'));
+              return;
+            }
           }
         } catch (dbErr) {
           console.log('[ProfileSetup] Supabase upsert (final) exception', dbErr);

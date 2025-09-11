@@ -35,6 +35,7 @@ export interface User {
   membershipTier?: MembershipTier;
   ownedThemes?: ThemeId[];
   profileTheme?: ThemeId | null;
+  completed?: boolean;
 }
 
 export interface Match {

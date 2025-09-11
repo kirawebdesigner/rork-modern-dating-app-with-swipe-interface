@@ -98,7 +98,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         if (!profile && uid) {
           const { data: me, error: meErr } = await supabase
             .from('profiles')
-            .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
+            .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
             .eq('id', uid)
             .maybeSingle();
           if (!meErr && me) {
@@ -118,6 +118,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               lastActive: me.last_active ? new Date(String(me.last_active)) : undefined,
               ownedThemes: Array.isArray(me.owned_themes) ? (me.owned_themes as ThemeId[]) : [],
               profileTheme: (me.profile_theme as ThemeId | null) ?? null,
+              completed: Boolean((me as any).completed),
             } as User;
             setCurrentProfileState(mappedMe);
             await AsyncStorage.setItem('user_profile', JSON.stringify(mappedMe));
@@ -137,7 +138,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes')
+        .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
         .limit(100);
       if (error) {
         console.log('[App] load profiles error', error.message);
@@ -159,6 +160,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           lastActive: row.last_active ? new Date(String(row.last_active)) : undefined,
           ownedThemes: Array.isArray(row.owned_themes) ? (row.owned_themes as ThemeId[]) : [],
           profileTheme: (row.profile_theme as ThemeId | null) ?? null,
+          completed: Boolean((row as any).completed),
         } as User));
         if (storedFilters) {
           setFiltersState(JSON.parse(storedFilters));
@@ -243,6 +245,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         last_active: new Date().toISOString(),
         profile_theme: normalized.profileTheme ?? null,
         owned_themes: normalized.ownedThemes ?? [],
+        completed: Boolean((normalized as any).completed ?? false),
       } as const;
       const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
       if (error) console.log('[App] profile upsert error', error.message);
@@ -283,6 +286,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             last_active: new Date().toISOString(),
             profile_theme: next.profileTheme ?? null,
             owned_themes: next.ownedThemes ?? [],
+            completed: Boolean((next as any).completed ?? false),
           } as const;
           const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
           if (error) console.log('[App] profile update error', error.message);
@@ -406,6 +410,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               last_active: new Date().toISOString(),
               profile_theme: next.profileTheme ?? null,
               owned_themes: next.ownedThemes ?? [],
+            completed: Boolean((next as any).completed ?? false),
             }, { onConflict: 'id' });
           } catch {}
         })();

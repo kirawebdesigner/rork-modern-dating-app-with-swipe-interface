@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   age INTEGER,
   birthday DATE,
   gender TEXT CHECK (gender IN ('boy', 'girl')),
+  interested_in TEXT CHECK (interested_in IN ('boy', 'girl')),
   bio TEXT DEFAULT '',
   photos TEXT[] DEFAULT '{}',
   interests TEXT[] DEFAULT '{}',
@@ -22,6 +23,9 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   distance_preference INTEGER DEFAULT 50,
   verified BOOLEAN DEFAULT FALSE,
   last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+  profile_theme TEXT,
+  owned_themes TEXT[] DEFAULT '{}',
+  completed BOOLEAN DEFAULT FALSE,
   visibility TEXT DEFAULT 'everyone' CHECK (visibility IN ('everyone', 'matches', 'nobody')),
   hide_online_status BOOLEAN DEFAULT FALSE,
   incognito BOOLEAN DEFAULT FALSE,
@@ -48,6 +52,13 @@ CREATE TABLE IF NOT EXISTS public.memberships (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
+
+-- Ensure profiles has all required columns used by the app (idempotent for existing databases)
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS interested_in TEXT CHECK (interested_in IN ('boy','girl')),
+  ADD COLUMN IF NOT EXISTS profile_theme TEXT,
+  ADD COLUMN IF NOT EXISTS owned_themes TEXT[] DEFAULT '{}'::text[],
+  ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE;
 
 -- Ensure memberships has all required columns used by the app
 ALTER TABLE public.memberships
