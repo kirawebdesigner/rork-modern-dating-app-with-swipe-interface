@@ -98,10 +98,6 @@ export default function ProfileSetup() {
         Alert.alert(t('Error'), t('Please select your gender'));
         return;
       }
-      if (!profileData.interestedIn) {
-        Alert.alert(t('Error'), t('Please select who you are interested in'));
-        return;
-      }
       try {
         const nextFilters = { ...filters, interestedIn: profileData.interestedIn } as any;
         await setFilters(nextFilters);
@@ -322,7 +318,7 @@ export default function ProfileSetup() {
       <View style={styles.genderContainer}>
         <TouchableOpacity
           style={[styles.genderOption, profileData.gender === 'girl' && styles.genderOptionSelected]}
-          onPress={() => setProfileData(prev => ({ ...prev, gender: 'girl' }))}
+          onPress={() => setProfileData(prev => ({ ...prev, gender: 'girl', interestedIn: 'boy' }))}
           testID="gender-girl"
         >
           <Text style={[styles.genderOptionText, profileData.gender === 'girl' && styles.genderOptionTextSelected]}>{t('Girl')}</Text>
@@ -331,7 +327,7 @@ export default function ProfileSetup() {
 
         <TouchableOpacity
           style={[styles.genderOption, profileData.gender === 'boy' && styles.genderOptionSelected]}
-          onPress={() => setProfileData(prev => ({ ...prev, gender: 'boy' }))}
+          onPress={() => setProfileData(prev => ({ ...prev, gender: 'boy', interestedIn: 'girl' }))}
           testID="gender-boy"
         >
           <Text style={[styles.genderOptionText, profileData.gender === 'boy' && styles.genderOptionTextSelected]}>{t('Boy')}</Text>
@@ -339,26 +335,6 @@ export default function ProfileSetup() {
         </TouchableOpacity>
       </View>
 
-      <Text style={[styles.title, { marginTop: 12 }]}>{t('I am interested in...')}</Text>
-      <View style={styles.genderContainer}>
-        <TouchableOpacity
-          style={[styles.genderOption, profileData.interestedIn === 'girl' && styles.genderOptionSelected]}
-          onPress={() => setProfileData(prev => ({ ...prev, interestedIn: 'girl' }))}
-          testID="interested-girl"
-        >
-          <Text style={[styles.genderOptionText, profileData.interestedIn === 'girl' && styles.genderOptionTextSelected]}>{t('Girls')}</Text>
-          {profileData.interestedIn === 'girl' && (<Check size={20} color={colors.text.white} />)}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={[styles.genderOption, profileData.interestedIn === 'boy' && styles.genderOptionSelected]}
-          onPress={() => setProfileData(prev => ({ ...prev, interestedIn: 'boy' }))}
-          testID="interested-boy"
-        >
-          <Text style={[styles.genderOptionText, profileData.interestedIn === 'boy' && styles.genderOptionTextSelected]}>{t('Boys')}</Text>
-          {profileData.interestedIn === 'boy' && (<Check size={20} color={colors.text.white} />)}
-        </TouchableOpacity>
-      </View>
 
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
