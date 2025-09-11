@@ -308,12 +308,16 @@ CREATE POLICY "Anyone can view interests" ON public.interests
 
 -- Functions
 
--- Function to create a profile when a user signs up
+-- Function to create a profile when a user signs up (syncs email)
 CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER AS $
 BEGIN
-  INSERT INTO public.profiles (id, name)
-  VALUES (NEW.id, COALESCE(NEW.raw_user_meta_data->>'name', 'User'));
+  INSERT INTO public.profiles (id, name, email)
+  VALUES (
+    NEW.id,
+    COALESCE(NEW.raw_user_meta_data->>'name', 'User'),
+    NEW.email
+  );
   
   INSERT INTO public.memberships (user_id)
   VALUES (NEW.id);
@@ -344,6 +348,33 @@ CREATE OR REPLACE TRIGGER update_profiles_updated_at
 CREATE OR REPLACE TRIGGER update_memberships_updated_at
   BEFORE UPDATE ON public.memberships
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
+
+-- Ensure profiles has an email column tied to auth.users and keep it in sync
+ALTER TABLE public.profiles
+  ADD COLUMN IF NOT EXISTS email TEXT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_unique ON public.profiles(email);
+
+-- Backfill email for existing rows
+UPDATE public.profiles p
+SET email = u.email
+FROM auth.users u
+WHERE p.id = u.id AND (p.email IS DISTINCT FROM u.email);
+
+-- Sync profile email when auth.users.email changes
+CREATE OR REPLACE FUNCTION public.sync_profile_email()
+RETURNS TRIGGER AS $
+BEGIN
+  IF NEW.email IS DISTINCT FROM OLD.email THEN
+    UPDATE public.profiles SET email = NEW.email WHERE id = NEW.id;
+  END IF;
+  RETURN NEW;
+END;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+CREATE OR REPLACE TRIGGER on_auth_user_updated
+  AFTER UPDATE OF email ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.sync_profile_email();
 
 -- Function to create matches when both users like each other
 CREATE OR REPLACE FUNCTION public.check_for_match()
@@ -397,3 +428,180 @@ INSERT INTO public.interests (name, category) VALUES
   ('Sports', 'Sports'),
   ('Nature', 'Outdoor')
 ON CONFLICT (name) DO NOTHING;
+
+-- RPCs to work by email safely
+
+-- Upsert profile by email (caller must be the same user)
+CREATE OR REPLACE FUNCTION public.upsert_profile_by_email(
+  p_email TEXT,
+  p_name TEXT,
+  p_age INTEGER,
+  p_gender TEXT,
+  p_bio TEXT,
+  p_photos TEXT[],
+  p_interests TEXT[],
+  p_city TEXT,
+  p_height_cm INTEGER,
+  p_education TEXT,
+  p_completed BOOLEAN
+) RETURNS public.profiles AS $
+DECLARE
+  v_user auth.users%ROWTYPE;
+  v_profile public.profiles%ROWTYPE;
+BEGIN
+  SELECT * INTO v_user FROM auth.users WHERE email = p_email;
+  IF v_user.id IS NULL THEN
+    RAISE EXCEPTION 'No user with email %', p_email USING ERRCODE = '22023';
+  END IF;
+  IF auth.uid() IS DISTINCT FROM v_user.id THEN
+    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
+  END IF;
+
+  INSERT INTO public.profiles AS p (
+    id, email, name, age, gender, bio, photos, interests, city, height_cm, education, completed
+  ) VALUES (
+    v_user.id, v_user.email, COALESCE(p_name, 'User'), p_age, p_gender, COALESCE(p_bio, ''), COALESCE(p_photos, '{}'::text[]), COALESCE(p_interests, '{}'::text[]), p_city, p_height_cm, p_education, COALESCE(p_completed,false)
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    name = COALESCE(EXCLUDED.name, p.name),
+    age = EXCLUDED.age,
+    gender = EXCLUDED.gender,
+    bio = COALESCE(EXCLUDED.bio, p.bio),
+    photos = COALESCE(EXCLUDED.photos, p.photos),
+    interests = COALESCE(EXCLUDED.interests, p.interests),
+    city = COALESCE(EXCLUDED.city, p.city),
+    height_cm = COALESCE(EXCLUDED.height_cm, p.height_cm),
+    education = COALESCE(EXCLUDED.education, p.education),
+    completed = COALESCE(EXCLUDED.completed, p.completed)
+  RETURNING * INTO v_profile;
+
+  RETURN v_profile;
+END;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- Get recommended profiles for a user (opposite gender if set)
+CREATE OR REPLACE FUNCTION public.get_recommended_profiles_by_email(
+  p_email TEXT,
+  p_limit INTEGER DEFAULT 30
+) RETURNS SETOF public.profiles AS $
+DECLARE
+  v_user auth.users%ROWTYPE;
+  v_me public.profiles%ROWTYPE;
+BEGIN
+  SELECT * INTO v_user FROM auth.users WHERE email = p_email;
+  IF v_user.id IS NULL THEN
+    RAISE EXCEPTION 'No user with email %', p_email USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_me FROM public.profiles WHERE id = v_user.id;
+
+  RETURN QUERY
+  SELECT p.* FROM public.profiles p
+  WHERE p.id <> v_user.id
+    AND p.completed = TRUE
+    AND (
+      v_me.gender IS NULL OR (
+        (v_me.gender = 'girl' AND p.gender = 'boy') OR
+        (v_me.gender = 'boy' AND p.gender = 'girl')
+      )
+    )
+  ORDER BY p.last_active DESC NULLS LAST
+  LIMIT p_limit;
+END;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- Ensure or create conversation between two emails
+CREATE OR REPLACE FUNCTION public.ensure_conversation_between_emails(
+  p_email1 TEXT,
+  p_email2 TEXT
+) RETURNS UUID AS $
+DECLARE
+  v_u1 auth.users%ROWTYPE;
+  v_u2 auth.users%ROWTYPE;
+  v_conv_id UUID;
+BEGIN
+  SELECT * INTO v_u1 FROM auth.users WHERE email = p_email1;
+  SELECT * INTO v_u2 FROM auth.users WHERE email = p_email2;
+  IF v_u1.id IS NULL OR v_u2.id IS NULL THEN
+    RAISE EXCEPTION 'User not found by email';
+  END IF;
+  -- Only allow caller to create if they are one of the participants
+  IF auth.uid() IS DISTINCT FROM v_u1.id AND auth.uid() IS DISTINCT FROM v_u2.id THEN
+    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
+  END IF;
+
+  -- Try to find existing conversation with exactly these 2 users
+  SELECT c.id INTO v_conv_id
+  FROM public.conversations c
+  JOIN public.conversation_participants p1 ON p1.conversation_id = c.id AND p1.user_id = v_u1.id
+  JOIN public.conversation_participants p2 ON p2.conversation_id = c.id AND p2.user_id = v_u2.id
+  LIMIT 1;
+
+  IF v_conv_id IS NULL THEN
+    INSERT INTO public.conversations (name, created_by) VALUES (NULL, v_u1.id) RETURNING id INTO v_conv_id;
+    INSERT INTO public.conversation_participants (conversation_id, user_id) VALUES (v_conv_id, v_u1.id) ON CONFLICT DO NOTHING;
+    INSERT INTO public.conversation_participants (conversation_id, user_id) VALUES (v_conv_id, v_u2.id) ON CONFLICT DO NOTHING;
+  END IF;
+
+  RETURN v_conv_id;
+END;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- Send a message using emails
+CREATE OR REPLACE FUNCTION public.send_message_by_emails(
+  p_from_email TEXT,
+  p_to_email TEXT,
+  p_content TEXT
+) RETURNS public.messages AS $
+DECLARE
+  v_conv_id UUID;
+  v_msg public.messages%ROWTYPE;
+  v_sender auth.users%ROWTYPE;
+BEGIN
+  SELECT * INTO v_sender FROM auth.users WHERE email = p_from_email;
+  IF v_sender.id IS NULL THEN
+    RAISE EXCEPTION 'Sender not found';
+  END IF;
+  IF auth.uid() IS DISTINCT FROM v_sender.id THEN
+    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
+  END IF;
+
+  v_conv_id := public.ensure_conversation_between_emails(p_from_email, p_to_email);
+
+  INSERT INTO public.messages (conversation_id, sender_id, content)
+  VALUES (v_conv_id, v_sender.id, p_content)
+  RETURNING * INTO v_msg;
+
+  RETURN v_msg;
+END;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+
+-- Record a swipe using emails
+CREATE OR REPLACE FUNCTION public.swipe_by_emails(
+  p_from_email TEXT,
+  p_to_email TEXT,
+  p_action TEXT
+) RETURNS public.swipes AS $
+DECLARE
+  v_from auth.users%ROWTYPE;
+  v_to auth.users%ROWTYPE;
+  v_swipe public.swipes%ROWTYPE;
+BEGIN
+  SELECT * INTO v_from FROM auth.users WHERE email = p_from_email;
+  SELECT * INTO v_to FROM auth.users WHERE email = p_to_email;
+  IF v_from.id IS NULL OR v_to.id IS NULL THEN
+    RAISE EXCEPTION 'User not found';
+  END IF;
+  IF auth.uid() IS DISTINCT FROM v_from.id THEN
+    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
+  END IF;
+
+  INSERT INTO public.swipes (swiper_id, swiped_id, action)
+  VALUES (v_from.id, v_to.id, p_action)
+  ON CONFLICT (swiper_id, swiped_id) DO UPDATE SET action = EXCLUDED.action
+  RETURNING * INTO v_swipe;
+
+  RETURN v_swipe;
+END;
+$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
