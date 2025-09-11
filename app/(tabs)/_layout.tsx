@@ -4,13 +4,16 @@ import React from 'react';
 import Colors from '@/constants/colors';
 import { useI18n } from '@/hooks/i18n-context';
 import { useAuth } from '@/hooks/auth-context';
+import { useApp } from '@/hooks/app-context';
 
 export default function TabLayout() {
   const { t, lang } = useI18n() as { t: (k: string) => string; lang: 'en' | 'am' };
   const { isAuthenticated, isLoading } = useAuth();
+  const { currentProfile } = useApp();
 
   if (isLoading) return null;
   if (!isAuthenticated) return <Redirect href="/onboarding" />;
+  if (!(currentProfile?.profileComplete ?? false)) return <Redirect href="/profile-setup" />;
 
   return (
     <Tabs
