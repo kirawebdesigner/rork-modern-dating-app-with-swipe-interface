@@ -91,8 +91,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       verified: Boolean(data.verified),
       lastActive: data.last_active ? new Date(data.last_active as string) : undefined,
       ownedThemes: [],
-      profileTheme: (data.profile_theme as any) ?? null,
-      profileComplete: Boolean((data as any).profile_complete ?? false),
+      profileTheme: null,
     };
     return u;
   };
