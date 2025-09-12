@@ -20,6 +20,20 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
 
   useEffect(() => {
     let mounted = true;
+
+    const ensureProfile = async (uid: string) => {
+      try {
+        const { data: au } = await supabase.auth.getUser();
+        const metaName = (au.user?.user_metadata?.name as string | undefined) ?? 'User';
+        const { error: upErr } = await supabase
+          .from('profiles')
+          .upsert({ id: uid, name: metaName }, { onConflict: 'id' });
+        if (upErr) console.log('[Auth] ensureProfile upsert error', upErr);
+      } catch (e) {
+        console.log('[Auth] ensureProfile exception', e);
+      }
+    };
+
     const init = async () => {
       try {
         console.log('[Auth] Initializing session…');
@@ -27,7 +41,11 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
         if (!mounted) return;
         const sessionUser = data.session?.user ?? null;
         if (sessionUser) {
-          const profile = await fetchProfile(sessionUser.id);
+          let profile = await fetchProfile(sessionUser.id);
+          if (!profile) {
+            await ensureProfile(sessionUser.id);
+            profile = await fetchProfile(sessionUser.id);
+          }
           const next: AuthUser = {
             id: sessionUser.id,
             email: sessionUser.email ?? '',
@@ -52,7 +70,11 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
         setUser(null);
         return;
       }
-      const profile = await fetchProfile(session.user.id);
+      let profile = await fetchProfile(session.user.id);
+      if (!profile) {
+        await ensureProfile(session.user.id);
+        profile = await fetchProfile(session.user.id);
+      }
       const next: AuthUser = {
         id: session.user.id,
         email: session.user.email ?? '',
@@ -100,7 +122,14 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     const { data, error } = await supabase.auth.signInWithPassword({ email, password });
     if (error) throw error;
     const sessionUser = data.user;
-    const profile = await fetchProfile(sessionUser.id);
+    let profile = await fetchProfile(sessionUser.id);
+    if (!profile) {
+      try {
+        const metaName = (sessionUser.user_metadata?.name as string | undefined) ?? 'User';
+        await supabase.from('profiles').upsert({ id: sessionUser.id, name: metaName }, { onConflict: 'id' });
+      } catch {}
+      profile = await fetchProfile(sessionUser.id);
+    }
     const next: AuthUser = {
       id: sessionUser.id,
       email: sessionUser.email ?? '',

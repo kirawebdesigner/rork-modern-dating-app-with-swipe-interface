@@ -1,13 +1,18 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Alert, ActivityIndicator, TextInput, SafeAreaView, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
 import * as Clipboard from 'expo-clipboard';
 import Colors from '@/constants/colors';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
+import type { MembershipTier } from '@/types';
 
 export default function PaymentVerificationScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+  const paramTier = (typeof params?.tier === 'string' ? params.tier : undefined) as MembershipTier | undefined;
+  const validTier: MembershipTier | undefined = useMemo(() => (paramTier && ['free','silver','gold','vip'].includes(paramTier) ? paramTier : undefined) as MembershipTier | undefined, [paramTier]);
+
   const [email, setEmail] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [txId, setTxId] = useState<string>('');
@@ -17,6 +22,24 @@ export default function PaymentVerificationScreen() {
   const TELEBIRR_NUMBER = '0944120739';
   const TELEBIRR_NAME = 'Tesnim meftuh';
   const TELEGRAM_DEEPLINK = 'tg://msg?to=0944120739';
+
+  const USD_TO_ETB = 160;
+  const priceUSD: Record<Exclude<MembershipTier,'free'>, number> = {
+    silver: 9.99,
+    gold: 19.99,
+    vip: 29.99,
+  };
+  const planPriceETB = useMemo(() => {
+    if (!validTier || validTier === 'free') return null;
+    const usd = priceUSD[validTier];
+    return Math.round(usd * USD_TO_ETB);
+  }, [validTier]);
+
+  useEffect(() => {
+    if (planPriceETB && !amount) {
+      setAmount(String(planPriceETB));
+    }
+  }, [planPriceETB, amount]);
 
   const pickImage = async () => {
     try {
@@ -82,7 +105,7 @@ export default function PaymentVerificationScreen() {
           type: 'unlocks',
           amount: Number(amount || 0) || 0,
           transaction_type: 'purchase',
-          description: `MANUAL TELEBIRR REQUEST | email=${email} | tx=${txId || 'n/a'} | phone=0944120739 Tesnim meftuh | file=${uploadedPath ?? 'upload_failed'} | platform=${Platform.OS}`,
+          description: `MANUAL TELEBIRR REQUEST | email=${email} | tier=${validTier ?? 'n/a'} | tx=${txId || 'n/a'} | phone=0944120739 Tesnim meftuh | file=${uploadedPath ?? 'upload_failed'} | platform=${Platform.OS}`,
         } as const;
         await supabase.from('credit_transactions').insert(payload);
       } catch (e) {
@@ -131,6 +154,9 @@ export default function PaymentVerificationScreen() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Manual Payment Verification</Text>
           <Text style={styles.subtitle}>Pay via Telebirr and submit your receipt.</Text>
+          {validTier && validTier !== 'free' && (
+            <Text style={styles.planHint} testID="selected-plan">Selected plan: {validTier.toUpperCase()} — Pay {planPriceETB} ETB</Text>
+          )}
         </View>
       </View>
 
@@ -170,10 +196,11 @@ export default function PaymentVerificationScreen() {
             <TextInput
               value={amount}
               onChangeText={setAmount}
-              placeholder="Optional"
+              placeholder={validTier && validTier !== 'free' ? String(planPriceETB ?? '') : 'Enter amount'}
               placeholderTextColor={Colors.text.light}
               keyboardType="numeric"
               style={styles.textInput}
+              editable={!(validTier && validTier !== 'free')}
               testID="input-amount"
             />
           </View>
@@ -202,7 +229,7 @@ export default function PaymentVerificationScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.help}>If you have issues, send the screenshot + your account email by Telegram to {TELEBIRR_NUMBER} ({TELEBIRR_NAME}).</Text>
+      <Text style={styles.help}>After paying {validTier && validTier !== 'free' ? `${planPriceETB} ETB` : 'the amount'}, send the screenshot and your account email to Telegram {TELEBIRR_NUMBER} ({TELEBIRR_NAME}). Admin will approve within 12 hours.</Text>
     </SafeAreaView>
   );
 }
@@ -213,6 +240,7 @@ const styles = StyleSheet.create({
   logo: { width: 44, height: 44, borderRadius: 8, marginRight: 6, backgroundColor: 'white' },
   title: { fontSize: 22, fontWeight: '800', color: Colors.text.primary },
   subtitle: { color: Colors.text.secondary, marginTop: 2 },
+  planHint: { color: Colors.text.primary, fontWeight: '700', marginTop: 6 },
   box: { marginTop: 16, backgroundColor: Colors.backgroundSecondary, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border },
   label: { color: Colors.text.secondary, fontSize: 12 },
   value: { color: Colors.text.primary, fontWeight: '700', marginTop: 2 },
