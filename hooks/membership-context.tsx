@@ -2,7 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { MembershipTier, MembershipFeatures, UserCredits, MonthlyAllowances } from '@/types';
-import { supabase } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from './auth-context';
 
 const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
@@ -154,6 +154,10 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
 
   const syncToServer = useCallback(async () => {
     try {
+      if (!isSupabaseConfigured) {
+        console.log('[Membership] Skipping server sync: Supabase not configured');
+        return;
+      }
       const { data: u } = await supabase.auth.getUser();
       const userId = u?.user?.id ?? authUser?.id ?? null;
       if (!userId) {
@@ -179,11 +183,11 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
 
       const insertRes = await supabase
         .from('memberships')
-        .insert({ user_id: userId } as any)
+        .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true } as any)
         .select('user_id')
-        .single();
-      if (insertRes.error) {
-        console.log('[Membership] initial insert (ignore if exists):', insertRes.error.message);
+        .maybeSingle();
+      if (insertRes?.error) {
+        console.log('[Membership] initial upsert (may be blocked by RLS):', insertRes.error.message);
       }
 
       const { error: updateErr } = await supabase
@@ -191,15 +195,20 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         .update(payload as any)
         .eq('user_id', userId);
       if (updateErr) {
-        console.error('[Membership] Supabase upsert error:', updateErr.message);
+        console.log('[Membership] Supabase upsert/update skipped or failed:', updateErr.message);
       }
     } catch (e: any) {
-      console.error('[Membership] syncToServer failed:', e?.message || e);
+      console.log('[Membership] syncToServer failed:', e?.message || e);
     }
   }, [authUser?.id, tier, credits, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, allowances, lastAllowanceGrantISO]);
 
   const loadFromServer = useCallback(async () => {
     try {
+      if (!isSupabaseConfigured) {
+        console.log('[Membership] Supabase not configured; loading from local only');
+        await loadFromLocalStorage();
+        return;
+      }
       const { data: u } = await supabase.auth.getUser();
       const userId = u?.user?.id ?? authUser?.id ?? null;
       if (!userId) {
@@ -213,7 +222,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         .eq('user_id', userId)
         .maybeSingle();
       if (error) {
-        console.warn('[Membership] Load from server error:', error.message);
+        console.log('[Membership] Load from server error (using local fallback):', error.message);
         await loadFromLocalStorage();
         return;
       }
@@ -243,7 +252,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         await syncToServer();
       }
     } catch (e: any) {
-      console.error('[Membership] loadFromServer failed:', e?.message || e);
+      console.log('[Membership] loadFromServer failed (using local fallback):', e?.message || e);
       await loadFromLocalStorage();
     }
   }, [authUser?.id, loadFromLocalStorage, syncToServer, tier]);
