@@ -44,6 +44,7 @@ interface AppContextType {
 export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   const [currentProfile, setCurrentProfileState] = useState<User | null>(null);
   const [potentialMatches, setPotentialMatches] = useState<User[]>([]);
+  const [allProfiles, setAllProfiles] = useState<User[]>([]);
   const [matches, setMatches] = useState<Match[]>([]);
   const [swipeHistory, setSwipeHistory] = useState<SwipeAction[]>([]);
   const [tier, setTierState] = useState<MembershipTier>('free');
@@ -52,9 +53,9 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   const [filters, setFiltersState] = useState<FiltersState>({
     interestedIn: 'girl',
     locationLabel: 'Ethiopia',
-    distanceKm: 40,
-    ageMin: 20,
-    ageMax: 28,
+    distanceKm: 50,
+    ageMin: 18,
+    ageMax: 60,
     latitude: undefined,
     longitude: undefined,
     showVerifiedOnly: false,
@@ -66,7 +67,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
   useEffect(() => {
     refilterPotential();
-  }, [filters, swipeHistory, blockedIds]);
+  }, [filters, swipeHistory, blockedIds, allProfiles]);
 
   const normalizeProfile = (p: User | null): User | null => {
     if (!p) return null;
@@ -143,6 +144,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (error) {
         console.log('[App] load profiles error', error.message);
         setPotentialMatches([]);
+        setAllProfiles([]);
       } else {
         const mapped: User[] = (profiles as any[]).map((row) => ({
           id: String(row.id),
@@ -168,6 +170,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           const defaultInterestedIn: InterestedIn = ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl'));
           setFiltersState(prev => ({ ...prev, interestedIn: defaultInterestedIn }));
         }
+        setAllProfiles(mapped);
         const filtered = applyFilters(mapped, {
           ...filters,
           interestedIn: (storedFilters ? JSON.parse(storedFilters).interestedIn : (currentProfile ? ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl')) : filters.interestedIn)) as InterestedIn,
@@ -193,10 +196,11 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     return users.filter(u => {
       if (swipedIds.has(u.id)) return false;
       if (blockedSet.has(u.id)) return false;
+      if (currentProfile?.id && u.id === currentProfile.id) return false;
       if (f.interestedIn === 'girl' && u.gender !== 'girl') return false;
       if (f.interestedIn === 'boy' && u.gender !== 'boy') return false;
       if (currentProfile?.gender && u.interestedIn && u.interestedIn !== currentProfile.gender) return false;
-      if (u.age < f.ageMin || u.age > f.ageMax) return false;
+      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) return false;
       if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
       if (f.showVerifiedOnly && !u.verified) return false;
       if (f.education && !(u.education ?? '').toLowerCase().includes(f.education.toLowerCase())) return false;
@@ -215,7 +219,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   };
 
   const refilterPotential = () => {
-    setPotentialMatches(prev => applyFilters(prev, filters, swipeHistory, blockedIds));
+    setPotentialMatches(applyFilters(allProfiles, filters, swipeHistory, blockedIds));
   };
 
   const computeCompleted = (u: User): boolean => {
@@ -350,15 +354,18 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           const { data: u } = await supabase.auth.getUser();
           const myId = u?.user?.id ?? (currentProfile?.id ?? null);
           if (!myId) return;
-          await supabase.from('likes').insert({ liker_id: myId, liked_id: userId, type: action });
+          await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action });
           const { data: reciprocal } = await supabase
-            .from('likes')
+            .from('swipes')
             .select('id')
-            .eq('liker_id', userId)
-            .eq('liked_id', myId)
+            .eq('swiper_id', userId)
+            .eq('swiped_id', myId)
+            .in('action', ['like','superlike'])
             .maybeSingle();
           if (reciprocal) {
-            await supabase.from('matches').insert({ user1_id: myId, user2_id: userId, matched_at: new Date().toISOString() });
+            const a = myId;
+            const b = userId;
+            await supabase.from('matches').insert({ user1_id: a < b ? a : b, user2_id: a < b ? b : a, matched_at: new Date().toISOString() });
           }
         } catch (e) {
           console.log('[App] swipe sync failed', e);

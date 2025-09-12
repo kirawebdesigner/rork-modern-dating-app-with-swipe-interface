@@ -206,11 +206,11 @@ export default function DiscoverScreen() {
         <View style={styles.headerRight}>
           <TouchableOpacity 
             style={[styles.beSeenButton, { backgroundColor: colors.primary }]}
-            onPress={() => router.push('/credits' as any)}
+            onPress={() => router.push('/boost' as any)}
             testID="be-seen"
           >
             <Rocket size={16} color={colors.text.white} testID="icon-boost" />
-            <Text style={[styles.beSeenText, { color: colors.text.white }]}>{t('Be seen')}</Text>
+            <Text style={[styles.beSeenText, { color: colors.text.white }]}>{t('Boost')}</Text>
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.filterButton}
