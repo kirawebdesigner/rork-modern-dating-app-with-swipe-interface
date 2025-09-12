@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Alert, ActivityIndicator, TextInput, SafeAreaView } from 'react-native';
+import React, { useState, useCallback } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Image, Platform, Alert, ActivityIndicator, TextInput, SafeAreaView, Linking } from 'react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Clipboard from 'expo-clipboard';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
@@ -12,6 +13,10 @@ export default function PaymentVerificationScreen() {
   const [txId, setTxId] = useState<string>('');
   const [imageUri, setImageUri] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState<boolean>(false);
+
+  const TELEBIRR_NUMBER = '0944120739';
+  const TELEBIRR_NAME = 'Tesnim meftuh';
+  const TELEGRAM_DEEPLINK = 'tg://msg?to=0944120739';
 
   const pickImage = async () => {
     try {
@@ -86,7 +91,7 @@ export default function PaymentVerificationScreen() {
 
       Alert.alert(
         'Submitted',
-        'Your manual payment verification is submitted. We will review and unlock within 24h. If upload failed, please send the screenshot to 0944120739 (Tesnim meftuh) with your account email.'
+        `Your request is submitted. We will review and approve manually. If upload failed, send the screenshot + your account email by Telegram to ${TELEBIRR_NUMBER} (${TELEBIRR_NAME}).`
       );
       if (router.canGoBack()) router.back(); else router.replace('/premium' as any);
     } catch (e) {
@@ -97,15 +102,50 @@ export default function PaymentVerificationScreen() {
     }
   };
 
+  const onTelegram = useCallback(async () => {
+    try {
+      await Clipboard.setStringAsync(TELEBIRR_NUMBER);
+      const supported = await Linking.canOpenURL(TELEGRAM_DEEPLINK);
+      if (supported) {
+        await Linking.openURL(TELEGRAM_DEEPLINK);
+      } else {
+        if (Platform.OS === 'web') {
+          console.log('Open Telegram manually and message', TELEBIRR_NUMBER);
+        }
+        Alert.alert('Number copied', 'Open Telegram and message the number with your email + screenshot.');
+      }
+    } catch (e) {
+      console.log('[PaymentVerify] telegram open error', e);
+      Alert.alert('Copied', 'Phone number copied to clipboard. Open Telegram and message us.');
+    }
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Manual Payment Verification</Text>
-      <Text style={styles.subtitle}>Pay via Telebirr and submit your receipt.</Text>
+      <View style={styles.headerRow}>
+        <Image
+          source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/bdshjzcr8c9zb8mhnshfy' }}
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.title}>Manual Payment Verification</Text>
+          <Text style={styles.subtitle}>Pay via Telebirr and submit your receipt.</Text>
+        </View>
+      </View>
 
       <View style={styles.box}>
         <Text style={styles.label}>Telebirr Number</Text>
-        <Text style={styles.value}>0944120739</Text>
-        <Text style={styles.value}>Name: Tesnim meftuh</Text>
+        <Text style={styles.value}>{TELEBIRR_NUMBER}</Text>
+        <Text style={styles.value}>Name: {TELEBIRR_NAME}</Text>
+        <View style={styles.actionsRow}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => Clipboard.setStringAsync(TELEBIRR_NUMBER)} testID="copy-number">
+            <Text style={styles.actionText}>Copy Number</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, styles.telegramBtn]} onPress={onTelegram} testID="open-telegram">
+            <Text style={[styles.actionText, { color: Colors.text.white }]}>Message on Telegram</Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <View style={styles.form}>
@@ -162,18 +202,24 @@ export default function PaymentVerificationScreen() {
         </TouchableOpacity>
       </View>
 
-      <Text style={styles.help}>If you have issues, send the screenshot + your account email to 0944120739 (Tesnim meftuh).</Text>
+      <Text style={styles.help}>If you have issues, send the screenshot + your account email by Telegram to {TELEBIRR_NUMBER} ({TELEBIRR_NAME}).</Text>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background, padding: 20 },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.text.primary },
-  subtitle: { color: Colors.text.secondary, marginTop: 4 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  logo: { width: 44, height: 44, borderRadius: 8, marginRight: 6, backgroundColor: 'white' },
+  title: { fontSize: 22, fontWeight: '800', color: Colors.text.primary },
+  subtitle: { color: Colors.text.secondary, marginTop: 2 },
   box: { marginTop: 16, backgroundColor: Colors.backgroundSecondary, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: Colors.border },
   label: { color: Colors.text.secondary, fontSize: 12 },
   value: { color: Colors.text.primary, fontWeight: '700', marginTop: 2 },
+  actionsRow: { flexDirection: 'row', gap: 10, marginTop: 10 },
+  actionBtn: { flex: 1, backgroundColor: Colors.card, padding: 10, borderRadius: 10, alignItems: 'center' },
+  actionText: { color: Colors.text.primary, fontWeight: '700' },
+  telegramBtn: { backgroundColor: '#2AABEE' },
   form: { marginTop: 16 },
   inputWrap: { marginBottom: 12 },
   inputLabel: { color: Colors.text.secondary, marginBottom: 6 },

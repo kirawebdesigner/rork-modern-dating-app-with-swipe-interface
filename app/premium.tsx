@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Platform,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, ArrowRight, Info, BadgePercent } from 'lucide-react-native';
@@ -114,52 +115,11 @@ export default function PremiumScreen() {
 
   const handleUpgrade = async () => {
     try {
-      console.log('[Premium] Upgrade pressed');
-      if (selectedTier === tier) {
-        Alert.alert('Already subscribed', `You already have ${selectedTier} membership.`);
-        return;
-      }
-
-      const doUpgrade = async () => {
-        try {
-          console.log('[Premium] Confirm upgrade to', selectedTier);
-          await upgradeTier(selectedTier);
-          await setAppTier(selectedTier);
-          await resetDailyLimits();
-          await grantMonthlyAllowancesIfNeeded();
-          try {
-            await upgradeMutation.mutateAsync({ tier: selectedTier });
-          } catch (err: any) {
-            console.warn('[Premium] upgrade mutation failed, kept local tier', err?.message || err);
-          }
-          Alert.alert('Success!', `Welcome to ${tierData[selectedTier].name}! Enjoy your new features.`);
-          if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
-        } catch (err: any) {
-          console.error('[Premium] upgrade flow error', err?.message || err);
-          Alert.alert('Upgrade failed', 'Please try again later.');
-        }
-      };
-
-      if (Platform.OS === 'web') {
-        await doUpgrade();
-        return;
-      }
-
-      const priceLabel = billingPeriod === 'monthly'
-        ? `${formatDual(tierData[selectedTier].priceMonthly)}/month`
-        : `${formatDual(tierData[selectedTier].priceMonthly * 6)}/year (-50%)`;
-
-      Alert.alert(
-        'Upgrade Membership',
-        `Upgrade to ${tierData[selectedTier].name} • ${priceLabel}`,
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: doUpgrade },
-        ]
-      );
+      console.log('[Premium] Upgrade pressed', selectedTier);
+      router.push({ pathname: '/payment-verification', params: { tier: selectedTier } } as any);
     } catch (e) {
-      console.error('[Premium] handleUpgrade error', (e as any)?.message || e);
-      Alert.alert('Upgrade failed', 'Please try again.');
+      console.error('[Premium] handleUpgrade nav error', (e as any)?.message || e);
+      Alert.alert('Navigation failed', 'Please try again.');
     }
   };
 
@@ -206,7 +166,7 @@ export default function PremiumScreen() {
           <View style={styles.badgesRow}>
             <View style={styles.bonusBadge}>
               <Info size={14} color={Colors.text.white} />
-              <Text style={styles.bonusText}>1st Month Bonus</Text>
+              <Text style={styles.bonusText}>Manual Telebirr supported</Text>
             </View>
             <View style={styles.offBadge}>
               <BadgePercent size={14} color={Colors.text.white} />
@@ -230,6 +190,10 @@ export default function PremiumScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.priceHighlight}>{selectedPriceLabel}</Text>
+          <View style={styles.telebirrRow}>
+            <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/bdshjzcr8c9zb8mhnshfy' }} style={styles.telebirrLogo} resizeMode="contain" />
+            <Text style={styles.telebirrText}>Pay via Telebirr 0944120739 (Tesnim meftuh)</Text>
+          </View>
         </LinearGradient>
 
         <View style={styles.tiersSection}>
@@ -312,59 +276,17 @@ export default function PremiumScreen() {
 
         <View style={styles.footer}>
           <GradientButton
-            title={tier === selectedTier ? 'Current Plan' : upgradeMutation.status === 'pending' ? 'Processing…' : `Upgrade to ${tierData[selectedTier].name}`}
+            title={`Upgrade to ${tierData[selectedTier].name}`}
             onPress={handleUpgrade}
-            style={[styles.button, (tier === selectedTier || upgradeMutation.status === 'pending') && styles.disabledButton]}
-            disabled={tier === selectedTier || upgradeMutation.status === 'pending'}
+            style={styles.button}
             testID="upgrade-btn"
           />
           <Text style={styles.disclaimer}>
-            First month bonus applied automatically. Annual plans save 50%.
+            You will be redirected to manual payment verification.
           </Text>
         </View>
 
-        <View style={styles.storeSection}>
-          <Text style={styles.storeTitle}>One-time purchases</Text>
-          <View style={styles.packsRow}>
-            <PackCard label="5 Super Likes" onPress={() => onBuyPack('superLikes', 5)} />
-            <PackCard label="25 Super Likes" onPress={() => onBuyPack('superLikes', 25)} />
-            <PackCard label="60 Super Likes" onPress={() => onBuyPack('superLikes', 60)} />
-          </View>
-          <View style={styles.packsRow}>
-            <PackCard label="5 Boosts" onPress={() => onBuyPack('boosts', 5)} />
-            <PackCard label="25 Boosts" onPress={() => onBuyPack('boosts', 25)} />
-            <PackCard label="60 Boosts" onPress={() => onBuyPack('boosts', 60)} />
-          </View>
-          <View style={styles.packsRow}>
-            <PackCard label="5 Compliments" onPress={() => onBuyPack('compliments', 5)} />
-            <PackCard label="25 Compliments" onPress={() => onBuyPack('compliments', 25)} />
-            <PackCard label="60 Compliments" onPress={() => onBuyPack('compliments', 60)} />
-          </View>
-
-          <Text style={[styles.storeTitle, { marginTop: 16 }]}>Profile Themes</Text>
-          <View style={styles.themesRow}>
-            <ThemeCard
-              id="midnight"
-              name="Midnight"
-              type="gradient"
-              colors={["#0F172A", "#0B1022"]}
-              onPress={async () => { try { await unlockThemeMutation.mutateAsync({ theme: 'midnight' }); } catch {} await unlockTheme('midnight' as ThemeId); Alert.alert('Purchased', 'Midnight theme unlocked. Choose it in Profile Settings.'); }}
-            />
-            <ThemeCard
-              id="sunset"
-              name="Sunset"
-              type="gradient"
-              colors={["#FF7E5F", "#F72585"]}
-              onPress={async () => { try { await unlockThemeMutation.mutateAsync({ theme: 'sunset' }); } catch {} await unlockTheme('sunset' as ThemeId); Alert.alert('Purchased', 'Sunset theme unlocked. Choose it in Profile Settings.'); }}
-            />
-            <ThemeCard
-              id="geometric"
-              name="Geometric"
-              type="pattern"
-              onPress={async () => { try { await unlockThemeMutation.mutateAsync({ theme: 'geometric' }); } catch {} await unlockTheme('geometric' as ThemeId); Alert.alert('Purchased', 'Geometric theme unlocked. Choose it in Profile Settings.'); }}
-            />
-          </View>
-        </View>
+        {/* Store section temporarily removed as requested */}
       </ScrollView>
 
       <Modal visible={showPromo} transparent animationType="fade" onRequestClose={() => setShowPromo(false)}>
@@ -577,4 +499,7 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   modalTitle: { color: Colors.text.primary, fontWeight: '700', fontSize: 16 },
   modalBody: { color: Colors.text.secondary },
+  telebirrRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
+  telebirrLogo: { width: 28, height: 28, borderRadius: 6, backgroundColor: 'white' },
+  telebirrText: { color: Colors.text.white, fontWeight: '700' },
 });
