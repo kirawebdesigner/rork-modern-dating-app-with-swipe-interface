@@ -132,24 +132,27 @@ export default function ProfileSetup() {
         } as User;
         try {
           if (authId) {
-            const email = authData?.user?.email ?? null;
-            if (email) {
-              const { error: upErr } = await supabase.rpc('upsert_profile_by_email', {
-                p_email: email,
-                p_name: user.name,
-                p_age: user.age,
-                p_gender: user.gender,
-                p_bio: user.bio,
-                p_photos: user.photos,
-                p_interests: user.interests,
-                p_city: user.location?.city ?? null,
-                p_height_cm: user.heightCm ?? null,
-                p_education: user.education ?? null,
-                p_completed: false,
-              });
-              if (upErr) {
-                console.log('[ProfileSetup] Supabase RPC upsert (extras) error', upErr.message);
-              }
+            const { error: upErr } = await supabase
+              .from('profiles')
+              .upsert(
+                {
+                  id: authId,
+                  name: user.name,
+                  age: user.age,
+                  birthday: birthday.toISOString().slice(0,10),
+                  gender: user.gender,
+                  bio: user.bio,
+                  photos: user.photos,
+                  interests: user.interests,
+                  city: user.location?.city ?? null,
+                  height_cm: user.heightCm ?? null,
+                  education: user.education ?? null,
+                  completed: false,
+                },
+                { onConflict: 'id' }
+              );
+            if (upErr) {
+              console.log('[ProfileSetup] profiles upsert (extras) error', upErr.message);
             }
           }
         } catch (dbErr) {
@@ -187,26 +190,29 @@ export default function ProfileSetup() {
         } as User;
         try {
           if (authId) {
-            const email = authData?.user?.email ?? null;
-            if (email) {
-              const { error: upErr } = await supabase.rpc('upsert_profile_by_email', {
-                p_email: email,
-                p_name: user.name,
-                p_age: user.age,
-                p_gender: user.gender,
-                p_bio: user.bio,
-                p_photos: user.photos,
-                p_interests: user.interests,
-                p_city: user.location?.city ?? null,
-                p_height_cm: user.heightCm ?? null,
-                p_education: user.education ?? null,
-                p_completed: true,
-              });
-              if (upErr) {
-                console.log('[ProfileSetup] Supabase RPC upsert (final) error', upErr.message);
-                Alert.alert(t('Error'), t('Failed to save your profile. Please try again.'));
-                return;
-              }
+            const { error: upErr } = await supabase
+              .from('profiles')
+              .upsert(
+                {
+                  id: authId,
+                  name: user.name,
+                  age: user.age,
+                  birthday: birthday.toISOString().slice(0,10),
+                  gender: user.gender,
+                  bio: user.bio,
+                  photos: user.photos,
+                  interests: user.interests,
+                  city: user.location?.city ?? null,
+                  height_cm: user.heightCm ?? null,
+                  education: user.education ?? null,
+                  completed: true,
+                },
+                { onConflict: 'id' }
+              );
+            if (upErr) {
+              console.log('[ProfileSetup] profiles upsert (final) error', upErr.message);
+              Alert.alert(t('Error'), t('Failed to save your profile. Please try again.'));
+              return;
             }
           }
         } catch (dbErr) {

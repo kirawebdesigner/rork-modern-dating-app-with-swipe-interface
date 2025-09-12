@@ -176,9 +176,22 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         monthly_allowances: allowances,
         last_allowance_grant: lastAllowanceGrantISO && lastAllowanceGrantISO.trim().length > 0 ? new Date(lastAllowanceGrantISO).toISOString() : null,
       } as const;
-      const { error } = await supabase.from('memberships').upsert(payload, { onConflict: 'user_id' });
-      if (error) {
-        console.error('[Membership] Supabase upsert error:', error.message);
+
+      const insertRes = await supabase
+        .from('memberships')
+        .insert({ user_id: userId } as any)
+        .select('user_id')
+        .single();
+      if (insertRes.error) {
+        console.log('[Membership] initial insert (ignore if exists):', insertRes.error.message);
+      }
+
+      const { error: updateErr } = await supabase
+        .from('memberships')
+        .update(payload as any)
+        .eq('user_id', userId);
+      if (updateErr) {
+        console.error('[Membership] Supabase upsert error:', updateErr.message);
       }
     } catch (e: any) {
       console.error('[Membership] syncToServer failed:', e?.message || e);
