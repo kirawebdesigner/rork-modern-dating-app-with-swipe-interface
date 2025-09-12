@@ -28,17 +28,32 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
-    if (!name || !email || !password) {
+    const nameTrim = name.trim();
+    const emailTrim = email.trim();
+    if (!nameTrim || !emailTrim || !password) {
       alert(t('Error') + ': ' + t('Please fill in all fields'));
+      return;
+    }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
+      alert(t('Error') + ': ' + t('Please enter a valid email'));
+      return;
+    }
+    if (password.length < 6) {
+      alert(t('Error') + ': ' + t('Password must be at least 6 characters'));
       return;
     }
 
     setLoading(true);
     try {
-      await signup(email, password, name);
+      await signup(emailTrim, password, nameTrim);
       router.replace('/profile-setup' as any);
-    } catch {
-      alert(t('Error') + ': Signup failed. Please try again.');
+    } catch (e: unknown) {
+      const msg = (e as Error)?.message ?? '';
+      if (msg === 'EMAIL_CONFIRMATION_REQUIRED') {
+        alert(t('Check your email to confirm your account. Then open the app again.'));
+      } else {
+        alert(t('Error') + ': ' + (msg || t('Signup failed. Please try again.')));
+      }
     } finally {
       setLoading(false);
     }
@@ -87,6 +102,7 @@ export default function SignupScreen() {
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
+                testID="signup-name"
               />
             </View>
 
@@ -99,6 +115,7 @@ export default function SignupScreen() {
                 onChangeText={setEmail}
                 keyboardType="email-address"
                 autoCapitalize="none"
+                testID="signup-email"
               />
             </View>
 
@@ -110,6 +127,7 @@ export default function SignupScreen() {
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                testID="signup-password"
               />
             </View>
 
@@ -118,6 +136,7 @@ export default function SignupScreen() {
               onPress={handleSignup}
               loading={loading}
               style={styles.button}
+              testID="signup-submit"
             />
 
             <View style={styles.divider}>

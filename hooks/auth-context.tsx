@@ -111,28 +111,29 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   }, []);
 
   const signup = useCallback(async (email: string, password: string, name: string) => {
+    console.log('[Auth] signup start', { email });
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { data: { name } },
     });
-    if (error) throw error;
+    if (error) {
+      console.log('[Auth] signUp error', error);
+      throw error;
+    }
 
     let u = data.user;
+
     if (!data.session) {
-      try {
-        const { data: signInData } = await supabase.auth.signInWithPassword({ email, password });
-        if (signInData.user) u = signInData.user;
-      } catch (e) {
-        console.log('[Auth] auto sign-in after signup failed', e);
-      }
+      console.log('[Auth] No session after signUp — likely email confirmation required');
+      // Do not attempt profile upsert without a session due to RLS; surface a clear error to UI
+      throw new Error('EMAIL_CONFIRMATION_REQUIRED');
     }
-    if (!u) return;
 
     try {
       const { error: upsertErr } = await supabase
         .from('profiles')
-        .upsert({ id: u.id, name }, { onConflict: 'id' });
+        .upsert({ id: data.user!.id, name }, { onConflict: 'id' });
       if (upsertErr) console.log('[Auth] profile upsert error', upsertErr);
     } catch (e) {
       console.log('[Auth] profile upsert exception', e);
@@ -146,18 +147,18 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
           .select('id')
           .or(`referral_code.eq.${code},id.eq.${code}`)
           .maybeSingle();
-        if (!refErr && refUser && refUser.id !== u.id) {
-          await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', u.id);
-          await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: u.id });
+        if (!refErr && refUser && refUser.id !== data.user!.id) {
+          await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', data.user!.id);
+          await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: data.user!.id });
           await AsyncStorage.removeItem('referrer_code');
         }
       }
     } catch {}
 
-    const profile = await fetchProfile(u.id);
+    const profile = await fetchProfile(data.user!.id);
     const next: AuthUser = {
-      id: u.id,
-      email: u.email ?? '',
+      id: data.user!.id,
+      email: data.user!.email ?? '',
       name: name ?? 'User',
       profile: profile ?? undefined,
     };
