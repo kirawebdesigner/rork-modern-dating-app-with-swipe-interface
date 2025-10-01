@@ -19,19 +19,19 @@ import { useAuth } from '@/hooks/auth-context';
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
-  const [email, setEmail] = useState<string>('');
+  const [emailOrPhone, setEmailOrPhone] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
 
   const handleLogin = async () => {
-    if (!email || !password) {
+    if (!emailOrPhone || !password) {
       alert('Please fill in all fields');
       return;
     }
 
     setLoading(true);
     try {
-      await login(email, password);
+      await login(emailOrPhone, password);
       router.replace('/(tabs)');
     } catch (e: any) {
       const msg = (e?.message as string | undefined) ?? 'Login failed. Please try again.';
@@ -77,13 +77,13 @@ export default function LoginScreen() {
 
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email</Text>
+            <Text style={styles.label}>Email or Phone</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your email"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
+              placeholder="Enter your email or phone number"
+              value={emailOrPhone}
+              onChangeText={setEmailOrPhone}
+              keyboardType="default"
               autoCapitalize="none"
               testID="login-email"
             />

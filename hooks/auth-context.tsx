@@ -8,8 +8,8 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  login: (emailOrPhone: string, password: string) => Promise<void>;
+  signup: (emailOrPhone: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   reloadProfile: () => Promise<void>;
 }
@@ -27,7 +27,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
         const metaName = (au.user?.user_metadata?.name as string | undefined) ?? 'User';
         const { error: upErr } = await supabase
           .from('profiles')
-          .upsert({ id: uid, name: metaName }, { onConflict: 'id' });
+          .upsert({ id: uid, name: metaName, email: au.user?.email, phone: au.user?.phone }, { onConflict: 'id' });
         if (upErr) console.log('[Auth] ensureProfile upsert error', upErr);
       } catch (e) {
         console.log('[Auth] ensureProfile exception', e);
@@ -118,16 +118,27 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     return u;
   };
 
-  const login = useCallback(async (email: string, password: string) => {
-    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+  const login = useCallback(async (emailOrPhone: string, password: string) => {
+    console.log('[Auth] login attempt', { emailOrPhone });
+    const isPhone = /^\+?[0-9]{10,15}$/.test(emailOrPhone.replace(/\s/g, ''));
+    const credentials = isPhone ? { phone: emailOrPhone, password } : { email: emailOrPhone, password };
+    const { data, error } = await supabase.auth.signInWithPassword(credentials as any);
+    if (error) {
+      console.log('[Auth] login error', error);
+      throw error;
+    }
     const sessionUser = data.user;
+    console.log('[Auth] login success, fetching profile for', sessionUser.id);
     let profile = await fetchProfile(sessionUser.id);
     if (!profile) {
+      console.log('[Auth] no profile found, creating one');
       try {
         const metaName = (sessionUser.user_metadata?.name as string | undefined) ?? 'User';
-        await supabase.from('profiles').upsert({ id: sessionUser.id, name: metaName }, { onConflict: 'id' });
-      } catch {}
+        const { error: upsertErr } = await supabase.from('profiles').upsert({ id: sessionUser.id, name: metaName, email: sessionUser.email, phone: sessionUser.phone }, { onConflict: 'id' });
+        if (upsertErr) console.log('[Auth] profile upsert error', upsertErr);
+      } catch (e) {
+        console.log('[Auth] profile upsert exception', e);
+      }
       profile = await fetchProfile(sessionUser.id);
     }
     const next: AuthUser = {
@@ -136,33 +147,32 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       name: profile?.name ?? (sessionUser.user_metadata?.name as string | undefined) ?? 'User',
       profile: profile ?? undefined,
     };
+    console.log('[Auth] login complete, user set', next);
     setUser(next);
   }, []);
 
-  const signup = useCallback(async (email: string, password: string, name: string) => {
-    console.log('[Auth] signup start', { email });
-    const { data, error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { data: { name } },
-    });
+  const signup = useCallback(async (emailOrPhone: string, password: string, name: string) => {
+    console.log('[Auth] signup start', { emailOrPhone });
+    const isPhone = /^\+?[0-9]{10,15}$/.test(emailOrPhone.replace(/\s/g, ''));
+    const signupData = isPhone 
+      ? { phone: emailOrPhone, password, options: { data: { name } } }
+      : { email: emailOrPhone, password, options: { data: { name } } };
+    const { data, error } = await supabase.auth.signUp(signupData as any);
     if (error) {
       console.log('[Auth] signUp error', error);
       throw error;
     }
 
-    let u = data.user;
-
     if (!data.session) {
-      console.log('[Auth] No session after signUp — likely email confirmation required');
-      // Do not attempt profile upsert without a session due to RLS; surface a clear error to UI
-      throw new Error('EMAIL_CONFIRMATION_REQUIRED');
+      console.log('[Auth] No session after signUp — confirmation required');
+      throw new Error(isPhone ? 'PHONE_CONFIRMATION_REQUIRED' : 'EMAIL_CONFIRMATION_REQUIRED');
     }
 
+    console.log('[Auth] signup session created, upserting profile');
     try {
       const { error: upsertErr } = await supabase
         .from('profiles')
-        .upsert({ id: data.user!.id, name }, { onConflict: 'id' });
+        .upsert({ id: data.user!.id, name, email: data.user!.email, phone: data.user!.phone }, { onConflict: 'id' });
       if (upsertErr) console.log('[Auth] profile upsert error', upsertErr);
     } catch (e) {
       console.log('[Auth] profile upsert exception', e);
@@ -191,6 +201,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       name: name ?? 'User',
       profile: profile ?? undefined,
     };
+    console.log('[Auth] signup complete, user set', next);
     setUser(next);
   }, []);
 

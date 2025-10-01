@@ -4,9 +4,23 @@
 -- Enable UUID extension
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
+-- Drop existing triggers and functions to recreate them cleanly
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+DROP TRIGGER IF EXISTS on_auth_user_updated ON auth.users;
+DROP TRIGGER IF EXISTS on_swipe_check_match ON public.swipes;
+DROP TRIGGER IF EXISTS update_profiles_updated_at ON public.profiles;
+DROP TRIGGER IF EXISTS update_memberships_updated_at ON public.memberships;
+
+DROP FUNCTION IF EXISTS public.handle_new_user() CASCADE;
+DROP FUNCTION IF EXISTS public.sync_profile_email() CASCADE;
+DROP FUNCTION IF EXISTS public.check_for_match() CASCADE;
+DROP FUNCTION IF EXISTS public.update_updated_at_column() CASCADE;
+
 -- Users table (extends Supabase auth.users)
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE PRIMARY KEY,
+  email TEXT,
+  phone TEXT,
   name TEXT NOT NULL,
   age INTEGER,
   birthday DATE,
@@ -44,29 +58,27 @@ CREATE TABLE IF NOT EXISTS public.memberships (
   boost_credits INTEGER DEFAULT 0,
   unlock_credits INTEGER DEFAULT 0,
   compliment_credits INTEGER DEFAULT 0,
+  superlike_credits INTEGER DEFAULT 0,
   remaining_daily_messages INTEGER DEFAULT 5,
   remaining_profile_views INTEGER DEFAULT 10,
+  remaining_right_swipes INTEGER,
+  remaining_compliments INTEGER,
   last_reset DATE DEFAULT CURRENT_DATE,
   expires_at TIMESTAMP WITH TIME ZONE,
   referral_rewards_claimed INTEGER DEFAULT 0,
+  monthly_allowances JSONB DEFAULT '{"monthlyBoosts":0,"monthlySuperLikes":0}'::jsonb,
+  last_allowance_grant TIMESTAMPTZ,
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- Ensure profiles has all required columns used by the app (idempotent for existing databases)
-ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS interested_in TEXT CHECK (interested_in IN ('boy','girl')),
-  ADD COLUMN IF NOT EXISTS profile_theme TEXT,
-  ADD COLUMN IF NOT EXISTS owned_themes TEXT[] DEFAULT '{}'::text[],
-  ADD COLUMN IF NOT EXISTS completed BOOLEAN DEFAULT FALSE;
+-- Ensure profiles has email column
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS email TEXT;
+ALTER TABLE public.profiles ADD COLUMN IF NOT EXISTS phone TEXT;
 
--- Ensure memberships has all required columns used by the app
-ALTER TABLE public.memberships
-  ADD COLUMN IF NOT EXISTS superlike_credits INTEGER DEFAULT 0,
-  ADD COLUMN IF NOT EXISTS remaining_right_swipes INTEGER,
-  ADD COLUMN IF NOT EXISTS remaining_compliments INTEGER,
-  ADD COLUMN IF NOT EXISTS monthly_allowances JSONB DEFAULT '{"monthlyBoosts":0,"monthlySuperLikes":0}'::jsonb,
-  ADD COLUMN IF NOT EXISTS last_allowance_grant TIMESTAMPTZ;
+-- Create unique index on email
+CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_unique ON public.profiles(email) WHERE email IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_profiles_phone ON public.profiles(phone) WHERE phone IS NOT NULL;
 
 -- Referrals table
 CREATE TABLE IF NOT EXISTS public.referrals (
@@ -96,24 +108,6 @@ CREATE TABLE IF NOT EXISTS public.matches (
   UNIQUE(user1_id, user2_id)
 );
 
--- If an old messages table exists (match-based), rename it to match_messages to avoid conflicts
-DO $
-BEGIN
-  IF EXISTS (
-    SELECT 1 FROM information_schema.tables 
-    WHERE table_schema = 'public' AND table_name = 'messages'
-  ) THEN
-    -- Check if it looks like the old structure by presence of match_id
-    IF EXISTS (
-      SELECT 1 FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'messages' AND column_name = 'match_id'
-    ) THEN
-      ALTER TABLE public.messages RENAME TO match_messages;
-    END IF;
-  END IF;
-END;
-$ LANGUAGE plpgsql;
-
 -- Conversations table
 CREATE TABLE IF NOT EXISTS public.conversations (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -129,7 +123,7 @@ CREATE TABLE IF NOT EXISTS public.conversation_participants (
   PRIMARY KEY (conversation_id, user_id)
 );
 
--- New messages table (conversation-based)
+-- Messages table (conversation-based)
 CREATE TABLE IF NOT EXISTS public.messages (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   conversation_id UUID REFERENCES public.conversations(id) ON DELETE CASCADE NOT NULL,
@@ -179,6 +173,7 @@ CREATE INDEX IF NOT EXISTS idx_profiles_age ON public.profiles(age);
 CREATE INDEX IF NOT EXISTS idx_profiles_city ON public.profiles(city);
 CREATE INDEX IF NOT EXISTS idx_profiles_last_active ON public.profiles(last_active);
 CREATE INDEX IF NOT EXISTS idx_profiles_referred_by ON public.profiles(referred_by);
+CREATE INDEX IF NOT EXISTS idx_profiles_completed ON public.profiles(completed);
 CREATE INDEX IF NOT EXISTS idx_swipes_swiper_id ON public.swipes(swiper_id);
 CREATE INDEX IF NOT EXISTS idx_swipes_swiped_id ON public.swipes(swiped_id);
 CREATE INDEX IF NOT EXISTS idx_matches_user1_id ON public.matches(user1_id);
@@ -188,6 +183,7 @@ CREATE INDEX IF NOT EXISTS idx_messages_sender_id ON public.messages(sender_id);
 CREATE INDEX IF NOT EXISTS idx_profile_views_viewer_id ON public.profile_views(viewer_id);
 CREATE INDEX IF NOT EXISTS idx_profile_views_viewed_id ON public.profile_views(viewed_id);
 CREATE INDEX IF NOT EXISTS idx_referrals_referrer_id ON public.referrals(referrer_id);
+CREATE INDEX IF NOT EXISTS idx_memberships_user_id ON public.memberships(user_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -201,6 +197,32 @@ ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_participants ENABLE ROW LEVEL SECURITY;
+
+-- Drop existing policies to recreate them
+DROP POLICY IF EXISTS "Users can view all profiles" ON public.profiles;
+DROP POLICY IF EXISTS "Users can update own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can insert own profile" ON public.profiles;
+DROP POLICY IF EXISTS "Users can view own membership" ON public.memberships;
+DROP POLICY IF EXISTS "Users can update own membership" ON public.memberships;
+DROP POLICY IF EXISTS "Users can insert own membership" ON public.memberships;
+DROP POLICY IF EXISTS "Users can view own referrals" ON public.referrals;
+DROP POLICY IF EXISTS "Users can insert their referral record" ON public.referrals;
+DROP POLICY IF EXISTS "Users can view own swipes" ON public.swipes;
+DROP POLICY IF EXISTS "Users can insert own swipes" ON public.swipes;
+DROP POLICY IF EXISTS "Users can view own matches" ON public.matches;
+DROP POLICY IF EXISTS "System can insert matches" ON public.matches;
+DROP POLICY IF EXISTS "Participants can select messages" ON public.messages;
+DROP POLICY IF EXISTS "Participants can insert messages" ON public.messages;
+DROP POLICY IF EXISTS "Participants can select conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can insert conversations" ON public.conversations;
+DROP POLICY IF EXISTS "Users can manage own participation" ON public.conversation_participants;
+DROP POLICY IF EXISTS "Users can view own profile views" ON public.profile_views;
+DROP POLICY IF EXISTS "Users can insert own profile views" ON public.profile_views;
+DROP POLICY IF EXISTS "Users can view own interests" ON public.user_interests;
+DROP POLICY IF EXISTS "Users can manage own interests" ON public.user_interests;
+DROP POLICY IF EXISTS "Users can view own transactions" ON public.credit_transactions;
+DROP POLICY IF EXISTS "Users can insert own transactions" ON public.credit_transactions;
+DROP POLICY IF EXISTS "Anyone can view interests" ON public.interests;
 
 -- RLS Policies
 
@@ -308,77 +330,88 @@ CREATE POLICY "Anyone can view interests" ON public.interests
 
 -- Functions
 
--- Function to create a profile when a user signs up (syncs email)
+-- Function to create a profile when a user signs up
 CREATE OR REPLACE FUNCTION public.handle_new_user()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, pg_temp
+LANGUAGE plpgsql
+AS $$
 BEGIN
-  INSERT INTO public.profiles (id, name, email)
+  -- Insert profile
+  INSERT INTO public.profiles (id, name, email, phone)
   VALUES (
     NEW.id,
     COALESCE(NEW.raw_user_meta_data->>'name', 'User'),
-    NEW.email
-  );
+    NEW.email,
+    NEW.phone
+  )
+  ON CONFLICT (id) DO UPDATE SET
+    email = EXCLUDED.email,
+    phone = EXCLUDED.phone;
   
+  -- Insert membership
   INSERT INTO public.memberships (user_id)
-  VALUES (NEW.id);
+  VALUES (NEW.id)
+  ON CONFLICT (user_id) DO NOTHING;
   
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+$$;
 
 -- Trigger to automatically create profile and membership on user signup
-CREATE OR REPLACE TRIGGER on_auth_user_created
+CREATE TRIGGER on_auth_user_created
   AFTER INSERT ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql;
+$$;
 
 -- Triggers for updated_at
-CREATE OR REPLACE TRIGGER update_profiles_updated_at
+CREATE TRIGGER update_profiles_updated_at
   BEFORE UPDATE ON public.profiles
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
-CREATE OR REPLACE TRIGGER update_memberships_updated_at
+CREATE TRIGGER update_memberships_updated_at
   BEFORE UPDATE ON public.memberships
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- Ensure profiles has an email column tied to auth.users and keep it in sync
-ALTER TABLE public.profiles
-  ADD COLUMN IF NOT EXISTS email TEXT;
-
-CREATE UNIQUE INDEX IF NOT EXISTS idx_profiles_email_unique ON public.profiles(email);
-
--- Backfill email for existing rows
-UPDATE public.profiles p
-SET email = u.email
-FROM auth.users u
-WHERE p.id = u.id AND (p.email IS DISTINCT FROM u.email);
-
--- Sync profile email when auth.users.email changes
+-- Sync profile email/phone when auth.users changes
 CREATE OR REPLACE FUNCTION public.sync_profile_email()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, pg_temp
+LANGUAGE plpgsql
+AS $$
 BEGIN
-  IF NEW.email IS DISTINCT FROM OLD.email THEN
-    UPDATE public.profiles SET email = NEW.email WHERE id = NEW.id;
-  END IF;
+  UPDATE public.profiles 
+  SET 
+    email = NEW.email,
+    phone = NEW.phone
+  WHERE id = NEW.id;
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+$$;
 
-CREATE OR REPLACE TRIGGER on_auth_user_updated
-  AFTER UPDATE OF email ON auth.users
+CREATE TRIGGER on_auth_user_updated
+  AFTER UPDATE OF email, phone ON auth.users
   FOR EACH ROW EXECUTE FUNCTION public.sync_profile_email();
 
 -- Function to create matches when both users like each other
 CREATE OR REPLACE FUNCTION public.check_for_match()
-RETURNS TRIGGER AS $
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, pg_temp
+LANGUAGE plpgsql
+AS $$
 BEGIN
   IF NEW.action IN ('like', 'superlike') THEN
     IF EXISTS (
@@ -398,10 +431,10 @@ BEGIN
   
   RETURN NEW;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+$$;
 
 -- Trigger to check for matches after swipe
-CREATE OR REPLACE TRIGGER on_swipe_check_match
+CREATE TRIGGER on_swipe_check_match
   AFTER INSERT ON public.swipes
   FOR EACH ROW EXECUTE FUNCTION public.check_for_match();
 
@@ -429,179 +462,11 @@ INSERT INTO public.interests (name, category) VALUES
   ('Nature', 'Outdoor')
 ON CONFLICT (name) DO NOTHING;
 
--- RPCs to work by email safely
-
--- Upsert profile by email (caller must be the same user)
-CREATE OR REPLACE FUNCTION public.upsert_profile_by_email(
-  p_email TEXT,
-  p_name TEXT,
-  p_age INTEGER,
-  p_gender TEXT,
-  p_bio TEXT,
-  p_photos TEXT[],
-  p_interests TEXT[],
-  p_city TEXT,
-  p_height_cm INTEGER,
-  p_education TEXT,
-  p_completed BOOLEAN
-) RETURNS public.profiles AS $
-DECLARE
-  v_user auth.users%ROWTYPE;
-  v_profile public.profiles%ROWTYPE;
-BEGIN
-  SELECT * INTO v_user FROM auth.users WHERE email = p_email;
-  IF v_user.id IS NULL THEN
-    RAISE EXCEPTION 'No user with email %', p_email USING ERRCODE = '22023';
-  END IF;
-  IF auth.uid() IS DISTINCT FROM v_user.id THEN
-    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
-  END IF;
-
-  INSERT INTO public.profiles AS p (
-    id, email, name, age, gender, bio, photos, interests, city, height_cm, education, completed
-  ) VALUES (
-    v_user.id, v_user.email, COALESCE(p_name, 'User'), p_age, p_gender, COALESCE(p_bio, ''), COALESCE(p_photos, '{}'::text[]), COALESCE(p_interests, '{}'::text[]), p_city, p_height_cm, p_education, COALESCE(p_completed,false)
-  )
-  ON CONFLICT (id) DO UPDATE SET
-    email = EXCLUDED.email,
-    name = COALESCE(EXCLUDED.name, p.name),
-    age = EXCLUDED.age,
-    gender = EXCLUDED.gender,
-    bio = COALESCE(EXCLUDED.bio, p.bio),
-    photos = COALESCE(EXCLUDED.photos, p.photos),
-    interests = COALESCE(EXCLUDED.interests, p.interests),
-    city = COALESCE(EXCLUDED.city, p.city),
-    height_cm = COALESCE(EXCLUDED.height_cm, p.height_cm),
-    education = COALESCE(EXCLUDED.education, p.education),
-    completed = COALESCE(EXCLUDED.completed, p.completed)
-  RETURNING * INTO v_profile;
-
-  RETURN v_profile;
-END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
-
--- Get recommended profiles for a user (opposite gender if set)
-CREATE OR REPLACE FUNCTION public.get_recommended_profiles_by_email(
-  p_email TEXT,
-  p_limit INTEGER DEFAULT 30
-) RETURNS SETOF public.profiles AS $
-DECLARE
-  v_user auth.users%ROWTYPE;
-  v_me public.profiles%ROWTYPE;
-BEGIN
-  SELECT * INTO v_user FROM auth.users WHERE email = p_email;
-  IF v_user.id IS NULL THEN
-    RAISE EXCEPTION 'No user with email %', p_email USING ERRCODE = '22023';
-  END IF;
-
-  SELECT * INTO v_me FROM public.profiles WHERE id = v_user.id;
-
-  RETURN QUERY
-  SELECT p.* FROM public.profiles p
-  WHERE p.id <> v_user.id
-    AND p.completed = TRUE
-    AND (
-      v_me.gender IS NULL OR (
-        (v_me.gender = 'girl' AND p.gender = 'boy') OR
-        (v_me.gender = 'boy' AND p.gender = 'girl')
-      )
-    )
-  ORDER BY p.last_active DESC NULLS LAST
-  LIMIT p_limit;
-END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
-
--- Ensure or create conversation between two emails
-CREATE OR REPLACE FUNCTION public.ensure_conversation_between_emails(
-  p_email1 TEXT,
-  p_email2 TEXT
-) RETURNS UUID AS $
-DECLARE
-  v_u1 auth.users%ROWTYPE;
-  v_u2 auth.users%ROWTYPE;
-  v_conv_id UUID;
-BEGIN
-  SELECT * INTO v_u1 FROM auth.users WHERE email = p_email1;
-  SELECT * INTO v_u2 FROM auth.users WHERE email = p_email2;
-  IF v_u1.id IS NULL OR v_u2.id IS NULL THEN
-    RAISE EXCEPTION 'User not found by email';
-  END IF;
-  -- Only allow caller to create if they are one of the participants
-  IF auth.uid() IS DISTINCT FROM v_u1.id AND auth.uid() IS DISTINCT FROM v_u2.id THEN
-    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
-  END IF;
-
-  -- Try to find existing conversation with exactly these 2 users
-  SELECT c.id INTO v_conv_id
-  FROM public.conversations c
-  JOIN public.conversation_participants p1 ON p1.conversation_id = c.id AND p1.user_id = v_u1.id
-  JOIN public.conversation_participants p2 ON p2.conversation_id = c.id AND p2.user_id = v_u2.id
-  LIMIT 1;
-
-  IF v_conv_id IS NULL THEN
-    INSERT INTO public.conversations (name, created_by) VALUES (NULL, v_u1.id) RETURNING id INTO v_conv_id;
-    INSERT INTO public.conversation_participants (conversation_id, user_id) VALUES (v_conv_id, v_u1.id) ON CONFLICT DO NOTHING;
-    INSERT INTO public.conversation_participants (conversation_id, user_id) VALUES (v_conv_id, v_u2.id) ON CONFLICT DO NOTHING;
-  END IF;
-
-  RETURN v_conv_id;
-END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
-
--- Send a message using emails
-CREATE OR REPLACE FUNCTION public.send_message_by_emails(
-  p_from_email TEXT,
-  p_to_email TEXT,
-  p_content TEXT
-) RETURNS public.messages AS $
-DECLARE
-  v_conv_id UUID;
-  v_msg public.messages%ROWTYPE;
-  v_sender auth.users%ROWTYPE;
-BEGIN
-  SELECT * INTO v_sender FROM auth.users WHERE email = p_from_email;
-  IF v_sender.id IS NULL THEN
-    RAISE EXCEPTION 'Sender not found';
-  END IF;
-  IF auth.uid() IS DISTINCT FROM v_sender.id THEN
-    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
-  END IF;
-
-  v_conv_id := public.ensure_conversation_between_emails(p_from_email, p_to_email);
-
-  INSERT INTO public.messages (conversation_id, sender_id, content)
-  VALUES (v_conv_id, v_sender.id, p_content)
-  RETURNING * INTO v_msg;
-
-  RETURN v_msg;
-END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
-
--- Record a swipe using emails
-CREATE OR REPLACE FUNCTION public.swipe_by_emails(
-  p_from_email TEXT,
-  p_to_email TEXT,
-  p_action TEXT
-) RETURNS public.swipes AS $
-DECLARE
-  v_from auth.users%ROWTYPE;
-  v_to auth.users%ROWTYPE;
-  v_swipe public.swipes%ROWTYPE;
-BEGIN
-  SELECT * INTO v_from FROM auth.users WHERE email = p_from_email;
-  SELECT * INTO v_to FROM auth.users WHERE email = p_to_email;
-  IF v_from.id IS NULL OR v_to.id IS NULL THEN
-    RAISE EXCEPTION 'User not found';
-  END IF;
-  IF auth.uid() IS DISTINCT FROM v_from.id THEN
-    RAISE EXCEPTION 'Not allowed' USING ERRCODE = '28000';
-  END IF;
-
-  INSERT INTO public.swipes (swiper_id, swiped_id, action)
-  VALUES (v_from.id, v_to.id, p_action)
-  ON CONFLICT (swiper_id, swiped_id) DO UPDATE SET action = EXCLUDED.action
-  RETURNING * INTO v_swipe;
-
-  RETURN v_swipe;
-END;
-$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
+-- Backfill email/phone for existing rows
+UPDATE public.profiles p
+SET 
+  email = u.email,
+  phone = u.phone
+FROM auth.users u
+WHERE p.id = u.id 
+  AND (p.email IS DISTINCT FROM u.email OR p.phone IS DISTINCT FROM u.phone);

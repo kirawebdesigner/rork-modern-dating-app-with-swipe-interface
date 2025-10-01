@@ -23,19 +23,20 @@ export default function SignupScreen() {
   const { signup } = useAuth();
   const { t } = useI18n();
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
+  const [emailOrPhone, setEmailOrPhone] = useState('');
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
     const nameTrim = name.trim();
-    const emailTrim = email.trim();
-    if (!nameTrim || !emailTrim || !password) {
+    const emailOrPhoneTrim = emailOrPhone.trim();
+    if (!nameTrim || !emailOrPhoneTrim || !password) {
       alert(t('Error') + ': ' + t('Please fill in all fields'));
       return;
     }
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTrim)) {
-      alert(t('Error') + ': ' + t('Please enter a valid email'));
+    const isPhone = /^\+?[0-9]{10,15}$/.test(emailOrPhoneTrim.replace(/\s/g, ''));
+    if (!isPhone && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailOrPhoneTrim)) {
+      alert(t('Error') + ': ' + t('Please enter a valid email or phone number'));
       return;
     }
     if (password.length < 6) {
@@ -45,12 +46,14 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      await signup(emailTrim, password, nameTrim);
+      await signup(emailOrPhoneTrim, password, nameTrim);
       router.replace('/profile-setup' as any);
     } catch (e: unknown) {
       const msg = (e as Error)?.message ?? '';
       if (msg === 'EMAIL_CONFIRMATION_REQUIRED') {
         alert(t('Check your email to confirm your account. Then open the app again.'));
+      } else if (msg === 'PHONE_CONFIRMATION_REQUIRED') {
+        alert(t('Check your phone for a confirmation code. Then open the app again.'));
       } else {
         alert(t('Error') + ': ' + (msg || t('Signup failed. Please try again.')));
       }
@@ -107,13 +110,13 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>{t('Email')}</Text>
+              <Text style={styles.label}>{t('Email or Phone')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder={t('Email')}
-                value={email}
-                onChangeText={setEmail}
-                keyboardType="email-address"
+                placeholder={t('Email or phone number')}
+                value={emailOrPhone}
+                onChangeText={setEmailOrPhone}
+                keyboardType="default"
                 autoCapitalize="none"
                 testID="signup-email"
               />
