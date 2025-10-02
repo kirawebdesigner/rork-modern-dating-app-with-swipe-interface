@@ -211,13 +211,15 @@ CREATE POLICY "Allow all on interests" ON public.interests FOR ALL USING (true) 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public, pg_temp
 LANGUAGE plpgsql
-AS $$
+AS $
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$;
+$;
 
 -- Triggers for updated_at
 CREATE TRIGGER update_profiles_updated_at
