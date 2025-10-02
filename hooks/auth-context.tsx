@@ -8,8 +8,8 @@ interface AuthContextType {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (emailOrPhone: string, password: string) => Promise<void>;
-  signup: (emailOrPhone: string, password: string, name: string) => Promise<void>;
+  login: (phone: string) => Promise<void>;
+  signup: (phone: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   reloadProfile: () => Promise<void>;
 }
@@ -21,38 +21,26 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   useEffect(() => {
     let mounted = true;
 
-    const ensureProfile = async (uid: string) => {
-      try {
-        const { data: au } = await supabase.auth.getUser();
-        const metaName = (au.user?.user_metadata?.name as string | undefined) ?? 'User';
-        const { error: upErr } = await supabase
-          .from('profiles')
-          .upsert({ id: uid, name: metaName, email: au.user?.email, phone: au.user?.phone }, { onConflict: 'id' });
-        if (upErr) console.log('[Auth] ensureProfile upsert error', upErr);
-      } catch (e) {
-        console.log('[Auth] ensureProfile exception', e);
-      }
-    };
-
     const init = async () => {
       try {
         console.log('[Auth] Initializing session…');
-        const { data } = await supabase.auth.getSession();
+        const storedPhone = await AsyncStorage.getItem('user_phone');
         if (!mounted) return;
-        const sessionUser = data.session?.user ?? null;
-        if (sessionUser) {
-          let profile = await fetchProfile(sessionUser.id);
-          if (!profile) {
-            await ensureProfile(sessionUser.id);
-            profile = await fetchProfile(sessionUser.id);
+        
+        if (storedPhone) {
+          const profile = await fetchProfileByPhone(storedPhone);
+          if (profile) {
+            const next: AuthUser = {
+              id: profile.id,
+              email: '',
+              name: profile.name,
+              profile: profile,
+            };
+            setUser(next);
+          } else {
+            await AsyncStorage.removeItem('user_phone');
+            setUser(null);
           }
-          const next: AuthUser = {
-            id: sessionUser.id,
-            email: sessionUser.email ?? '',
-            name: profile?.name ?? (sessionUser.user_metadata?.name as string | undefined) ?? 'User',
-            profile: profile ?? undefined,
-          };
-          setUser(next);
         } else {
           setUser(null);
         }
@@ -64,43 +52,25 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     };
     init();
 
-    const { data: sub } = supabase.auth.onAuthStateChange(async (event, session) => {
-      console.log('[Auth] onAuthStateChange', event);
-      if (!session?.user) {
-        setUser(null);
-        return;
-      }
-      let profile = await fetchProfile(session.user.id);
-      if (!profile) {
-        await ensureProfile(session.user.id);
-        profile = await fetchProfile(session.user.id);
-      }
-      const next: AuthUser = {
-        id: session.user.id,
-        email: session.user.email ?? '',
-        name: profile?.name ?? (session.user.user_metadata?.name as string | undefined) ?? 'User',
-        profile: profile ?? undefined,
-      };
-      setUser(next);
-    });
-
     return () => {
       mounted = false;
-      sub.subscription.unsubscribe();
     };
   }, []);
 
-  const fetchProfile = async (uid: string): Promise<User | null> => {
+  const fetchProfileByPhone = async (phone: string): Promise<User | null> => {
+    console.log('[Auth] fetchProfileByPhone', phone);
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', uid)
+      .eq('phone', phone)
       .maybeSingle();
+    
     if (error) {
-      console.error('[Auth] fetchProfile error', error);
+      console.error('[Auth] fetchProfileByPhone error', error);
       return null;
     }
     if (!data) return null;
+    
     const u: User = {
       id: data.id as string,
       name: (data.name as string) ?? 'User',
@@ -118,64 +88,56 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     return u;
   };
 
-  const login = useCallback(async (emailOrPhone: string, password: string) => {
-    console.log('[Auth] login attempt', { emailOrPhone });
-    const isPhone = /^\+?[0-9]{10,15}$/.test(emailOrPhone.replace(/\s/g, ''));
-    const credentials = isPhone ? { phone: emailOrPhone, password } : { email: emailOrPhone, password };
-    const { data, error } = await supabase.auth.signInWithPassword(credentials as any);
-    if (error) {
-      console.log('[Auth] login error', error);
-      throw error;
-    }
-    const sessionUser = data.user;
-    console.log('[Auth] login success, fetching profile for', sessionUser.id);
-    let profile = await fetchProfile(sessionUser.id);
+  const login = useCallback(async (phone: string) => {
+    console.log('[Auth] login attempt', { phone });
+    const cleanPhone = phone.trim();
+    
+    const profile = await fetchProfileByPhone(cleanPhone);
     if (!profile) {
-      console.log('[Auth] no profile found, creating one');
-      try {
-        const metaName = (sessionUser.user_metadata?.name as string | undefined) ?? 'User';
-        const { error: upsertErr } = await supabase.from('profiles').upsert({ id: sessionUser.id, name: metaName, email: sessionUser.email, phone: sessionUser.phone }, { onConflict: 'id' });
-        if (upsertErr) console.log('[Auth] profile upsert error', upsertErr);
-      } catch (e) {
-        console.log('[Auth] profile upsert exception', e);
-      }
-      profile = await fetchProfile(sessionUser.id);
+      throw new Error('Phone number not found. Please sign up first.');
     }
+
+    await AsyncStorage.setItem('user_phone', cleanPhone);
+    
     const next: AuthUser = {
-      id: sessionUser.id,
-      email: sessionUser.email ?? '',
-      name: profile?.name ?? (sessionUser.user_metadata?.name as string | undefined) ?? 'User',
-      profile: profile ?? undefined,
+      id: profile.id,
+      email: '',
+      name: profile.name,
+      profile: profile,
     };
     console.log('[Auth] login complete, user set', next);
     setUser(next);
   }, []);
 
-  const signup = useCallback(async (emailOrPhone: string, password: string, name: string) => {
-    console.log('[Auth] signup start', { emailOrPhone });
-    const isPhone = /^\+?[0-9]{10,15}$/.test(emailOrPhone.replace(/\s/g, ''));
-    const signupData = isPhone 
-      ? { phone: emailOrPhone, password, options: { data: { name } } }
-      : { email: emailOrPhone, password, options: { data: { name } } };
-    const { data, error } = await supabase.auth.signUp(signupData as any);
+  const signup = useCallback(async (phone: string, name: string) => {
+    console.log('[Auth] signup start', { phone, name });
+    const cleanPhone = phone.trim();
+    const cleanName = name.trim();
+
+    const existing = await fetchProfileByPhone(cleanPhone);
+    if (existing) {
+      throw new Error('Phone number already registered. Please login instead.');
+    }
+
+    const { data, error } = await supabase
+      .from('profiles')
+      .insert({ phone: cleanPhone, name: cleanName })
+      .select()
+      .single();
+
     if (error) {
-      console.log('[Auth] signUp error', error);
-      throw error;
+      console.log('[Auth] signup error', error);
+      throw new Error('Failed to create account: ' + error.message);
     }
 
-    if (!data.session) {
-      console.log('[Auth] No session after signUp — confirmation required');
-      throw new Error(isPhone ? 'PHONE_CONFIRMATION_REQUIRED' : 'EMAIL_CONFIRMATION_REQUIRED');
-    }
+    const userId = data.id as string;
 
-    console.log('[Auth] signup session created, upserting profile');
-    try {
-      const { error: upsertErr } = await supabase
-        .from('profiles')
-        .upsert({ id: data.user!.id, name, email: data.user!.email, phone: data.user!.phone }, { onConflict: 'id' });
-      if (upsertErr) console.log('[Auth] profile upsert error', upsertErr);
-    } catch (e) {
-      console.log('[Auth] profile upsert exception', e);
+    const { error: membershipError } = await supabase
+      .from('memberships')
+      .insert({ user_id: userId });
+
+    if (membershipError) {
+      console.log('[Auth] membership creation error', membershipError);
     }
 
     try {
@@ -186,19 +148,21 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
           .select('id')
           .or(`referral_code.eq.${code},id.eq.${code}`)
           .maybeSingle();
-        if (!refErr && refUser && refUser.id !== data.user!.id) {
-          await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', data.user!.id);
-          await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: data.user!.id });
+        if (!refErr && refUser && refUser.id !== userId) {
+          await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', userId);
+          await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: userId });
           await AsyncStorage.removeItem('referrer_code');
         }
       }
     } catch {}
 
-    const profile = await fetchProfile(data.user!.id);
+    await AsyncStorage.setItem('user_phone', cleanPhone);
+
+    const profile = await fetchProfileByPhone(cleanPhone);
     const next: AuthUser = {
-      id: data.user!.id,
-      email: data.user!.email ?? '',
-      name: name ?? 'User',
+      id: userId,
+      email: '',
+      name: cleanName,
       profile: profile ?? undefined,
     };
     console.log('[Auth] signup complete, user set', next);
@@ -207,12 +171,8 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
 
   const logout = useCallback(async () => {
     try {
-      await supabase.auth.signOut();
-    } catch (e) {
-      console.log('[Auth] signOut error, continuing', e);
-    }
-    try {
       const keys = [
+        'user_phone',
         'user_profile',
         'tier',
         'credits',
@@ -233,30 +193,14 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     } catch (e) {
       console.log('[Auth] clear storage failed', e);
     }
-    try {
-      if (typeof window !== 'undefined') {
-        const ls = window.localStorage;
-        const toRemove: string[] = [];
-        for (let i = 0; i < ls.length; i++) {
-          const k = ls.key(i);
-          if (k && (k.startsWith('sb-') || k.includes('supabase'))) {
-            toRemove.push(k);
-          }
-        }
-        toRemove.forEach((k) => ls.removeItem(k));
-        console.log('[Auth] Cleared web localStorage keys', toRemove);
-      }
-    } catch (e) {
-      console.log('[Auth] localStorage clear failed (web)', e);
-    }
     setUser(null);
   }, []);
 
   const reloadProfile = useCallback(async () => {
-    const { data } = await supabase.auth.getUser();
-    const uid = data.user?.id;
-    if (!uid) return;
-    const profile = await fetchProfile(uid);
+    const storedPhone = await AsyncStorage.getItem('user_phone');
+    if (!storedPhone) return;
+    
+    const profile = await fetchProfileByPhone(storedPhone);
     setUser(prev => {
       if (!prev) return prev;
       const next: AuthUser = { ...prev, profile: profile ?? undefined, name: profile?.name ?? prev.name };

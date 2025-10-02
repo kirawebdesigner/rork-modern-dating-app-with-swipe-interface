@@ -1,198 +1,189 @@
-# Admin Guide: Manual Telebirr Payment Verification
+# Admin Guide: Manual Payment Verification (Phone-Based)
 
 ## Overview
-This guide explains how to manually verify and approve Telebirr payments for membership upgrades.
+This guide explains how to manually verify and approve Telebirr payments for membership upgrades using phone numbers as the primary identifier.
 
 ## Payment Flow
-1. User selects a plan (Silver, Gold, or VIP) in the app
-2. User clicks "Upgrade" and is redirected to payment verification page
-3. User sees:
-   - Telebirr number: **0944120739**
-   - Account name: **Tesnim meftuh**
-   - Amount to pay (in ETB)
-   - Instructions to send screenshot + email via Telegram
-4. User pays via Telebirr and sends proof to **0944120739** on Telegram
-5. Admin (you) verifies payment and upgrades user in Supabase
+1. User selects a membership plan (Silver, Gold, or VIP)
+2. User pays via Telebirr to: **0944120739** (Tesnim meftuh)
+3. User sends payment screenshot + their registered phone number via Telegram to **0944120739**
+4. Admin verifies payment and upgrades user in Supabase
 
-## Pricing (ETB)
-- **Silver**: 1,598 ETB/month (9.99 USD × 160)
-- **Gold**: 3,198 ETB/month (19.99 USD × 160)
-- **VIP**: 4,798 ETB/month (29.99 USD × 160)
+## Pricing
+- **Silver**: 1,598 ETB/month ($9.99 × 160)
+- **Gold**: 3,198 ETB/month ($19.99 × 160)
+- **VIP**: 4,798 ETB/month ($29.99 × 160)
 
-Yearly plans are 50% off (6 months price for 12 months).
+## How to Verify and Approve Payments
 
-## How to Approve Payments in Supabase
+### Step 1: Receive Payment Proof
+User will send you via Telegram:
+- Screenshot of Telebirr payment
+- Their phone number (e.g., "0944120739")
 
-### Step 1: Get User Email
-When a user sends you payment proof on Telegram, they should include their **app account email or phone number**.
+### Step 2: Verify Payment
+1. Check the screenshot shows correct amount
+2. Verify payment was made to your Telebirr account
+3. Note the user's phone number
 
-### Step 2: Open Supabase SQL Editor
+### Step 3: Upgrade User in Supabase
+
+#### Option A: Using Supabase Dashboard (Recommended)
 1. Go to your Supabase project dashboard
-2. Click on "SQL Editor" in the left sidebar
-3. Click "New query"
+2. Navigate to **Table Editor** → **memberships** table
+3. Find the user by their phone number:
+   - First, go to **profiles** table
+   - Search for the phone number in the `phone` column
+   - Copy the user's `id` (UUID)
+4. Go back to **memberships** table
+5. Find the row where `user_id` matches the copied UUID
+6. Click **Edit** on that row
+7. Update the following fields:
+   - `tier`: Change to `silver`, `gold`, or `vip`
+   - `expires_at`: Set to 30 days from now (e.g., `2025-11-02 00:00:00+00`)
+8. Click **Save**
 
-### Step 3: Verify Payment Screenshot
-Check the Telebirr screenshot to confirm:
-- Payment amount matches the plan
-- Payment went to 0944120739
-- Transaction is recent
+#### Option B: Using SQL Editor
+1. Go to **SQL Editor** in Supabase
+2. Run this query to upgrade a user:
 
-### Step 4: Upgrade User to SILVER
 ```sql
--- Replace 'user@example.com' with the actual user email
-UPDATE public.memberships m
-SET 
-  tier = 'silver',
-  expires_at = NOW() + INTERVAL '30 days',
-  updated_at = NOW()
-FROM public.profiles p
-WHERE p.email = 'user@example.com' 
-  AND m.user_id = p.id;
-```
-
-### Step 5: Upgrade User to GOLD
-```sql
--- Replace 'user@example.com' with the actual user email
-UPDATE public.memberships m
+-- Find user by phone number and upgrade to GOLD
+UPDATE memberships m
 SET 
   tier = 'gold',
   expires_at = NOW() + INTERVAL '30 days',
   updated_at = NOW()
-FROM public.profiles p
-WHERE p.email = 'user@example.com' 
+FROM profiles p
+WHERE p.phone = '0944120739'  -- Replace with user's phone number
   AND m.user_id = p.id;
 ```
 
-### Step 6: Upgrade User to VIP
+**For different tiers:**
 ```sql
--- Replace 'user@example.com' with the actual user email
-UPDATE public.memberships m
-SET 
-  tier = 'vip',
-  expires_at = NOW() + INTERVAL '30 days',
-  updated_at = NOW()
-FROM public.profiles p
-WHERE p.email = 'user@example.com' 
-  AND m.user_id = p.id;
+-- Silver
+UPDATE memberships m
+SET tier = 'silver', expires_at = NOW() + INTERVAL '30 days', updated_at = NOW()
+FROM profiles p
+WHERE p.phone = 'USER_PHONE_HERE' AND m.user_id = p.id;
+
+-- Gold
+UPDATE memberships m
+SET tier = 'gold', expires_at = NOW() + INTERVAL '30 days', updated_at = NOW()
+FROM profiles p
+WHERE p.phone = 'USER_PHONE_HERE' AND m.user_id = p.id;
+
+-- VIP
+UPDATE memberships m
+SET tier = 'vip', expires_at = NOW() + INTERVAL '30 days', updated_at = NOW()
+FROM profiles p
+WHERE p.phone = 'USER_PHONE_HERE' AND m.user_id = p.id;
 ```
 
-### For Yearly Plans
-Replace `INTERVAL '30 days'` with `INTERVAL '365 days'` in the queries above.
+### Step 4: Confirm with User
+Send a message back to the user on Telegram:
+> "✅ Payment confirmed! Your [TIER] membership is now active. Thank you!"
 
-Example for yearly GOLD:
+## Checking User's Current Membership
+
+To check a user's current membership status:
+
 ```sql
-UPDATE public.memberships m
+SELECT 
+  p.phone,
+  p.name,
+  m.tier,
+  m.expires_at,
+  m.message_credits,
+  m.boost_credits
+FROM profiles p
+JOIN memberships m ON m.user_id = p.id
+WHERE p.phone = 'USER_PHONE_HERE';
+```
+
+## Troubleshooting
+
+### User not found by phone number
+- Ask user to confirm their registered phone number
+- Check if they used a different format (with/without country code)
+- Search in profiles table manually
+
+### Payment amount doesn't match
+- Verify which plan they selected
+- Check if exchange rate changed
+- Contact user for clarification
+
+### User already has active membership
+- Check `expires_at` date
+- If extending, add 30 days to current `expires_at`:
+```sql
+UPDATE memberships m
 SET 
   tier = 'gold',
-  expires_at = NOW() + INTERVAL '365 days',
+  expires_at = GREATEST(expires_at, NOW()) + INTERVAL '30 days',
   updated_at = NOW()
-FROM public.profiles p
-WHERE p.email = 'user@example.com' 
+FROM profiles p
+WHERE p.phone = 'USER_PHONE_HERE' AND m.user_id = p.id;
+```
+
+## Important Notes
+
+1. **Always verify payment before upgrading** - Check your Telebirr account
+2. **Phone number is the key identifier** - Make sure it matches exactly
+3. **Set expiration date** - Memberships should expire after 30 days
+4. **Keep records** - Save payment screenshots for your records
+5. **Response time** - Try to approve within 12 hours as promised
+
+## Quick Reference SQL Queries
+
+### Find all pending payments (users who messaged but not upgraded)
+This requires manual tracking via Telegram messages.
+
+### Find all active premium members
+```sql
+SELECT 
+  p.phone,
+  p.name,
+  m.tier,
+  m.expires_at
+FROM profiles p
+JOIN memberships m ON m.user_id = p.id
+WHERE m.tier != 'free'
+  AND (m.expires_at IS NULL OR m.expires_at > NOW())
+ORDER BY m.expires_at DESC;
+```
+
+### Find expired memberships that need downgrade
+```sql
+SELECT 
+  p.phone,
+  p.name,
+  m.tier,
+  m.expires_at
+FROM profiles p
+JOIN memberships m ON m.user_id = p.id
+WHERE m.tier != 'free'
+  AND m.expires_at < NOW();
+```
+
+To downgrade them:
+```sql
+UPDATE memberships m
+SET tier = 'free', expires_at = NULL, updated_at = NOW()
+FROM profiles p
+WHERE m.tier != 'free'
+  AND m.expires_at < NOW()
   AND m.user_id = p.id;
 ```
 
-## If User Signed Up with Phone Number
+## Support
 
-If the user provides a phone number instead of email:
-
-```sql
--- Replace '+251944120739' with the actual user phone
-UPDATE public.memberships m
-SET 
-  tier = 'gold',
-  expires_at = NOW() + INTERVAL '30 days',
-  updated_at = NOW()
-FROM public.profiles p
-WHERE p.phone = '+251944120739' 
-  AND m.user_id = p.id;
-```
-
-## Verify the Upgrade Worked
-
-After running the query, verify it worked:
-
-```sql
--- Check user's current tier
-SELECT p.email, p.phone, p.name, m.tier, m.expires_at
-FROM public.profiles p
-JOIN public.memberships m ON m.user_id = p.id
-WHERE p.email = 'user@example.com' OR p.phone = '+251944120739';
-```
-
-You should see the updated tier and expiration date.
-
-## Common Issues
-
-### Issue: "No rows updated"
-**Solution**: The email/phone doesn't exist in the database. Ask the user to confirm their account details.
-
-### Issue: User says upgrade didn't work
-**Solution**: 
-1. Verify the query ran successfully (check for "UPDATE 1" message)
-2. Ask user to log out and log back in
-3. Check if the user's app is connected to the correct Supabase instance
-
-### Issue: User wants a refund
-**Solution**: Process Telebirr refund and run:
-```sql
-UPDATE public.memberships m
-SET 
-  tier = 'free',
-  expires_at = NULL,
-  updated_at = NOW()
-FROM public.profiles p
-WHERE p.email = 'user@example.com' 
-  AND m.user_id = p.id;
-```
-
-## Record Keeping
-
-Keep a simple log of approved payments:
-- Date
-- User email/phone
-- Plan (Silver/Gold/VIP)
-- Duration (Monthly/Yearly)
-- Amount paid (ETB)
-- Telebirr transaction ID (from screenshot)
-
-This helps with accounting and dispute resolution.
-
-## Support Response Template
-
-When user sends payment proof on Telegram:
-
-```
-✅ Payment verified! 
-Your account has been upgraded to [PLAN].
-Please log out and log back in to see your new features.
-Expires: [DATE]
-
-Thank you for your support! 🎉
-```
-
-## Emergency: Downgrade User
-
-If you need to downgrade a user (e.g., payment dispute):
-
-```sql
-UPDATE public.memberships m
-SET 
-  tier = 'free',
-  expires_at = NULL,
-  updated_at = NOW()
-FROM public.profiles p
-WHERE p.email = 'user@example.com' 
-  AND m.user_id = p.id;
-```
-
-## Questions?
-
-If you encounter any issues with this process, check:
-1. Supabase connection is working
-2. User exists in the database
-3. SQL query syntax is correct (no typos in email/phone)
-4. User has logged out and back in after upgrade
+If you encounter any issues:
+1. Check the database schema in `database-schema.sql`
+2. Verify all tables exist and have correct structure
+3. Check Supabase logs for any errors
+4. Contact technical support if needed
 
 ---
 
-**Important**: Always verify payment screenshots before upgrading accounts. Never upgrade without proof of payment.
+**Remember**: Phone number is the primary identifier. Always ask users for their registered phone number when processing payments.

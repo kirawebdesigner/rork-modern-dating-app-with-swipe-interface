@@ -23,40 +23,28 @@ export default function SignupScreen() {
   const { signup } = useAuth();
   const { t } = useI18n();
   const [name, setName] = useState('');
-  const [emailOrPhone, setEmailOrPhone] = useState('');
-  const [password, setPassword] = useState('');
+  const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
     const nameTrim = name.trim();
-    const emailOrPhoneTrim = emailOrPhone.trim();
-    if (!nameTrim || !emailOrPhoneTrim || !password) {
+    const phoneTrim = phone.trim();
+    if (!nameTrim || !phoneTrim) {
       alert(t('Error') + ': ' + t('Please fill in all fields'));
       return;
     }
-    const isPhone = /^\+?[0-9]{10,15}$/.test(emailOrPhoneTrim.replace(/\s/g, ''));
-    if (!isPhone && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailOrPhoneTrim)) {
-      alert(t('Error') + ': ' + t('Please enter a valid email or phone number'));
-      return;
-    }
-    if (password.length < 6) {
-      alert(t('Error') + ': ' + t('Password must be at least 6 characters'));
+    if (!/^[0-9+\s-]{10,15}$/.test(phoneTrim)) {
+      alert(t('Error') + ': ' + t('Please enter a valid phone number'));
       return;
     }
 
     setLoading(true);
     try {
-      await signup(emailOrPhoneTrim, password, nameTrim);
+      await signup(phoneTrim, nameTrim);
       router.replace('/profile-setup' as any);
     } catch (e: unknown) {
       const msg = (e as Error)?.message ?? '';
-      if (msg === 'EMAIL_CONFIRMATION_REQUIRED') {
-        alert(t('Check your email to confirm your account. Then open the app again.'));
-      } else if (msg === 'PHONE_CONFIRMATION_REQUIRED') {
-        alert(t('Check your phone for a confirmation code. Then open the app again.'));
-      } else {
-        alert(t('Error') + ': ' + (msg || t('Signup failed. Please try again.')));
-      }
+      alert(t('Error') + ': ' + (msg || t('Signup failed. Please try again.')));
     } finally {
       setLoading(false);
     }
@@ -110,27 +98,15 @@ export default function SignupScreen() {
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>{t('Email or Phone')}</Text>
+              <Text style={styles.label}>{t('Phone Number')}</Text>
               <TextInput
                 style={styles.input}
-                placeholder={t('Email or phone number')}
-                value={emailOrPhone}
-                onChangeText={setEmailOrPhone}
-                keyboardType="default"
+                placeholder={t('Phone number (e.g., 0944120739)')}
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
                 autoCapitalize="none"
-                testID="signup-email"
-              />
-            </View>
-
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>{t('Password')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('Password')}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                testID="signup-password"
+                testID="signup-phone"
               />
             </View>
 
@@ -142,19 +118,7 @@ export default function SignupScreen() {
               testID="signup-submit"
             />
 
-            <View style={styles.divider}>
-              <View style={styles.dividerLine} />
-              <Text style={styles.dividerText}>OR</Text>
-              <View style={styles.dividerLine} />
-            </View>
 
-            <TouchableOpacity style={styles.socialButton}>
-              <Text style={styles.socialButtonText}>Continue with Google</Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity style={styles.socialButton}>
-              <Text style={styles.socialButtonText}>Continue with Facebook</Text>
-            </TouchableOpacity>
           </View>
 
           <View style={styles.footer}>

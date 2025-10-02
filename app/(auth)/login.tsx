@@ -19,19 +19,19 @@ import { useAuth } from '@/hooks/auth-context';
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
-  const [emailOrPhone, setEmailOrPhone] = useState<string>('');
-  const [password, setPassword] = useState<string>('');
+  const [phone, setPhone] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
 
   const handleLogin = async () => {
-    if (!emailOrPhone || !password) {
-      alert('Please fill in all fields');
+    const cleanPhone = phone.trim();
+    if (!cleanPhone) {
+      alert('Please enter your phone number');
       return;
     }
 
     setLoading(true);
     try {
-      await login(emailOrPhone, password);
+      await login(cleanPhone);
       router.replace('/(tabs)');
     } catch (e: any) {
       const msg = (e?.message as string | undefined) ?? 'Login failed. Please try again.';
@@ -77,33 +77,17 @@ export default function LoginScreen() {
 
         <View style={styles.form}>
           <View style={styles.inputContainer}>
-            <Text style={styles.label}>Email or Phone</Text>
+            <Text style={styles.label}>Phone Number</Text>
             <TextInput
               style={styles.input}
-              placeholder="Enter your email or phone number"
-              value={emailOrPhone}
-              onChangeText={setEmailOrPhone}
-              keyboardType="default"
+              placeholder="Enter your phone number (e.g., 0944120739)"
+              value={phone}
+              onChangeText={setPhone}
+              keyboardType="phone-pad"
               autoCapitalize="none"
-              testID="login-email"
+              testID="login-phone"
             />
           </View>
-
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Password</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your password"
-              value={password}
-              onChangeText={setPassword}
-              secureTextEntry
-              testID="login-password"
-            />
-          </View>
-
-          <TouchableOpacity style={styles.forgotPassword} testID="login-forgot">
-            <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
-          </TouchableOpacity>
 
           <GradientButton
             title="Sign In"

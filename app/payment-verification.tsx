@@ -81,7 +81,7 @@ export default function PaymentVerificationScreen() {
       </View>
 
       <Text style={styles.help}>
-        After paying {validTier && validTier !== 'free' ? `${planPriceETB} ETB` : 'the amount'}, send your payment screenshot and the email of your app account via Telegram to {TELEBIRR_NUMBER} ({TELEBIRR_NAME}). Admin will approve within 12 hours.
+        After paying {validTier && validTier !== 'free' ? `${planPriceETB} ETB` : 'the amount'}, send your payment screenshot and your phone number (the one you used to register) via Telegram to {TELEBIRR_NUMBER} ({TELEBIRR_NAME}). Admin will approve within 12 hours.
       </Text>
 
       <TouchableOpacity style={styles.doneBtn} onPress={() => { if (router.canGoBack()) router.back(); else router.replace('/(tabs)/profile' as any); }} testID="done-btn">

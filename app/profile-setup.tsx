@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert, Platform, Image } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
@@ -108,13 +109,26 @@ export default function ProfileSetup() {
       setCurrentStep('extras');
     } else if (currentStep === 'extras') {
       try {
-        const { data: authData } = await supabase.auth.getUser();
-        const authId = authData?.user?.id ?? null;
+        const storedPhone = await AsyncStorage.getItem('user_phone');
+        if (!storedPhone) {
+          Alert.alert(t('Error'), t('Phone number not found. Please login again.'));
+          return;
+        }
+        const { data: dbProfile, error: fetchErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', storedPhone)
+          .maybeSingle();
+        if (fetchErr || !dbProfile) {
+          Alert.alert(t('Error'), t('Profile not found. Please login again.'));
+          return;
+        }
+        const authId = dbProfile.id as string;
         const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
         const birthday = profileData.birthday ?? new Date(1995, 0, 1);
         const age = calculateAge(birthday);
         const user: User = {
-          id: String(authId ?? Math.random().toString(36).slice(2)),
+          id: authId,
           name: name || 'New User',
           age,
           birthday,
@@ -131,32 +145,27 @@ export default function ProfileSetup() {
           lastActive: new Date(),
         } as User;
         try {
-          if (authId) {
-            const { error: upErr } = await supabase
-              .from('profiles')
-              .upsert(
-                {
-                  id: authId,
-                  name: user.name,
-                  age: user.age,
-                  birthday: birthday.toISOString().slice(0,10),
-                  gender: user.gender,
-                  bio: user.bio,
-                  photos: user.photos,
-                  interests: user.interests,
-                  city: user.location?.city ?? null,
-                  height_cm: user.heightCm ?? null,
-                  education: user.education ?? null,
-                  completed: false,
-                },
-                { onConflict: 'id' }
-              );
-            if (upErr) {
-              console.log('[ProfileSetup] profiles upsert (extras) error', upErr.message);
-            }
+          const { error: upErr } = await supabase
+            .from('profiles')
+            .update({
+              name: user.name,
+              age: user.age,
+              birthday: birthday.toISOString().slice(0,10),
+              gender: user.gender,
+              bio: user.bio,
+              photos: user.photos,
+              interests: user.interests,
+              city: user.location?.city ?? null,
+              height_cm: user.heightCm ?? null,
+              education: user.education ?? null,
+              completed: false,
+            })
+            .eq('id', authId);
+          if (upErr) {
+            console.log('[ProfileSetup] profiles update (extras) error', upErr.message);
           }
         } catch (dbErr) {
-          console.log('[ProfileSetup] Supabase upsert (extras) exception', dbErr);
+          console.log('[ProfileSetup] Supabase update (extras) exception', dbErr);
         }
         await setCurrentProfile(user);
         console.log('[ProfileSetup] Saved partial profile (extras)');
@@ -166,13 +175,26 @@ export default function ProfileSetup() {
       setCurrentStep('interests');
     } else if (currentStep === 'interests') {
       try {
-        const { data: authData } = await supabase.auth.getUser();
-        const authId = authData?.user?.id ?? null;
+        const storedPhone = await AsyncStorage.getItem('user_phone');
+        if (!storedPhone) {
+          Alert.alert(t('Error'), t('Phone number not found. Please login again.'));
+          return;
+        }
+        const { data: dbProfile, error: fetchErr } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', storedPhone)
+          .maybeSingle();
+        if (fetchErr || !dbProfile) {
+          Alert.alert(t('Error'), t('Profile not found. Please login again.'));
+          return;
+        }
+        const authId = dbProfile.id as string;
         const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
         const birthday = profileData.birthday ?? new Date(1995, 0, 1);
         const age = calculateAge(birthday);
         const user: User = {
-          id: String(authId ?? Math.random().toString(36).slice(2)),
+          id: authId,
           name: name || 'New User',
           age,
           birthday,
@@ -189,34 +211,29 @@ export default function ProfileSetup() {
           lastActive: new Date(),
         } as User;
         try {
-          if (authId) {
-            const { error: upErr } = await supabase
-              .from('profiles')
-              .upsert(
-                {
-                  id: authId,
-                  name: user.name,
-                  age: user.age,
-                  birthday: birthday.toISOString().slice(0,10),
-                  gender: user.gender,
-                  bio: user.bio,
-                  photos: user.photos,
-                  interests: user.interests,
-                  city: user.location?.city ?? null,
-                  height_cm: user.heightCm ?? null,
-                  education: user.education ?? null,
-                  completed: true,
-                },
-                { onConflict: 'id' }
-              );
-            if (upErr) {
-              console.log('[ProfileSetup] profiles upsert (final) error', upErr.message);
-              Alert.alert(t('Error'), t('Failed to save your profile. Please try again.'));
-              return;
-            }
+          const { error: upErr } = await supabase
+            .from('profiles')
+            .update({
+              name: user.name,
+              age: user.age,
+              birthday: birthday.toISOString().slice(0,10),
+              gender: user.gender,
+              bio: user.bio,
+              photos: user.photos,
+              interests: user.interests,
+              city: user.location?.city ?? null,
+              height_cm: user.heightCm ?? null,
+              education: user.education ?? null,
+              completed: true,
+            })
+            .eq('id', authId);
+          if (upErr) {
+            console.log('[ProfileSetup] profiles update (final) error', upErr.message);
+            Alert.alert(t('Error'), t('Failed to save your profile. Please try again.'));
+            return;
           }
         } catch (dbErr) {
-          console.log('[ProfileSetup] Supabase upsert (final) exception', dbErr);
+          console.log('[ProfileSetup] Supabase update (final) exception', dbErr);
         }
         await setCurrentProfile(user);
         console.log('[ProfileSetup] Saved profile on interests');
