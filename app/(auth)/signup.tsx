@@ -27,23 +27,31 @@ export default function SignupScreen() {
   const [loading, setLoading] = useState(false);
 
   const handleSignup = async () => {
+    console.log('[Signup] handleSignup called', { name, phone });
     const nameTrim = name.trim();
     const phoneTrim = phone.trim();
+    
     if (!nameTrim || !phoneTrim) {
+      console.log('[Signup] Validation failed: empty fields');
       alert(t('Error') + ': ' + t('Please fill in all fields'));
       return;
     }
+    
     if (!/^[0-9+\s-]{10,15}$/.test(phoneTrim)) {
+      console.log('[Signup] Validation failed: invalid phone format');
       alert(t('Error') + ': ' + t('Please enter a valid phone number'));
       return;
     }
 
+    console.log('[Signup] Starting signup process');
     setLoading(true);
     try {
       await signup(phoneTrim, nameTrim);
-      router.replace('/profile-setup' as any);
+      console.log('[Signup] Signup successful, navigating to profile-setup');
+      router.push('/profile-setup');
     } catch (e: unknown) {
       const msg = (e as Error)?.message ?? '';
+      console.log('[Signup] Signup failed:', msg);
       alert(t('Error') + ': ' + (msg || t('Signup failed. Please try again.')));
     } finally {
       setLoading(false);

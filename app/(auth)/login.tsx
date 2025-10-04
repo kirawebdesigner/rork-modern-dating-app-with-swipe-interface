@@ -23,20 +23,25 @@ export default function LoginScreen() {
   const [loading, setLoading] = useState<boolean>(false);
 
   const handleLogin = async () => {
+    console.log('[Login] handleLogin called', { phone });
     const cleanPhone = phone.trim();
+    
     if (!cleanPhone) {
+      console.log('[Login] Validation failed: empty phone');
       alert('Please enter your phone number');
       return;
     }
 
+    console.log('[Login] Starting login process');
     setLoading(true);
     try {
       await login(cleanPhone);
-      router.replace('/(tabs)');
+      console.log('[Login] Login successful, navigating to tabs');
+      router.push('/(tabs)');
     } catch (e: any) {
       const msg = (e?.message as string | undefined) ?? 'Login failed. Please try again.';
+      console.log('[Login] Login failed:', msg, e);
       alert(msg);
-      console.log('[Login] error', e);
     } finally {
       setLoading(false);
     }

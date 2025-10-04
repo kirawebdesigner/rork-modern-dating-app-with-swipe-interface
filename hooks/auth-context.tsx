@@ -114,59 +114,77 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     const cleanPhone = phone.trim();
     const cleanName = name.trim();
 
-    const existing = await fetchProfileByPhone(cleanPhone);
-    if (existing) {
-      throw new Error('Phone number already registered. Please login instead.');
-    }
-
-    const { data, error } = await supabase
-      .from('profiles')
-      .insert({ phone: cleanPhone, name: cleanName })
-      .select()
-      .single();
-
-    if (error) {
-      console.log('[Auth] signup error', error);
-      throw new Error('Failed to create account: ' + error.message);
-    }
-
-    const userId = data.id as string;
-
-    const { error: membershipError } = await supabase
-      .from('memberships')
-      .insert({ user_id: userId });
-
-    if (membershipError) {
-      console.log('[Auth] membership creation error', membershipError);
-    }
-
     try {
-      const code = await AsyncStorage.getItem('referrer_code');
-      if (code) {
-        const { data: refUser, error: refErr } = await supabase
-          .from('profiles')
-          .select('id')
-          .or(`referral_code.eq.${code},id.eq.${code}`)
-          .maybeSingle();
-        if (!refErr && refUser && refUser.id !== userId) {
-          await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', userId);
-          await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: userId });
-          await AsyncStorage.removeItem('referrer_code');
-        }
+      const existing = await fetchProfileByPhone(cleanPhone);
+      if (existing) {
+        console.log('[Auth] Phone already exists');
+        throw new Error('Phone number already registered. Please login instead.');
       }
-    } catch {}
 
-    await AsyncStorage.setItem('user_phone', cleanPhone);
+      console.log('[Auth] Creating profile in Supabase');
+      const { data, error } = await supabase
+        .from('profiles')
+        .insert({ phone: cleanPhone, name: cleanName })
+        .select()
+        .single();
 
-    const profile = await fetchProfileByPhone(cleanPhone);
-    const next: AuthUser = {
-      id: userId,
-      email: '',
-      name: cleanName,
-      profile: profile ?? undefined,
-    };
-    console.log('[Auth] signup complete, user set', next);
-    setUser(next);
+      if (error) {
+        console.log('[Auth] signup error', error);
+        throw new Error('Failed to create account: ' + error.message);
+      }
+
+      if (!data) {
+        console.log('[Auth] No data returned from insert');
+        throw new Error('Failed to create account: No data returned');
+      }
+
+      const userId = data.id as string;
+      console.log('[Auth] Profile created with ID:', userId);
+
+      console.log('[Auth] Creating membership record');
+      const { error: membershipError } = await supabase
+        .from('memberships')
+        .insert({ user_id: userId });
+
+      if (membershipError) {
+        console.log('[Auth] membership creation error (non-fatal)', membershipError);
+      }
+
+      try {
+        const code = await AsyncStorage.getItem('referrer_code');
+        if (code) {
+          const { data: refUser, error: refErr } = await supabase
+            .from('profiles')
+            .select('id')
+            .or(`referral_code.eq.${code},id.eq.${code}`)
+            .maybeSingle();
+          if (!refErr && refUser && refUser.id !== userId) {
+            await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', userId);
+            await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: userId });
+            await AsyncStorage.removeItem('referrer_code');
+          }
+        }
+      } catch (refErr) {
+        console.log('[Auth] Referral processing failed (non-fatal)', refErr);
+      }
+
+      console.log('[Auth] Storing phone in AsyncStorage');
+      await AsyncStorage.setItem('user_phone', cleanPhone);
+
+      console.log('[Auth] Fetching created profile');
+      const profile = await fetchProfileByPhone(cleanPhone);
+      const next: AuthUser = {
+        id: userId,
+        email: '',
+        name: cleanName,
+        profile: profile ?? undefined,
+      };
+      console.log('[Auth] signup complete, user set', next);
+      setUser(next);
+    } catch (error) {
+      console.log('[Auth] signup failed with error:', error);
+      throw error;
+    }
   }, []);
 
   const logout = useCallback(async () => {

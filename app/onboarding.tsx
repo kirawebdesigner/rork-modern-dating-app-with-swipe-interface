@@ -77,13 +77,22 @@ export default function OnboardingScreen() {
         console.log('[Onboarding] scrollToIndex failed', e);
       }
     } else {
-      router.replace('/(auth)/signup' as any);
+      console.log('[Onboarding] Navigating to signup');
+      try {
+        router.push('/(auth)/signup');
+      } catch (e) {
+        console.log('[Onboarding] Navigation failed', e);
+      }
     }
   };
 
   const handleSkip = () => {
     console.log('[Onboarding] Skip pressed');
-    router.replace('/(auth)/signup' as any);
+    try {
+      router.push('/(auth)/signup');
+    } catch (e) {
+      console.log('[Onboarding] Skip navigation failed', e);
+    }
   };
 
   return (
