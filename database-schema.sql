@@ -208,18 +208,18 @@ CREATE POLICY "Allow all on user_interests" ON public.user_interests FOR ALL USI
 CREATE POLICY "Allow all on credit_transactions" ON public.credit_transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on interests" ON public.interests FOR ALL USING (true) WITH CHECK (true);
 
--- Function to update updated_at timestamp
+-- Function to update updated_at timestamp (with fixed search_path)
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
 SECURITY DEFINER
 SET search_path = public, pg_temp
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$;
+$$;
 
 -- Triggers for updated_at
 CREATE TRIGGER update_profiles_updated_at
@@ -230,7 +230,7 @@ CREATE TRIGGER update_memberships_updated_at
   BEFORE UPDATE ON public.memberships
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- Function to create matches when both users like each other
+-- Function to create matches when both users like each other (with fixed search_path)
 CREATE OR REPLACE FUNCTION public.check_for_match()
 RETURNS TRIGGER
 SECURITY DEFINER

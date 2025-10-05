@@ -152,6 +152,7 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     paddingHorizontal: 20,
+    paddingBottom: 40,
   },
   backButton: {
     marginTop: 20,
@@ -159,33 +160,37 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 40,
+    marginBottom: 32,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: Colors.text.primary,
     marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text.secondary,
+    textAlign: 'center',
+    paddingHorizontal: 20,
   },
   logo: {
-    width: 96,
-    height: 96,
-    marginBottom: 12,
+    width: 80,
+    height: 80,
+    marginBottom: 16,
   },
   form: {
     flex: 1,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
     color: Colors.text.secondary,
     marginBottom: 8,
+    fontWeight: '500',
   },
   input: {
     borderWidth: 1,
@@ -195,10 +200,11 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: Colors.text.primary,
+    backgroundColor: Colors.background,
   },
   button: {
-    marginTop: 20,
-    marginBottom: 30,
+    marginTop: 24,
+    marginBottom: 20,
   },
   divider: {
     flexDirection: 'row',
@@ -232,6 +238,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     paddingVertical: 20,
+    flexWrap: 'wrap',
   },
   footerText: {
     fontSize: 14,

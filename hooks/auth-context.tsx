@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import { useEffect, useState, useCallback, useMemo } from 'react';
-import { AuthUser, User } from '@/types';
+import { AuthUser, User, ThemeId } from '@/types';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -69,21 +69,34 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       console.error('[Auth] fetchProfileByPhone error', error);
       return null;
     }
-    if (!data) return null;
+    if (!data) {
+      console.log('[Auth] No profile found for phone:', phone);
+      return null;
+    }
     
+    console.log('[Auth] Profile found:', data);
     const u: User = {
       id: data.id as string,
       name: (data.name as string) ?? 'User',
       age: (data.age as number | null) ?? 0,
+      birthday: data.birthday ? new Date(data.birthday as string) : undefined,
       gender: (data.gender as 'boy' | 'girl') ?? 'boy',
+      interestedIn: (data.interested_in as 'boy' | 'girl' | null) ?? undefined,
       bio: (data.bio as string) ?? '',
       photos: (data.photos as string[] | null) ?? [],
       interests: (data.interests as string[] | null) ?? [],
-      location: { city: (data.city as string) ?? '' },
+      location: { 
+        city: (data.city as string) ?? '',
+        latitude: data.latitude ? Number(data.latitude) : undefined,
+        longitude: data.longitude ? Number(data.longitude) : undefined,
+      },
+      heightCm: data.height_cm ? Number(data.height_cm) : undefined,
+      education: data.education ? String(data.education) : undefined,
       verified: Boolean(data.verified),
       lastActive: data.last_active ? new Date(data.last_active as string) : undefined,
-      ownedThemes: [],
-      profileTheme: null,
+      ownedThemes: ((data.owned_themes as string[] | null) ?? []) as ThemeId[],
+      profileTheme: ((data.profile_theme as string | null) ?? null) as ThemeId | null,
+      completed: Boolean(data.completed),
     };
     return u;
   };

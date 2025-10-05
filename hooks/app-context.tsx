@@ -137,33 +137,41 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         console.log('[App] load self profile failed', meLoadErr);
       }
 
+      const storedPhone = await AsyncStorage.getItem('user_phone');
       const { data: profiles, error } = await supabase
         .from('profiles')
-        .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
+        .select('id,phone,name,age,birthday,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
+        .neq('completed', false)
         .limit(100);
       if (error) {
         console.log('[App] load profiles error', error.message);
         setPotentialMatches([]);
         setAllProfiles([]);
       } else {
-        const mapped: User[] = (profiles as any[]).map((row) => ({
-          id: String(row.id),
-          name: String(row.name ?? 'User'),
-          age: Number(row.age ?? 0),
-          gender: (row.gender as 'boy' | 'girl') ?? 'boy',
-          interestedIn: (row.interested_in as 'boy' | 'girl' | null) ?? undefined,
-          bio: String(row.bio ?? ''),
-          photos: Array.isArray(row.photos) ? (row.photos as string[]) : [],
-          interests: Array.isArray(row.interests) ? (row.interests as string[]) : [],
-          location: { city: String(row.city ?? ''), latitude: row.latitude ? Number(row.latitude) : undefined, longitude: row.longitude ? Number(row.longitude) : undefined },
-          heightCm: typeof row.height_cm === 'number' ? Number(row.height_cm) : undefined,
-          education: row.education ? String(row.education) : undefined,
-          verified: Boolean(row.verified),
-          lastActive: row.last_active ? new Date(String(row.last_active)) : undefined,
-          ownedThemes: Array.isArray(row.owned_themes) ? (row.owned_themes as ThemeId[]) : [],
-          profileTheme: (row.profile_theme as ThemeId | null) ?? null,
-          completed: Boolean((row as any).completed),
-        } as User));
+        const mapped: User[] = (profiles as any[])
+          .filter((row) => {
+            if (storedPhone && row.phone === storedPhone) return false;
+            return Boolean(row.completed);
+          })
+          .map((row) => ({
+            id: String(row.id),
+            name: String(row.name ?? 'User'),
+            age: Number(row.age ?? 0),
+            birthday: row.birthday ? new Date(String(row.birthday)) : undefined,
+            gender: (row.gender as 'boy' | 'girl') ?? 'boy',
+            interestedIn: (row.interested_in as 'boy' | 'girl' | null) ?? undefined,
+            bio: String(row.bio ?? ''),
+            photos: Array.isArray(row.photos) && row.photos.length > 0 ? (row.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+            interests: Array.isArray(row.interests) ? (row.interests as string[]) : [],
+            location: { city: String(row.city ?? ''), latitude: row.latitude ? Number(row.latitude) : undefined, longitude: row.longitude ? Number(row.longitude) : undefined },
+            heightCm: typeof row.height_cm === 'number' ? Number(row.height_cm) : undefined,
+            education: row.education ? String(row.education) : undefined,
+            verified: Boolean(row.verified),
+            lastActive: row.last_active ? new Date(String(row.last_active)) : undefined,
+            ownedThemes: Array.isArray(row.owned_themes) ? (row.owned_themes as ThemeId[]) : [],
+            profileTheme: (row.profile_theme as ThemeId | null) ?? null,
+            completed: Boolean((row as any).completed),
+          } as User));
         if (storedFilters) {
           setFiltersState(JSON.parse(storedFilters));
         } else if (currentProfile) {
@@ -191,16 +199,38 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   };
 
   const applyFilters = (users: User[], f: FiltersState, swiped: SwipeAction[], blocked: string[]) => {
+    console.log('[App] applyFilters called with', users.length, 'users');
     const swipedIds = new Set(swiped.map(s => s.userId));
     const blockedSet = new Set(blocked);
-    return users.filter(u => {
-      if (swipedIds.has(u.id)) return false;
-      if (blockedSet.has(u.id)) return false;
-      if (currentProfile?.id && u.id === currentProfile.id) return false;
-      if (f.interestedIn === 'girl' && u.gender !== 'girl') return false;
-      if (f.interestedIn === 'boy' && u.gender !== 'boy') return false;
-      if (currentProfile?.gender && u.interestedIn && u.interestedIn !== currentProfile.gender) return false;
-      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) return false;
+    const filtered = users.filter(u => {
+      if (swipedIds.has(u.id)) {
+        console.log('[App] Filtering out swiped user:', u.id);
+        return false;
+      }
+      if (blockedSet.has(u.id)) {
+        console.log('[App] Filtering out blocked user:', u.id);
+        return false;
+      }
+      if (currentProfile?.id && u.id === currentProfile.id) {
+        console.log('[App] Filtering out current user:', u.id);
+        return false;
+      }
+      if (f.interestedIn === 'girl' && u.gender !== 'girl') {
+        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
+        return false;
+      }
+      if (f.interestedIn === 'boy' && u.gender !== 'boy') {
+        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
+        return false;
+      }
+      if (currentProfile?.gender && u.interestedIn && u.interestedIn !== currentProfile.gender) {
+        console.log('[App] Filtering out user (interested_in mismatch):', u.id, u.interestedIn, 'vs', currentProfile.gender);
+        return false;
+      }
+      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) {
+        console.log('[App] Filtering out user (age):', u.id, u.age);
+        return false;
+      }
       if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
       if (f.showVerifiedOnly && !u.verified) return false;
       if (f.education && !(u.education ?? '').toLowerCase().includes(f.education.toLowerCase())) return false;
@@ -216,6 +246,8 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (f.specificLocation && !(u.location.city ?? '').toLowerCase().includes(f.specificLocation.toLowerCase())) return false;
       return true;
     });
+    console.log('[App] Filtered to', filtered.length, 'users');
+    return filtered;
   };
 
   const refilterPotential = () => {

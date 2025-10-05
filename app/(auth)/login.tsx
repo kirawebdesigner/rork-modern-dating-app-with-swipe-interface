@@ -132,30 +132,33 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   logo: {
-    width: 96,
-    height: 96,
-    marginBottom: 12,
+    width: 80,
+    height: 80,
+    marginBottom: 16,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: Colors.text.primary,
-    marginBottom: 6,
+    marginBottom: 8,
+    textAlign: 'center',
   },
   subtitle: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text.secondary,
+    textAlign: 'center',
   },
   form: {
     flex: 1,
   },
   inputContainer: {
-    marginBottom: 20,
+    marginBottom: 16,
   },
   label: {
     fontSize: 14,
     color: Colors.text.secondary,
     marginBottom: 8,
+    fontWeight: '500',
   },
   input: {
     borderWidth: 1,
@@ -165,6 +168,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     fontSize: 16,
     color: Colors.text.primary,
+    backgroundColor: Colors.background,
   },
   forgotPassword: {
     alignSelf: 'flex-end',
@@ -176,12 +180,14 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   button: {
+    marginTop: 24,
     marginBottom: 20,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
     paddingVertical: 20,
+    flexWrap: 'wrap',
   },
   footerText: {
     fontSize: 14,
