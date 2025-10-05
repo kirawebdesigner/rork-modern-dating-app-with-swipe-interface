@@ -79,7 +79,7 @@ export default function OnboardingScreen() {
     } else {
       console.log('[Onboarding] Navigating to signup');
       try {
-        router.push('/(auth)/signup');
+        router.push('/signup');
       } catch (e) {
         console.log('[Onboarding] Navigation failed', e);
       }
@@ -89,7 +89,7 @@ export default function OnboardingScreen() {
   const handleSkip = () => {
     console.log('[Onboarding] Skip pressed');
     try {
-      router.push('/(auth)/signup');
+      router.push('/signup');
     } catch (e) {
       console.log('[Onboarding] Skip navigation failed', e);
     }
@@ -157,7 +157,7 @@ export default function OnboardingScreen() {
         />
 
         {currentIndex < slides.length - 1 && (
-          <TouchableOpacity onPress={() => router.push('/(auth)/login' as any)} testID="signin-link">
+          <TouchableOpacity onPress={() => router.push('/login' as any)} testID="signin-link">
             <Text style={styles.loginText}>
               Already have an account? <Text style={styles.loginLink}>Sign In</Text>
             </Text>
