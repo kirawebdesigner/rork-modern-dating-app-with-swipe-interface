@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, ArrowRight, Info, BadgePercent } from 'lucide-react-native';
+import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, ArrowRight, Info, BadgePercent, Phone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -20,6 +20,8 @@ import { useMembership } from '@/hooks/membership-context';
 import { MembershipTier, ThemeId } from '@/types';
 import { useApp } from '@/hooks/app-context';
 import { trpc } from '@/lib/trpc';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { supabase } from '@/lib/supabase';
 
 interface TierFeature {
   icon: any;
@@ -108,10 +110,25 @@ export default function PremiumScreen() {
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
+  const [userPhone, setUserPhone] = useState<string>('');
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
   const buyCreditsMutation = trpc.credits.buy.useMutation();
   const unlockThemeMutation = trpc.themes.unlock.useMutation();
+
+  useEffect(() => {
+    const loadPhone = async () => {
+      try {
+        const storedPhone = await AsyncStorage.getItem('user_phone');
+        if (storedPhone) {
+          setUserPhone(storedPhone);
+        }
+      } catch (e) {
+        console.log('[Premium] Failed to load phone', e);
+      }
+    };
+    loadPhone();
+  }, []);
 
   const handleUpgrade = async () => {
     try {
@@ -163,6 +180,12 @@ export default function PremiumScreen() {
           <Text style={styles.heroSubtitle} testID="current-plan">
             Current plan: {tierData[tier].name}
           </Text>
+          {userPhone && (
+            <View style={styles.phoneRow}>
+              <Phone size={14} color={Colors.text.white} />
+              <Text style={styles.phoneText}>{userPhone}</Text>
+            </View>
+          )}
           <View style={styles.badgesRow}>
             <View style={styles.bonusBadge}>
               <Info size={14} color={Colors.text.white} />
@@ -370,6 +393,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     opacity: 0.9,
   },
+  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
+  phoneText: { color: Colors.text.white, fontWeight: '700', fontSize: 14 },
   badgesRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
   bonusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
   bonusText: { color: Colors.text.white, fontWeight: '700' },

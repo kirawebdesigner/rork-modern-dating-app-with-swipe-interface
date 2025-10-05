@@ -63,6 +63,8 @@ export default function ProfileSetup() {
       setCurrentStep('details');
     } else if (currentStep === 'extras') {
       setCurrentStep('gender');
+    } else if (currentStep === 'interests') {
+      setCurrentStep('extras');
     }
   };
 

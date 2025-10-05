@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useMembership } from '@/hooks/membership-context';
-import { mockUsers } from '@/mocks/users';
-import { mockMatches } from '@/mocks/matches';
 import { Match, User } from '@/types';
 import { Diamond, Lock } from 'lucide-react-native';
 
@@ -20,8 +18,8 @@ export default function LikesAndMatchesScreen() {
   const { features } = useMembership();
   const [active, setActive] = useState<LikesTab>('likes');
 
-  const likesData: User[] = useMemo(() => mockUsers.slice(0, 20), []);
-  const matchesData: Match[] = useMemo(() => mockMatches, []);
+  const likesData: User[] = useMemo(() => [], []);
+  const matchesData: Match[] = useMemo(() => [], []);
   const canSee = true;
 
   const onOpenMatchChat = useCallback((chatId: string) => {
@@ -106,25 +104,41 @@ export default function LikesAndMatchesScreen() {
 
 
       {active === 'likes' ? (
-        <FlatList
-          data={likesData}
-          keyExtractor={(u) => u.id}
-          numColumns={NUM_COLUMNS}
-          columnWrapperStyle={styles.row}
-          renderItem={renderLike}
-          contentContainerStyle={styles.list}
-          testID="likes-grid"
-        />
+        likesData.length > 0 ? (
+          <FlatList
+            data={likesData}
+            keyExtractor={(u) => u.id}
+            numColumns={NUM_COLUMNS}
+            columnWrapperStyle={styles.row}
+            renderItem={renderLike}
+            contentContainerStyle={styles.list}
+            testID="likes-grid"
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Diamond size={48} color={Colors.text.secondary} />
+            <Text style={styles.emptyTitle}>No likes yet</Text>
+            <Text style={styles.emptyText}>Keep swiping to find your matches!</Text>
+          </View>
+        )
       ) : (
-        <FlatList
-          data={matchesData}
-          keyExtractor={(m) => m.id}
-          numColumns={NUM_COLUMNS}
-          columnWrapperStyle={styles.row}
-          renderItem={renderMatch}
-          contentContainerStyle={styles.list}
-          testID="matches-grid"
-        />
+        matchesData.length > 0 ? (
+          <FlatList
+            data={matchesData}
+            keyExtractor={(m) => m.id}
+            numColumns={NUM_COLUMNS}
+            columnWrapperStyle={styles.row}
+            renderItem={renderMatch}
+            contentContainerStyle={styles.list}
+            testID="matches-grid"
+          />
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Diamond size={48} color={Colors.text.secondary} />
+            <Text style={styles.emptyTitle}>No matches yet</Text>
+            <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
+          </View>
+        )
       )}
     </SafeAreaView>
   );
@@ -218,4 +232,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   lockText: { color: Colors.text.white, fontWeight: '700' },
+  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  emptyTitle: { fontSize: 20, fontWeight: '700', color: Colors.text.primary, marginTop: 16, marginBottom: 8 },
+  emptyText: { fontSize: 14, color: Colors.text.secondary, textAlign: 'center' },
 });

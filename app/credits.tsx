@@ -44,26 +44,13 @@ export default function Credits() {
   const formatPrice = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
 
   const buyPack = async (type: 'messages' | 'boosts' | 'unlocks', amount: number, priceAmount: number) => {
-    Alert.alert(
-      'Purchase Credits',
-      `Buy ${amount} ${type} for ${formatPrice(priceAmount)}?`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { 
-          text: 'Buy', 
-          onPress: async () => {
-            try {
-              const kind = type === 'messages' ? 'messages' : type === 'boosts' ? 'boosts' : 'unlocks';
-              await buyMutation.mutateAsync({ kind: kind as any, amount });
-            } catch (e: any) {
-              console.warn('[Credits] server buy failed, falling back local', e?.message || e);
-            }
-            await addCredits(type as any, amount);
-            Alert.alert('Success', `Added ${amount} ${type} to your account!`);
-          }
-        }
-      ]
-    );
+    try {
+      console.log('[Credits] Buy pack pressed', { type, amount, priceAmount });
+      router.push({ pathname: '/payment-verification', params: { type: 'credits', creditType: type, amount: String(amount), price: String(priceAmount) } } as any);
+    } catch (e) {
+      console.error('[Credits] navigation error', (e as any)?.message || e);
+      Alert.alert('Navigation failed', 'Please try again.');
+    }
   };
 
   const creditPacks = [
