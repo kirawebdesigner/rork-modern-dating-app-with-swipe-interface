@@ -186,12 +186,52 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         setPotentialMatches(filtered);
       }
 
-      const { data: matchesRows } = await supabase
-        .from('matches')
-        .select('id, user1_id, user2_id, matched_at');
-      if (matchesRows) {
-        const m: Match[] = (matchesRows as any[]).map((r) => ({ id: String(r.id), user: { id: '', name: '', age: 0, gender: 'boy', bio: '', photos: [], interests: [], location: { city: '' } }, matchedAt: new Date(String(r.matched_at)) } as Match));
-        setMatches(m);
+      try {
+        const { data: authUser } = await supabase.auth.getUser();
+        const myId = authUser?.user?.id ?? null;
+        if (myId) {
+          const { data: matchesRows } = await supabase
+            .from('matches')
+            .select('id, user1_id, user2_id, matched_at')
+            .or(`user1_id.eq.${myId},user2_id.eq.${myId}`);
+          
+          if (matchesRows && matchesRows.length > 0) {
+            console.log('[App] loading matches:', matchesRows.length);
+            const matchesWithUsers = await Promise.all(
+              matchesRows.map(async (m: any) => {
+                const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
+                const { data: otherUser } = await supabase
+                  .from('profiles')
+                  .select('id,name,age,gender,bio,photos,interests,city')
+                  .eq('id', otherId)
+                  .maybeSingle();
+                
+                if (!otherUser) return null;
+                
+                return {
+                  id: String(m.id),
+                  user: {
+                    id: String(otherUser.id),
+                    name: String(otherUser.name ?? 'User'),
+                    age: Number(otherUser.age ?? 0),
+                    gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
+                    bio: String(otherUser.bio ?? ''),
+                    photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+                    interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
+                    location: { city: String(otherUser.city ?? '') },
+                  },
+                  matchedAt: new Date(String(m.matched_at)),
+                } as Match;
+              })
+            );
+            
+            const validMatches = matchesWithUsers.filter((m): m is Match => m !== null);
+            setMatches(validMatches);
+            console.log('[App] loaded matches with user data:', validMatches.length);
+          }
+        }
+      } catch (matchLoadErr) {
+        console.log('[App] load matches failed', matchLoadErr);
       }
     } catch (error) {
       console.error('Error loading app data:', error);
@@ -385,19 +425,56 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         try {
           const { data: u } = await supabase.auth.getUser();
           const myId = u?.user?.id ?? (currentProfile?.id ?? null);
-          if (!myId) return;
-          await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action });
-          const { data: reciprocal } = await supabase
-            .from('swipes')
-            .select('id')
-            .eq('swiper_id', userId)
-            .eq('swiped_id', myId)
-            .in('action', ['like','superlike'])
-            .maybeSingle();
-          if (reciprocal) {
-            const a = myId;
-            const b = userId;
-            await supabase.from('matches').insert({ user1_id: a < b ? a : b, user2_id: a < b ? b : a, matched_at: new Date().toISOString() });
+          if (!myId) {
+            console.log('[App] swipe: no user ID found');
+            return;
+          }
+          console.log('[App] inserting swipe:', myId, '->', userId, action);
+          const { error: swipeError } = await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action });
+          if (swipeError) {
+            console.log('[App] swipe insert error:', swipeError.message);
+            return;
+          }
+          console.log('[App] swipe inserted successfully');
+          
+          const { data: newMatches, error: matchError } = await supabase
+            .from('matches')
+            .select('id, user1_id, user2_id, matched_at')
+            .or(`user1_id.eq.${myId},user2_id.eq.${myId}`);
+          
+          if (!matchError && newMatches) {
+            console.log('[App] loaded matches after swipe:', newMatches.length);
+            const matchesWithUsers = await Promise.all(
+              newMatches.map(async (m: any) => {
+                const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
+                const { data: otherUser } = await supabase
+                  .from('profiles')
+                  .select('id,name,age,gender,bio,photos,interests,city')
+                  .eq('id', otherId)
+                  .maybeSingle();
+                
+                if (!otherUser) return null;
+                
+                return {
+                  id: String(m.id),
+                  user: {
+                    id: String(otherUser.id),
+                    name: String(otherUser.name ?? 'User'),
+                    age: Number(otherUser.age ?? 0),
+                    gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
+                    bio: String(otherUser.bio ?? ''),
+                    photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+                    interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
+                    location: { city: String(otherUser.city ?? '') },
+                  },
+                  matchedAt: new Date(String(m.matched_at)),
+                } as Match;
+              })
+            );
+            
+            const validMatches = matchesWithUsers.filter((m): m is Match => m !== null);
+            setMatches(validMatches);
+            console.log('[App] updated matches state:', validMatches.length);
           }
         } catch (e) {
           console.log('[App] swipe sync failed', e);

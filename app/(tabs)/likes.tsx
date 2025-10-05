@@ -1,10 +1,12 @@
-import React, { useMemo, useState, useCallback } from 'react';
+import React, { useMemo, useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { useMembership } from '@/hooks/membership-context';
 import { Match, User } from '@/types';
 import { Diamond, Lock } from 'lucide-react-native';
+import { supabase } from '@/lib/supabase';
+import { useApp } from '@/hooks/app-context';
 
 const { width } = Dimensions.get('window');
 const GAP = 12;
@@ -16,11 +18,79 @@ type LikesTab = 'likes' | 'matches';
 export default function LikesAndMatchesScreen() {
   const router = useRouter();
   const { features } = useMembership();
+  const { matches: contextMatches } = useApp();
   const [active, setActive] = useState<LikesTab>('likes');
-
-  const likesData: User[] = useMemo(() => [], []);
-  const matchesData: Match[] = useMemo(() => [], []);
+  const [likesData, setLikesData] = useState<User[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
   const canSee = true;
+
+  useEffect(() => {
+    loadLikes();
+  }, []);
+
+  const loadLikes = async () => {
+    try {
+      setLoading(true);
+      const { data: authUser } = await supabase.auth.getUser();
+      const myId = authUser?.user?.id ?? null;
+      if (!myId) {
+        console.log('[Likes] no user ID');
+        setLikesData([]);
+        return;
+      }
+
+      const { data: swipes, error } = await supabase
+        .from('swipes')
+        .select('swiper_id')
+        .eq('swiped_id', myId)
+        .in('action', ['like', 'superlike']);
+
+      if (error) {
+        console.log('[Likes] error loading swipes:', error.message);
+        setLikesData([]);
+        return;
+      }
+
+      if (!swipes || swipes.length === 0) {
+        console.log('[Likes] no likes found');
+        setLikesData([]);
+        return;
+      }
+
+      const likerIds = swipes.map((s: any) => s.swiper_id);
+      console.log('[Likes] found', likerIds.length, 'likes');
+
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id,name,age,gender,bio,photos,interests,city')
+        .in('id', likerIds);
+
+      if (profilesError) {
+        console.log('[Likes] error loading profiles:', profilesError.message);
+        setLikesData([]);
+        return;
+      }
+
+      const mapped: User[] = (profiles as any[]).map((p) => ({
+        id: String(p.id),
+        name: String(p.name ?? 'User'),
+        age: Number(p.age ?? 0),
+        gender: (p.gender as 'boy' | 'girl') ?? 'boy',
+        bio: String(p.bio ?? ''),
+        photos: Array.isArray(p.photos) && p.photos.length > 0 ? (p.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+        interests: Array.isArray(p.interests) ? (p.interests as string[]) : [],
+        location: { city: String(p.city ?? '') },
+      } as User));
+
+      console.log('[Likes] loaded', mapped.length, 'profiles');
+      setLikesData(mapped);
+    } catch (e) {
+      console.log('[Likes] load error:', e);
+      setLikesData([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const onOpenMatchChat = useCallback((chatId: string) => {
     router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId } });
@@ -79,7 +149,7 @@ export default function LikesAndMatchesScreen() {
             <Diamond size={20} color={Colors.primary} />
             <Text style={styles.title}>Likes & Matches</Text>
           </View>
-          <Text style={styles.subtitle}>{likesData.length} likes • {matchesData.length} matches</Text>
+          <Text style={styles.subtitle}>{likesData.length} likes • {contextMatches.length} matches</Text>
         </View>
         <View style={styles.headerRight} />
       </View>
@@ -103,7 +173,11 @@ export default function LikesAndMatchesScreen() {
 
 
 
-      {active === 'likes' ? (
+      {loading ? (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.emptyText}>Loading...</Text>
+        </View>
+      ) : active === 'likes' ? (
         likesData.length > 0 ? (
           <FlatList
             data={likesData}
@@ -122,9 +196,9 @@ export default function LikesAndMatchesScreen() {
           </View>
         )
       ) : (
-        matchesData.length > 0 ? (
+        contextMatches.length > 0 ? (
           <FlatList
-            data={matchesData}
+            data={contextMatches}
             keyExtractor={(m) => m.id}
             numColumns={NUM_COLUMNS}
             columnWrapperStyle={styles.row}
