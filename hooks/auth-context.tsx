@@ -116,14 +116,18 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     console.log('[Auth] login attempt', { phone });
     const cleanPhone = phone.trim();
     
+    console.log('[Auth] Clearing all storage before login');
     await clearStorage();
     setUser(null);
+    
+    await new Promise(resolve => setTimeout(resolve, 100));
     
     const profile = await fetchProfileByPhone(cleanPhone);
     if (!profile) {
       throw new Error('Phone number not found. Please sign up first.');
     }
 
+    console.log('[Auth] Storing new phone:', cleanPhone);
     await AsyncStorage.setItem('user_phone', cleanPhone);
     
     const next: AuthUser = {
@@ -225,13 +229,24 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   }, []);
 
   const reloadProfile = useCallback(async () => {
+    console.log('[Auth] reloadProfile called');
     const storedPhone = await AsyncStorage.getItem('user_phone');
-    if (!storedPhone) return;
+    if (!storedPhone) {
+      console.log('[Auth] No stored phone, cannot reload');
+      return;
+    }
     
+    console.log('[Auth] Reloading profile for phone:', storedPhone);
     const profile = await fetchProfileByPhone(storedPhone);
+    if (!profile) {
+      console.log('[Auth] Profile not found during reload');
+      return;
+    }
+    
     setUser(prev => {
       if (!prev) return prev;
       const next: AuthUser = { ...prev, profile: profile ?? undefined, name: profile?.name ?? prev.name };
+      console.log('[Auth] Profile reloaded successfully');
       return next;
     });
   }, []);

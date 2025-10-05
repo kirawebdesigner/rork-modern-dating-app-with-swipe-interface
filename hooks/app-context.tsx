@@ -66,6 +66,17 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, []);
 
   useEffect(() => {
+    const checkAndReload = async () => {
+      const storedPhone = await AsyncStorage.getItem('user_phone');
+      if (storedPhone && (!currentProfile || currentProfile.id === '')) {
+        console.log('[App] User logged in but no profile loaded, reloading...');
+        await loadAppData();
+      }
+    };
+    checkAndReload();
+  }, [currentProfile]);
+
+  useEffect(() => {
     refilterPotential();
   }, [filters, swipeHistory, blockedIds, allProfiles]);
 
@@ -138,10 +149,12 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       }
 
       const storedPhone = await AsyncStorage.getItem('user_phone');
+      console.log('[App] Loading profiles, current user phone:', storedPhone);
+      
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('id,phone,name,age,birthday,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
-        .neq('completed', false)
+        .eq('completed', true)
         .limit(100);
       if (error) {
         console.log('[App] load profiles error', error.message);
@@ -150,8 +163,15 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       } else {
         const mapped: User[] = (profiles as any[])
           .filter((row) => {
-            if (storedPhone && row.phone === storedPhone) return false;
-            return Boolean(row.completed);
+            if (storedPhone && row.phone === storedPhone) {
+              console.log('[App] Filtering out current user:', row.phone);
+              return false;
+            }
+            if (!row.completed) {
+              console.log('[App] Filtering out incomplete profile:', row.phone);
+              return false;
+            }
+            return true;
           })
           .map((row) => ({
             id: String(row.id),
