@@ -158,14 +158,29 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         console.log('[Membership] Skipping server sync: Supabase not configured');
         return;
       }
-      const { data: u } = await supabase.auth.getUser();
-      const userId = u?.user?.id ?? authUser?.id ?? null;
-      if (!userId) {
-        console.log('[Membership] No user, skipping server sync');
+      const storedPhone = await AsyncStorage.getItem('user_phone');
+      if (!storedPhone) {
+        console.log('[Membership] No phone, skipping server sync');
         return;
       }
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', storedPhone)
+        .maybeSingle();
+      
+      const userId = profile?.id ?? authUser?.id ?? null;
+      if (!userId) {
+        console.log('[Membership] No user ID found, skipping server sync');
+        return;
+      }
+      
+      console.log('[Membership] Syncing to server for user:', userId);
+      
       const payload = {
         user_id: userId,
+        phone_number: storedPhone,
         tier,
         message_credits: credits.messages,
         boost_credits: credits.boosts,
@@ -181,21 +196,14 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         last_allowance_grant: lastAllowanceGrantISO && lastAllowanceGrantISO.trim().length > 0 ? new Date(lastAllowanceGrantISO).toISOString() : null,
       } as const;
 
-      const insertRes = await supabase
+      const { error: upsertErr } = await supabase
         .from('memberships')
-        .upsert({ user_id: userId }, { onConflict: 'user_id', ignoreDuplicates: true } as any)
-        .select('user_id')
-        .maybeSingle();
-      if (insertRes?.error) {
-        console.log('[Membership] initial upsert (may be blocked by RLS):', insertRes.error.message);
-      }
-
-      const { error: updateErr } = await supabase
-        .from('memberships')
-        .update(payload as any)
-        .eq('user_id', userId);
-      if (updateErr) {
-        console.log('[Membership] Supabase upsert/update skipped or failed:', updateErr.message);
+        .upsert(payload as any, { onConflict: 'user_id' });
+      
+      if (upsertErr) {
+        console.log('[Membership] Supabase upsert failed:', upsertErr.message);
+      } else {
+        console.log('[Membership] Successfully synced to server');
       }
     } catch (e: any) {
       console.log('[Membership] syncToServer failed:', e?.message || e);
@@ -209,13 +217,29 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         await loadFromLocalStorage();
         return;
       }
-      const { data: u } = await supabase.auth.getUser();
-      const userId = u?.user?.id ?? authUser?.id ?? null;
-      if (!userId) {
-        console.log('[Membership] No user, loading from local only');
+      
+      const storedPhone = await AsyncStorage.getItem('user_phone');
+      if (!storedPhone) {
+        console.log('[Membership] No phone, loading from local only');
         await loadFromLocalStorage();
         return;
       }
+      
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('phone', storedPhone)
+        .maybeSingle();
+      
+      const userId = profile?.id ?? authUser?.id ?? null;
+      if (!userId) {
+        console.log('[Membership] No user ID, loading from local only');
+        await loadFromLocalStorage();
+        return;
+      }
+      
+      console.log('[Membership] Loading from server for user:', userId);
+      
       const { data, error } = await supabase
         .from('memberships')
         .select('tier, message_credits, boost_credits, superlike_credits, compliment_credits, unlock_credits, remaining_daily_messages, remaining_profile_views, remaining_right_swipes, remaining_compliments, last_reset, monthly_allowances, last_allowance_grant')
@@ -227,10 +251,9 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         return;
       }
       if (data) {
-        const serverTier = (data.tier as MembershipTier | null) ?? null;
-        const currentTier: MembershipTier = tier;
-        const resolvedTier: MembershipTier = serverTier ? (TIER_RANK[serverTier] >= TIER_RANK[currentTier] ? serverTier : currentTier) : currentTier;
-        setTier(resolvedTier);
+        console.log('[Membership] Loaded from server:', data);
+        const serverTier = (data.tier as MembershipTier | null) ?? 'free';
+        setTier(serverTier);
         setCredits({
           messages: Number((data as any).message_credits ?? 0),
           boosts: Number((data as any).boost_credits ?? 0),
@@ -238,7 +261,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
           compliments: Number((data as any).compliment_credits ?? 0),
           unlocks: Number((data as any).unlock_credits ?? 0),
         });
-        const f = TIER_FEATURES[resolvedTier];
+        const f = TIER_FEATURES[serverTier];
         const dailyMessages = Number(data.remaining_daily_messages ?? f.dailyMessages);
         setRemainingDailyMessages(Number.isFinite(dailyMessages) ? dailyMessages : f.dailyMessages);
         setRemainingProfileViews((data.remaining_profile_views ?? f.profileViews) as number | 'unlimited');
@@ -248,6 +271,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         setLastAllowanceGrantISO(String(data.last_allowance_grant ?? ''));
         setLastReset(normalizeISODate((data as any).last_reset ?? null));
       } else {
+        console.log('[Membership] No membership found, creating one');
         await loadFromLocalStorage();
         await syncToServer();
       }
@@ -255,7 +279,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       console.log('[Membership] loadFromServer failed (using local fallback):', e?.message || e);
       await loadFromLocalStorage();
     }
-  }, [authUser?.id, loadFromLocalStorage, syncToServer, tier]);
+  }, [authUser?.id, loadFromLocalStorage, syncToServer]);
 
   const resetDailyLimits = useCallback(async () => {
     const f = TIER_FEATURES[tier];

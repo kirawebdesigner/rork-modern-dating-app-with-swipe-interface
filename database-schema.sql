@@ -54,6 +54,7 @@ CREATE TABLE public.profiles (
 CREATE TABLE public.memberships (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  phone_number TEXT,
   tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'silver', 'gold', 'vip')),
   message_credits INTEGER DEFAULT 0,
   boost_credits INTEGER DEFAULT 0,
@@ -212,14 +213,14 @@ CREATE POLICY "Allow all on interests" ON public.interests FOR ALL USING (true) 
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = ''
 LANGUAGE plpgsql
-AS $$
+AS $
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$$;
+$;
 
 -- Triggers for updated_at
 CREATE TRIGGER update_profiles_updated_at
@@ -234,9 +235,9 @@ CREATE TRIGGER update_memberships_updated_at
 CREATE OR REPLACE FUNCTION public.check_for_match()
 RETURNS TRIGGER
 SECURITY DEFINER
-SET search_path = public, pg_temp
+SET search_path = ''
 LANGUAGE plpgsql
-AS $$
+AS $
 BEGIN
   IF NEW.action IN ('like', 'superlike') THEN
     IF EXISTS (
@@ -251,12 +252,14 @@ BEGIN
         GREATEST(NEW.swiper_id, NEW.swiped_id)
       )
       ON CONFLICT (user1_id, user2_id) DO NOTHING;
+      
+      RAISE NOTICE 'Match created between % and %', NEW.swiper_id, NEW.swiped_id;
     END IF;
   END IF;
   
   RETURN NEW;
 END;
-$$;
+$;
 
 -- Trigger to check for matches after swipe
 CREATE TRIGGER on_swipe_check_match

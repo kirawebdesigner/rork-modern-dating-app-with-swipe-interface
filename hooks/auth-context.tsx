@@ -101,9 +101,23 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     return u;
   };
 
+  const clearStorage = async () => {
+    console.log('[Auth] clearing storage');
+    try {
+      const allKeys = await AsyncStorage.getAllKeys();
+      console.log('[Auth] clearing all AsyncStorage keys:', allKeys.length);
+      await AsyncStorage.clear();
+    } catch (e) {
+      console.log('[Auth] clear storage failed', e);
+    }
+  };
+
   const login = useCallback(async (phone: string) => {
     console.log('[Auth] login attempt', { phone });
     const cleanPhone = phone.trim();
+    
+    await clearStorage();
+    setUser(null);
     
     const profile = await fetchProfileByPhone(cleanPhone);
     if (!profile) {
@@ -128,6 +142,9 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     const cleanName = name.trim();
 
     try {
+      await clearStorage();
+      setUser(null);
+      
       const existing = await fetchProfileByPhone(cleanPhone);
       if (existing) {
         console.log('[Auth] Phone already exists');
@@ -157,7 +174,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       console.log('[Auth] Creating membership record');
       const { error: membershipError } = await supabase
         .from('memberships')
-        .insert({ user_id: userId });
+        .insert({ user_id: userId, phone_number: cleanPhone });
 
       if (membershipError) {
         console.log('[Auth] membership creation error (non-fatal)', membershipError);
@@ -201,30 +218,10 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   }, []);
 
   const logout = useCallback(async () => {
-    try {
-      const keys = [
-        'user_phone',
-        'user_profile',
-        'tier',
-        'credits',
-        'swipe_history',
-        'filters_state',
-        'blocked_ids',
-        'membership_tier',
-        'membership_credits',
-        'remaining_daily_messages',
-        'remaining_profile_views',
-        'remaining_right_swipes',
-        'remaining_compliments',
-        'last_reset',
-        'monthly_allowances',
-        'last_allowance_grant',
-      ];
-      await AsyncStorage.multiRemove(keys);
-    } catch (e) {
-      console.log('[Auth] clear storage failed', e);
-    }
+    console.log('[Auth] logout called');
+    await clearStorage();
     setUser(null);
+    console.log('[Auth] logout complete');
   }, []);
 
   const reloadProfile = useCallback(async () => {
