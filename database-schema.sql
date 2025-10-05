@@ -213,14 +213,14 @@ CREATE POLICY "Allow all on interests" ON public.interests FOR ALL USING (true) 
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
   NEW.updated_at = NOW();
   RETURN NEW;
 END;
-$;
+$$;
 
 -- Triggers for updated_at
 CREATE TRIGGER update_profiles_updated_at
@@ -235,9 +235,9 @@ CREATE TRIGGER update_memberships_updated_at
 CREATE OR REPLACE FUNCTION public.check_for_match()
 RETURNS TRIGGER
 SECURITY DEFINER
-SET search_path = ''
+SET search_path = public
 LANGUAGE plpgsql
-AS $
+AS $$
 BEGIN
   IF NEW.action IN ('like', 'superlike') THEN
     IF EXISTS (
@@ -259,12 +259,47 @@ BEGIN
   
   RETURN NEW;
 END;
-$;
+$$;
 
 -- Trigger to check for matches after swipe
 CREATE TRIGGER on_swipe_check_match
   AFTER INSERT ON public.swipes
   FOR EACH ROW EXECUTE FUNCTION public.check_for_match();
+
+-- Function to auto-create membership when profile is created
+CREATE OR REPLACE FUNCTION public.handle_new_profile()
+RETURNS TRIGGER
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  INSERT INTO public.memberships (user_id, phone_number, tier)
+  VALUES (NEW.id, NEW.phone, 'free')
+  ON CONFLICT (user_id) DO NOTHING;
+  
+  RETURN NEW;
+END;
+$$;
+
+-- Trigger to auto-create membership
+CREATE TRIGGER on_profile_create_membership
+  AFTER INSERT ON public.profiles
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_profile();
+
+-- Function to downgrade expired memberships
+CREATE OR REPLACE FUNCTION public.downgrade_expired_memberships()
+RETURNS void
+SECURITY DEFINER
+SET search_path = public
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  UPDATE public.memberships
+  SET tier = 'free', expires_at = NULL, updated_at = NOW()
+  WHERE tier != 'free' AND expires_at < NOW();
+END;
+$$;
 
 -- Insert default interests
 INSERT INTO public.interests (name, category) VALUES
