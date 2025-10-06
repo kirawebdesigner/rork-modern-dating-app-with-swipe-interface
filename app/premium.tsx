@@ -19,7 +19,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
 import { MembershipTier, ThemeId } from '@/types';
 import { useApp } from '@/hooks/app-context';
-import { trpc } from '@/lib/trpc';
+
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 
@@ -112,9 +112,7 @@ export default function PremiumScreen() {
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [userPhone, setUserPhone] = useState<string>('');
 
-  const upgradeMutation = trpc.membership.upgrade.useMutation();
-  const buyCreditsMutation = trpc.credits.buy.useMutation();
-  const unlockThemeMutation = trpc.themes.unlock.useMutation();
+
 
   useEffect(() => {
     const loadPhone = async () => {
@@ -141,11 +139,6 @@ export default function PremiumScreen() {
   };
 
   const onBuyPack = async (type: 'superLikes' | 'boosts' | 'compliments', amount: number) => {
-    try {
-      await buyCreditsMutation.mutateAsync({ kind: type, amount });
-    } catch (e) {
-      console.warn('[Premium] credits buy failed, falling back local', e);
-    }
     await addCredits(type as any, amount);
     Alert.alert('Purchased', `Added ${amount} ${type}.`);
   };

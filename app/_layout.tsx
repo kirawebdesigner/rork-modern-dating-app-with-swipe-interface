@@ -8,7 +8,6 @@ import { AppProvider } from "@/hooks/app-context";
 import { MembershipProvider } from "@/hooks/membership-context";
 import { I18nProvider } from "@/hooks/i18n-context";
 import { ThemeProvider } from "@/hooks/theme-context";
-import { trpc, trpcClient } from "@/lib/trpc";
 import { Platform } from "react-native";
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -61,22 +60,20 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <trpc.Provider client={trpcClient} queryClient={queryClient}>
-      <QueryClientProvider client={queryClient}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <AuthProvider>
-            <AppProvider>
-              <MembershipProvider>
-                <I18nProvider>
-                  <ThemeProvider>
-                    <RootLayoutNav />
-                  </ThemeProvider>
-                </I18nProvider>
-              </MembershipProvider>
-            </AppProvider>
-          </AuthProvider>
-        </GestureHandlerRootView>
-      </QueryClientProvider>
-    </trpc.Provider>
+    <QueryClientProvider client={queryClient}>
+      <GestureHandlerRootView style={{ flex: 1 }}>
+        <AuthProvider>
+          <AppProvider>
+            <MembershipProvider>
+              <I18nProvider>
+                <ThemeProvider>
+                  <RootLayoutNav />
+                </ThemeProvider>
+              </I18nProvider>
+            </MembershipProvider>
+          </AppProvider>
+        </AuthProvider>
+      </GestureHandlerRootView>
+    </QueryClientProvider>
   );
 }

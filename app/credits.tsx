@@ -5,7 +5,7 @@ import Colors from '@/constants/colors';
 import { useMembership } from '@/hooks/membership-context';
 import { useApp } from '@/hooks/app-context';
 import { Plus, ArrowLeft, MessageCircle, Zap, Unlock, Crown, Info } from 'lucide-react-native';
-import { trpc } from '@/lib/trpc';
+
 
 export default function Credits() {
   const router = useRouter();
@@ -39,7 +39,7 @@ export default function Credits() {
       setCurrency(regionToCurrency[region] ?? 'USD');
     } catch { setCurrency('USD'); }
   }, [currentProfile?.location?.city]);
-  const buyMutation = trpc.credits.buy.useMutation();
+
 
   const formatPrice = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency }).format(amount);
 
