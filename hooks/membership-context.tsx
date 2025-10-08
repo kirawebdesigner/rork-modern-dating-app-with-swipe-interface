@@ -356,8 +356,11 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   }, [lastAllowanceGrantISO, tier]);
 
   useEffect(() => {
-    loadFromServer();
-  }, [loadFromServer]);
+    const timer = setTimeout(() => {
+      loadFromServer().catch(e => console.error('[Membership] loadFromServer failed:', e));
+    }, 200);
+    return () => clearTimeout(timer);
+  }, []);
 
   useEffect(() => {
     const today = isoToday();
@@ -371,9 +374,12 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
   }, [grantMonthlyAllowancesIfNeeded]);
 
   useEffect(() => {
-    syncToStorage();
-    syncToServer();
-  }, [tier, credits, allowances, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, lastAllowanceGrantISO, syncToStorage, syncToServer]);
+    const timer = setTimeout(() => {
+      syncToStorage().catch(e => console.error('[Membership] syncToStorage failed:', e));
+      syncToServer().catch(e => console.error('[Membership] syncToServer failed:', e));
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [tier, credits, allowances, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, lastAllowanceGrantISO]);
 
   const useBoost = useCallback(async (): Promise<boolean> => {
     if (tier === 'vip') {

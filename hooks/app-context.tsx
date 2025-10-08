@@ -62,7 +62,10 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   });
 
   useEffect(() => {
-    loadAppData();
+    const timer = setTimeout(() => {
+      loadAppData().catch(e => console.error('[App] loadAppData failed:', e));
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   useEffect(() => {
@@ -89,6 +92,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
   const loadAppData = async () => {
     try {
+      console.log('[App] loadAppData starting...');
       const [profile, storedTier, storedCredits, history, storedFilters, storedBlocked] = await Promise.all([
         AsyncStorage.getItem('user_profile'),
         AsyncStorage.getItem('tier'),
