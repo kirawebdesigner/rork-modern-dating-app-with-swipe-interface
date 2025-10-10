@@ -51,6 +51,39 @@ export default function ProfileSetup() {
   const { setCurrentProfile, setFilters, filters } = useApp();
   const { t } = useI18n();
 
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const saved = await AsyncStorage.getItem('profile_setup_state');
+        const storedProfileRaw = await AsyncStorage.getItem('user_profile');
+        const storedProfile = storedProfileRaw ? (JSON.parse(storedProfileRaw) as { completed?: boolean }) : null;
+        if (storedProfile?.completed) {
+          router.replace('/(tabs)' as any);
+          return;
+        }
+        if (saved) {
+          const parsed = JSON.parse(saved) as { step: ProfileStep; data: ProfileData };
+          setCurrentStep(parsed.step);
+          setProfileData(parsed.data);
+          console.log('[ProfileSetup] Resumed saved progress at step', parsed.step);
+        }
+      } catch (e) {
+        console.log('[ProfileSetup] Failed to restore saved progress', e);
+      }
+    })();
+  }, []);
+
+  React.useEffect(() => {
+    (async () => {
+      try {
+        const payload = JSON.stringify({ step: currentStep, data: profileData });
+        await AsyncStorage.setItem('profile_setup_state', payload);
+      } catch (e) {
+        console.log('[ProfileSetup] Failed to persist progress', e);
+      }
+    })();
+  }, [currentStep, profileData]);
+
   const handleBack = () => {
     if (currentStep === 'details') {
       const canGoBack = (router as any)?.canGoBack?.() ?? false;
@@ -242,6 +275,9 @@ export default function ProfileSetup() {
       } catch (e) {
         console.log('[ProfileSetup] Final save error', e);
       }
+      try {
+        await AsyncStorage.removeItem('profile_setup_state');
+      } catch {}
       router.replace('/(tabs)' as any);
     }
   };

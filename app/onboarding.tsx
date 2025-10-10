@@ -1,4 +1,4 @@
-import React, { useRef, useState, useMemo } from 'react';
+import React, { useRef, useState, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -53,12 +53,16 @@ const slides = [
 
 type Slide = { id: string; title: string; description: string; image: string };
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useApp } from '@/hooks/app-context';
+
 export default function OnboardingScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const itemLayout = useMemo(() => ({ length: width, offset: 0, index: 0 }), [width]);
   const listRef = useRef<FlatList<Slide>>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
+  const { currentProfile } = useApp();
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
     const idx = viewableItems?.[0]?.index ?? 0;
@@ -67,6 +71,32 @@ export default function OnboardingScreen() {
   }).current;
 
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 60 });
+
+  useEffect(() => {
+    let mounted = true;
+    const redirectIfReady = async () => {
+      try {
+        const storedProfileRaw = await AsyncStorage.getItem('user_profile');
+        const storedPhone = await AsyncStorage.getItem('user_phone');
+        if (!mounted) return;
+        const storedProfile = storedProfileRaw ? JSON.parse(storedProfileRaw) as { completed?: boolean } : null;
+        const completed = Boolean(currentProfile?.completed ?? storedProfile?.completed ?? false);
+        if (completed) {
+          router.replace('/(tabs)' as any);
+          return;
+        }
+        if ((currentProfile && !currentProfile.completed) || (storedPhone && storedProfile && !storedProfile.completed)) {
+          router.replace('/profile-setup' as any);
+          return;
+        }
+      } catch (e) {
+        console.log('[Onboarding] redirect check failed', e);
+      }
+    };
+    redirectIfReady();
+    const t = setTimeout(redirectIfReady, 400);
+    return () => { mounted = false; clearTimeout(t); };
+  }, [currentProfile]);
 
   const handleNext = () => {
     console.log('[Onboarding] CTA pressed at index', currentIndex);
