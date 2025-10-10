@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
 import { ArrowLeft, Send, ShieldAlert, Crown } from 'lucide-react-native';
 import Colors from '@/constants/colors';
@@ -33,7 +33,7 @@ class Boundary extends React.Component<{ children: React.ReactNode }, { hasError
 export default function ChatScreen() {
   const router = useRouter();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
-  const { tier, remainingDailyMessages, useDaily } = useMembership();
+  const { tier, remainingDailyMessages, useDaily: consumeDailyLimit } = useMembership();
   const { user } = useAuth();
   const uid = user?.id ?? null;
   const [input, setInput] = useState<string>('');
@@ -52,13 +52,34 @@ export default function ChatScreen() {
     const load = async () => {
       if (!chatId || !uid) { setInitLoading(false); return; }
       try {
+        console.log('[Chat] init loading participants for chatId', chatId);
         const { data: convParts, error: cpErr } = await supabase
           .from('conversation_participants')
           .select('conversation_id, user_id')
           .eq('conversation_id', chatId);
         if (cpErr) throw cpErr;
-        const other = (convParts as any[]).find(p => p.user_id !== uid)?.user_id as string | undefined;
-        if (!other) throw new Error('Participant not found');
+        let other: string | undefined = (convParts as any[] | null)?.find(p => p.user_id !== uid)?.user_id as string | undefined;
+
+        if (!other) {
+          console.log('[Chat] No other participant found in participants table, falling back to messages lookup');
+          const { data: msgs, error: mErr } = await supabase
+            .from('messages')
+            .select('sender_id')
+            .eq('conversation_id', chatId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+          if (mErr) throw mErr;
+          other = (msgs as any[] | null)?.map(r => r.sender_id as string).find(id => id !== uid);
+        }
+
+        if (!other) {
+          console.warn('[Chat] Participant not found for conversation', chatId);
+          Alert.alert('Chat unavailable', 'We could not determine the other participant for this conversation.');
+          setOtherId(null);
+          setOtherName('Unknown');
+          return;
+        }
+
         setOtherId(other);
         const { data: prof, error: pErr } = await supabase
           .from('profiles')
@@ -94,7 +115,7 @@ export default function ChatScreen() {
   const onSend = useCallback(async () => {
     if (!input.trim()) return;
     if (tier === 'free') {
-      const allowed = await useDaily('messages');
+      const allowed = await consumeDailyLimit('messages');
       if (!allowed) {
         Alert.alert(
           'Daily Limit Reached',
@@ -117,7 +138,7 @@ export default function ChatScreen() {
     } finally {
       setSending(false);
     }
-  }, [input, router, tier, useDaily, sendMessage]);
+  }, [input, router, tier, consumeDailyLimit, sendMessage]);
 
   const renderItem = useCallback(({ item }: { item: Message }) => {
     const isMine = uid != null && item.senderId === uid;
