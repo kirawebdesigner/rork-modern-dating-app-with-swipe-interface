@@ -128,11 +128,14 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   };
 
   const clearStorage = async () => {
-    console.log('[Auth] clearing storage');
+    console.log('[Auth] clearing auth-related storage');
     try {
+      const keysToPreserve = new Set<string>(['profile_setup_state', 'user_profile']);
       const allKeys = await AsyncStorage.getAllKeys();
-      console.log('[Auth] clearing all AsyncStorage keys:', allKeys.length);
-      await AsyncStorage.clear();
+      const keysToRemove = allKeys.filter((k) => !keysToPreserve.has(k));
+      if (keysToRemove.length > 0) {
+        await AsyncStorage.multiRemove(keysToRemove);
+      }
     } catch (e) {
       console.log('[Auth] clear storage failed', e);
     }

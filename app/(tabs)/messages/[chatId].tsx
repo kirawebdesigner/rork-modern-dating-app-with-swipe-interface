@@ -49,6 +49,12 @@ export default function ChatScreen() {
 
   useEffect(() => {
     let active = true;
+    const failSafe = setTimeout(() => {
+      if (active) {
+        console.log('[Chat] init timeout fallback — continuing without participant');
+        setInitLoading(false);
+      }
+    }, 3500);
     const load = async () => {
       if (!chatId || !uid) { setInitLoading(false); return; }
       try {
@@ -74,28 +80,27 @@ export default function ChatScreen() {
 
         if (!other) {
           console.warn('[Chat] Participant not found for conversation', chatId);
-          Alert.alert('Chat unavailable', 'We could not determine the other participant for this conversation.');
           setOtherId(null);
           setOtherName('Unknown');
-          return;
+        } else {
+          setOtherId(other);
+          const { data: prof, error: pErr } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', other)
+            .maybeSingle();
+          if (pErr) throw pErr;
+          setOtherName((prof?.name as string) ?? 'User');
         }
-
-        setOtherId(other);
-        const { data: prof, error: pErr } = await supabase
-          .from('profiles')
-          .select('name')
-          .eq('id', other)
-          .maybeSingle();
-        if (pErr) throw pErr;
-        setOtherName((prof?.name as string) ?? 'User');
       } catch (e) {
         console.error('[Chat] init other user error', e);
       } finally {
         if (active) setInitLoading(false);
+        clearTimeout(failSafe);
       }
     };
     load();
-    return () => { active = false; };
+    return () => { active = false; clearTimeout(failSafe); };
   }, [chatId, uid]);
 
   const scrollToEnd = useCallback(() => {
