@@ -131,7 +131,25 @@ export default function PremiumScreen() {
   const handleUpgrade = async () => {
     try {
       console.log('[Premium] Upgrade pressed', selectedTier);
-      router.push({ pathname: '/payment-verification', params: { tier: selectedTier } } as any);
+      Alert.alert(
+        'Choose Payment Method',
+        'Select how you want to pay',
+        [
+          {
+            text: 'Arifpay (Automatic)',
+            onPress: () => router.push({ pathname: '/arifpay-checkout', params: { tier: selectedTier } } as any),
+          },
+          {
+            text: 'Manual Payment',
+            onPress: () => router.push({ pathname: '/payment-verification', params: { tier: selectedTier } } as any),
+          },
+          {
+            text: 'Cancel',
+            style: 'cancel',
+          },
+        ],
+        { cancelable: true }
+      );
     } catch (e) {
       console.error('[Premium] handleUpgrade nav error', (e as any)?.message || e);
       Alert.alert('Navigation failed', 'Please try again.');
@@ -298,7 +316,7 @@ export default function PremiumScreen() {
             testID="upgrade-btn"
           />
           <Text style={styles.disclaimer}>
-            You will be redirected to manual payment verification.
+            Choose between automatic payment (Arifpay) or manual payment (Telebirr).
           </Text>
         </View>
 
