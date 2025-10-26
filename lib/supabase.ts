@@ -32,3 +32,16 @@ if (!isSupabaseConfigured) {
 }
 
 console.log('[Supabase] Client initialized for', Platform.OS, 'with URL:', supabaseUrl);
+console.log('[Supabase] Config status:', isSupabaseConfigured ? 'Configured' : 'Using defaults');
+
+// Test connection
+supabase.from('profiles').select('count').limit(1).then(({ error }) => {
+  if (error) {
+    console.error('[Supabase] Connection test failed:', JSON.stringify(error, null, 2));
+    console.error('[Supabase] Error message:', error.message);
+    console.error('[Supabase] Error details:', error.details);
+    console.error('[Supabase] Error hint:', error.hint);
+  } else {
+    console.log('[Supabase] Connection test successful');
+  }
+});

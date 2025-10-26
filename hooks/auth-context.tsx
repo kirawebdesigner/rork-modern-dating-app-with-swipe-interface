@@ -94,37 +94,71 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
   });
 
   const fetchProfileById = async (id: string): Promise<User | null> => {
-    console.log('[Auth] fetchProfileById');
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', id)
-      .maybeSingle();
-    if (error) {
-      console.error('[Auth] fetchProfileById error', error);
+    try {
+      console.log('[Auth] fetchProfileById', id);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', id)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('[Auth] fetchProfileById error:', JSON.stringify(error, null, 2));
+        console.error('[Auth] Error message:', error.message);
+        return null;
+      }
+      
+      if (!data) {
+        console.log('[Auth] No profile found for id', id);
+        return null;
+      }
+      
+      console.log('[Auth] Profile found by ID successfully');
+      return mapProfile(data);
+    } catch (err) {
+      console.error('[Auth] fetchProfileById unexpected error:', err);
+      if (err instanceof Error) {
+        console.error('[Auth] Error message:', err.message);
+      }
       return null;
     }
-    if (!data) return null;
-    return mapProfile(data);
   };
 
   const fetchProfileByPhone = async (phone: string): Promise<User | null> => {
-    const masked = phone.length > 4 ? phone.slice(0, -4).replace(/\d/g, '*') + phone.slice(-4) : '***';
-    console.log('[Auth] fetchProfileByPhone', masked);
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('phone', phone)
-      .maybeSingle();
-    if (error) {
-      console.error('[Auth] fetchProfileByPhone error', error);
+    try {
+      const masked = phone.length > 4 ? phone.slice(0, -4).replace(/\d/g, '*') + phone.slice(-4) : '***';
+      console.log('[Auth] fetchProfileByPhone', masked);
+      
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('phone', phone)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('[Auth] fetchProfileByPhone error:', JSON.stringify(error, null, 2));
+        console.error('[Auth] Error message:', error.message);
+        console.error('[Auth] Error details:', error.details);
+        console.error('[Auth] Error hint:', error.hint);
+        return null;
+      }
+      
+      if (!data) {
+        console.log('[Auth] No profile found for phone', masked);
+        return null;
+      }
+      
+      console.log('[Auth] Profile found successfully');
+      return mapProfile(data);
+    } catch (err) {
+      console.error('[Auth] fetchProfileByPhone unexpected error:', err);
+      console.error('[Auth] Error type:', typeof err);
+      if (err instanceof Error) {
+        console.error('[Auth] Error message:', err.message);
+        console.error('[Auth] Error stack:', err.stack);
+      }
       return null;
     }
-    if (!data) {
-      console.log('[Auth] No profile found for phone');
-      return null;
-    }
-    return mapProfile(data);
   };
 
   const clearStorage = async () => {
