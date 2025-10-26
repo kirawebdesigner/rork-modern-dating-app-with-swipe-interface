@@ -31,6 +31,9 @@ function RootLayoutNav() {
       <Stack.Screen name="credits" options={{ presentation: "modal" }} />
       <Stack.Screen name="discovery-filters" />
       <Stack.Screen name="referrals" />
+      <Stack.Screen name="terms" />
+      <Stack.Screen name="privacy-policy" />
+      <Stack.Screen name="permissions-info" />
     </Stack>
   );
 }

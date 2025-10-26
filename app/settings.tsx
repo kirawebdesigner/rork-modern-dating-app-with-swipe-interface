@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
-import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2, Mail, LogOut } from 'lucide-react-native';
+import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2, Mail, LogOut, FileText, Lock, Info } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
 import * as Linking from 'expo-linking';
 import { useAuth } from '@/hooks/auth-context';
@@ -40,8 +40,10 @@ export default function SettingsScreen() {
           <Item icon={<User size={18} color={Colors.primary} />} label={t('Account settings')} onPress={() => router.push('/settings/account' as any)} testID="settings-account" last />
         </Card>
 
-        <Card title={t('Privacy')}>
-          <Item icon={<Shield size={18} color={Colors.primary} />} label={t('Privacy settings')} onPress={() => router.push('/settings/privacy' as any)} testID="settings-privacy" last />
+        <Card title={t('Privacy & Security')}>
+          <Item icon={<Shield size={18} color={Colors.primary} />} label={t('Privacy settings')} onPress={() => router.push('/settings/privacy' as any)} testID="settings-privacy" />
+          <Item icon={<Lock size={18} color={Colors.primary} />} label={t('Security')} onPress={() => router.push('/settings/security' as any)} testID="settings-security" />
+          <Item icon={<Info size={18} color={Colors.primary} />} label={t('App Permissions')} onPress={() => router.push('/permissions-info' as any)} testID="settings-permissions" last />
         </Card>
 
         <Card title={t('Notifications')}>
@@ -58,7 +60,9 @@ export default function SettingsScreen() {
         </Card>
 
         <Card title={t('App')}>
-          <Item icon={<Globe size={18} color={Colors.primary} />} label={t('Language')} onPress={() => router.push('/language' as any)} testID="settings-language" last />
+          <Item icon={<Globe size={18} color={Colors.primary} />} label={t('Language')} onPress={() => router.push('/language' as any)} testID="settings-language" />
+          <Item icon={<FileText size={18} color={Colors.primary} />} label={t('Terms & Conditions')} onPress={() => router.push('/terms' as any)} testID="settings-terms" />
+          <Item icon={<FileText size={18} color={Colors.primary} />} label={t('Privacy Policy')} onPress={() => router.push('/privacy-policy' as any)} testID="settings-privacy-policy" last />
         </Card>
 
         <Card title={t('Session')}>

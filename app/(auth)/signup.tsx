@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, CheckSquare, Square } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/hooks/auth-context';
@@ -25,6 +25,8 @@ export default function SignupScreen() {
   const [name, setName] = useState('');
   const [phone, setPhone] = useState('');
   const [loading, setLoading] = useState(false);
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [confirmedAge, setConfirmedAge] = useState(false);
 
   const handleSignup = async () => {
     console.log('[Signup] handleSignup called', { name, phone });
@@ -34,6 +36,16 @@ export default function SignupScreen() {
     if (!nameTrim || !phoneTrim) {
       console.log('[Signup] Validation failed: empty fields');
       alert(t('Error') + ': ' + t('Please fill in all fields'));
+      return;
+    }
+    
+    if (!confirmedAge) {
+      alert(t('Error') + ': ' + t('Please confirm you are 18 or older'));
+      return;
+    }
+    
+    if (!agreedToTerms) {
+      alert(t('Error') + ': ' + t('Please agree to the Terms & Conditions and Privacy Policy'));
       return;
     }
     
@@ -116,6 +128,57 @@ export default function SignupScreen() {
                 autoCapitalize="none"
                 testID="signup-phone"
               />
+            </View>
+
+            <View style={styles.checkboxContainer}>
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setConfirmedAge(!confirmedAge)}
+                testID="age-checkbox"
+              >
+                {confirmedAge ? (
+                  <CheckSquare size={24} color={Colors.primary} />
+                ) : (
+                  <Square size={24} color={Colors.text.secondary} />
+                )}
+                <Text style={styles.checkboxText}>
+                  {t('I confirm that I am 18 years or older')}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.checkboxRow}
+                onPress={() => setAgreedToTerms(!agreedToTerms)}
+                testID="terms-checkbox"
+              >
+                {agreedToTerms ? (
+                  <CheckSquare size={24} color={Colors.primary} />
+                ) : (
+                  <Square size={24} color={Colors.text.secondary} />
+                )}
+                <Text style={styles.checkboxText}>
+                  {t('I agree to the')}{' '}
+                  <Text
+                    style={styles.linkText}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push('/terms' as any);
+                    }}
+                  >
+                    {t('Terms & Conditions')}
+                  </Text>
+                  {' '}{t('and')}{' '}
+                  <Text
+                    style={styles.linkText}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      router.push('/privacy-policy' as any);
+                    }}
+                  >
+                    {t('Privacy Policy')}
+                  </Text>
+                </Text>
+              </TouchableOpacity>
             </View>
 
             <GradientButton
@@ -248,5 +311,25 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.primary,
     fontWeight: '600',
+  },
+  checkboxContainer: {
+    marginTop: 16,
+    gap: 16,
+  },
+  checkboxRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 12,
+  },
+  checkboxText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.text.secondary,
+    lineHeight: 20,
+  },
+  linkText: {
+    color: Colors.primary,
+    fontWeight: '600',
+    textDecorationLine: 'underline',
   },
 });
