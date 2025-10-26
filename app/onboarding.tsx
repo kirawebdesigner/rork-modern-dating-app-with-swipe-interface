@@ -10,6 +10,8 @@ import {
   TouchableOpacity,
   SafeAreaView,
   Image,
+  Animated,
+  StatusBar,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -65,11 +67,38 @@ export default function OnboardingScreen() {
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const { currentProfile } = useApp();
   const { user, isAuthenticated } = useAuth();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
     const idx = viewableItems?.[0]?.index ?? 0;
     console.log('[Onboarding] viewable index', idx);
     setCurrentIndex(idx ?? 0);
+    
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 0.9,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 5,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
   }).current;
 
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 60 });
@@ -130,8 +159,24 @@ export default function OnboardingScreen() {
     }
   };
 
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 5,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   return (
     <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
       <TouchableOpacity style={styles.skipButton} onPress={handleSkip} testID="skip-button">
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
@@ -141,22 +186,32 @@ export default function OnboardingScreen() {
         data={slides as Slide[]}
         keyExtractor={(item) => item.id}
         renderItem={({ item }: ListRenderItemInfo<Slide>) => (
-          <View style={[styles.slide, { width }]} testID={`slide-${item.id}`}>
+          <Animated.View 
+            style={[
+              styles.slide, 
+              { width },
+              { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+            ]} 
+            testID={`slide-${item.id}`}
+          >
             <View style={styles.imageContainer}>
-              <Image
-                source={{ uri: item.image }}
-                style={[styles.image, { width: width - 80 }]}
-                accessibilityIgnoresInvertColors
-                accessible
-                accessibilityLabel={item.title}
-                testID={`slide-image-${item.id}`}
-              />
+              <View style={styles.imageWrapper}>
+                <Image
+                  source={{ uri: item.image }}
+                  style={[styles.image, { width: width - 80 }]}
+                  accessibilityIgnoresInvertColors
+                  accessible
+                  accessibilityLabel={item.title}
+                  testID={`slide-image-${item.id}`}
+                />
+                <View style={styles.imageOverlay} />
+              </View>
             </View>
             <View style={styles.textContainer}>
               <Text style={styles.title}>{item.title}</Text>
               <Text style={styles.description}>{item.description}</Text>
             </View>
-          </View>
+          </Animated.View>
         )}
         horizontal
         pagingEnabled
@@ -210,15 +265,22 @@ const styles = StyleSheet.create({
   },
   skipButton: {
     position: 'absolute',
-    top: 12,
-    right: 16,
+    top: 16,
+    right: 20,
     zIndex: 10,
-    padding: 8,
+    padding: 10,
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   skipText: {
     color: Colors.primary,
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 15,
+    fontWeight: '700',
   },
   list: {
     flex: 1,
@@ -234,59 +296,80 @@ const styles = StyleSheet.create({
   imageContainer: {
     justifyContent: 'center',
     alignItems: 'center',
-    paddingTop: 32,
+    paddingTop: 48,
+  },
+  imageWrapper: {
+    position: 'relative',
+    overflow: 'hidden',
+    borderRadius: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 8 },
+    elevation: 10,
+  },
+  imageOverlay: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    backgroundColor: 'transparent',
   },
   image: {
     aspectRatio: 4 / 5,
-    borderRadius: 20,
     resizeMode: 'cover',
-    shadowColor: '#000',
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
   },
   textContainer: {
-    paddingVertical: 24,
+    paddingVertical: 32,
     alignItems: 'center',
   },
   title: {
-    fontSize: 26,
-    fontWeight: '700',
-    color: Colors.primary,
+    fontSize: 30,
+    fontWeight: '800',
+    color: Colors.text.primary,
     marginBottom: 12,
+    textAlign: 'center',
   },
   description: {
-    fontSize: 15,
+    fontSize: 16,
     color: Colors.text.secondary,
     textAlign: 'center',
-    paddingHorizontal: 12,
-    lineHeight: 22,
+    paddingHorizontal: 20,
+    lineHeight: 24,
   },
   footer: {
     paddingHorizontal: 20,
-    paddingBottom: 16,
+    paddingBottom: 20,
+    paddingTop: 12,
     alignItems: 'center',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: Colors.background,
     zIndex: 5,
+    borderTopWidth: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 8,
   },
   pagination: {
     flexDirection: 'row',
-    gap: 8,
-    marginBottom: 20,
+    gap: 10,
+    marginBottom: 24,
   },
   dot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: Colors.border,
   },
   activeDot: {
-    width: 24,
+    width: 32,
     backgroundColor: Colors.primary,
   },
   button: {
     width: '100%',
-    marginBottom: 20,
+    marginBottom: 16,
   },
   loginText: {
     fontSize: 14,

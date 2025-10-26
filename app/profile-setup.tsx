@@ -54,13 +54,27 @@ export default function ProfileSetup() {
   React.useEffect(() => {
     (async () => {
       try {
-        const saved = await AsyncStorage.getItem('profile_setup_state');
-        const storedProfileRaw = await AsyncStorage.getItem('user_profile');
-        const storedProfile = storedProfileRaw ? (JSON.parse(storedProfileRaw) as { completed?: boolean }) : null;
-        if (storedProfile?.completed) {
-          router.replace('/(tabs)' as any);
-          return;
+        const storedIdRaw = await AsyncStorage.getItem('user_id');
+        const storedPhoneRaw = await AsyncStorage.getItem('user_phone');
+        
+        if (storedIdRaw || storedPhoneRaw) {
+          const id = storedIdRaw ?? '';
+          if (id) {
+            const { data: profile, error } = await supabase
+              .from('profiles')
+              .select('completed')
+              .eq('id', id)
+              .maybeSingle();
+            
+            if (!error && profile?.completed) {
+              console.log('[ProfileSetup] Profile already completed, redirecting to tabs');
+              router.replace('/(tabs)' as any);
+              return;
+            }
+          }
         }
+        
+        const saved = await AsyncStorage.getItem('profile_setup_state');
         if (saved) {
           const parsed = JSON.parse(saved) as { step: ProfileStep; data: ProfileData };
           setCurrentStep(parsed.step);
@@ -71,7 +85,7 @@ export default function ProfileSetup() {
         console.log('[ProfileSetup] Failed to restore saved progress', e);
       }
     })();
-  }, []);
+  }, [router]);
 
   React.useEffect(() => {
     (async () => {
