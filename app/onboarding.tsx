@@ -55,6 +55,7 @@ type Slide = { id: string; title: string; description: string; image: string };
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useApp } from '@/hooks/app-context';
+import { useAuth } from '@/hooks/auth-context';
 
 export default function OnboardingScreen() {
   const router = useRouter();
@@ -63,6 +64,7 @@ export default function OnboardingScreen() {
   const listRef = useRef<FlatList<Slide>>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
   const { currentProfile } = useApp();
+  const { user, isAuthenticated } = useAuth();
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
     const idx = viewableItems?.[0]?.index ?? 0;
@@ -76,16 +78,19 @@ export default function OnboardingScreen() {
     let mounted = true;
     const redirectIfReady = async () => {
       try {
-        const storedProfileRaw = await AsyncStorage.getItem('user_profile');
-        const storedPhone = await AsyncStorage.getItem('user_phone');
-        if (!mounted) return;
-        const storedProfile = storedProfileRaw ? JSON.parse(storedProfileRaw) as { completed?: boolean } : null;
-        const completed = Boolean(currentProfile?.completed ?? storedProfile?.completed ?? false);
+        if (!mounted || !isAuthenticated) return;
+        
+        const completed = Boolean(user?.profile?.completed);
+        console.log('[Onboarding] Redirect check:', { isAuthenticated, completed });
+        
         if (completed) {
+          console.log('[Onboarding] Profile completed, redirecting to tabs');
           router.replace('/(tabs)' as any);
           return;
         }
-        if ((currentProfile && !currentProfile.completed) || (storedPhone && storedProfile && !storedProfile.completed)) {
+        
+        if (isAuthenticated && !completed) {
+          console.log('[Onboarding] Profile incomplete, redirecting to profile-setup');
           router.replace('/profile-setup' as any);
           return;
         }
@@ -96,7 +101,7 @@ export default function OnboardingScreen() {
     redirectIfReady();
     const t = setTimeout(redirectIfReady, 400);
     return () => { mounted = false; clearTimeout(t); };
-  }, [currentProfile]);
+  }, [isAuthenticated, user, router]);
 
   const handleNext = () => {
     console.log('[Onboarding] CTA pressed at index', currentIndex);

@@ -67,19 +67,47 @@ export default function ChatScreen() {
         let other: string | undefined = (convParts as any[] | null)?.find(p => p.user_id !== uid)?.user_id as string | undefined;
 
         if (!other) {
-          console.log('[Chat] No other participant found in participants table, falling back to messages lookup');
+          console.log('[Chat] No other participant in participants table, trying messages');
           const { data: msgs, error: mErr } = await supabase
             .from('messages')
             .select('sender_id')
             .eq('conversation_id', chatId)
             .order('created_at', { ascending: false })
             .limit(50);
-          if (mErr) throw mErr;
+          if (mErr) console.log('[Chat] Messages fetch error', mErr);
           other = (msgs as any[] | null)?.map(r => r.sender_id as string).find(id => id !== uid);
         }
 
         if (!other) {
-          console.warn('[Chat] Participant not found for conversation', chatId);
+          console.log('[Chat] Trying to find match for conversation');
+          const { data: match, error: matchErr } = await supabase
+            .from('matches')
+            .select('user1_id, user2_id, id')
+            .eq('id', chatId)
+            .maybeSingle();
+          if (!matchErr && match) {
+            other = (match.user1_id === uid ? match.user2_id : match.user1_id) as string;
+            console.log('[Chat] Found other user from match:', other);
+            
+            const { data: existingConv } = await supabase
+              .from('conversations')
+              .select('id')
+              .eq('id', chatId)
+              .maybeSingle();
+            
+            if (!existingConv) {
+              console.log('[Chat] Creating missing conversation and participants');
+              await supabase.from('conversations').insert({ id: chatId, created_by: uid });
+              await supabase.from('conversation_participants').insert([
+                { conversation_id: chatId, user_id: uid },
+                { conversation_id: chatId, user_id: other }
+              ]);
+            }
+          }
+        }
+
+        if (!other) {
+          console.warn('[Chat] Could not find other participant');
           setOtherId(null);
           setOtherName('Unknown');
         } else {
@@ -89,11 +117,11 @@ export default function ChatScreen() {
             .select('name')
             .eq('id', other)
             .maybeSingle();
-          if (pErr) throw pErr;
+          if (pErr) console.log('[Chat] Profile fetch error', pErr);
           setOtherName((prof?.name as string) ?? 'User');
         }
       } catch (e) {
-        console.error('[Chat] init other user error', e);
+        console.error('[Chat] init error', e);
       } finally {
         if (active) setInitLoading(false);
         clearTimeout(failSafe);
