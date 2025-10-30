@@ -181,16 +181,21 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     setUser(null);
     await new Promise(resolve => setTimeout(resolve, 50));
 
+    console.log('[Auth] Fetching profile for phone:', cleanPhone.slice(0, -4).replace(/\d/g, '*') + cleanPhone.slice(-4));
     const profile = await fetchProfileByPhone(cleanPhone);
     if (!profile) throw new Error('Phone number not found. Please sign up first.');
 
+    console.log('[Auth] Profile fetched successfully:', profile.id);
     await AsyncStorage.multiSet([
       ['user_phone', cleanPhone],
       ['user_id', profile.id],
     ]);
+    
+    await AsyncStorage.setItem('user_profile', JSON.stringify(profile));
 
     const next: AuthUser = { id: profile.id, email: '', name: profile.name, profile };
     setUser(next);
+    console.log('[Auth] Login complete, user state updated');
   }, []);
 
   const signup = useCallback(async (phone: string, name: string) => {

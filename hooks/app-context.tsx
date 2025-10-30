@@ -93,16 +93,61 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   const loadAppData = async () => {
     try {
       console.log('[App] loadAppData starting...');
-      const [profile, storedTier, storedCredits, history, storedFilters, storedBlocked] = await Promise.all([
+      const [profile, storedTier, storedCredits, history, storedFilters, storedBlocked, storedPhone, storedId] = await Promise.all([
         AsyncStorage.getItem('user_profile'),
         AsyncStorage.getItem('tier'),
         AsyncStorage.getItem('credits'),
         AsyncStorage.getItem('swipe_history'),
         AsyncStorage.getItem('filters_state'),
         AsyncStorage.getItem('blocked_ids'),
+        AsyncStorage.getItem('user_phone'),
+        AsyncStorage.getItem('user_id'),
       ]);
 
-      if (profile) setCurrentProfileState(normalizeProfile(JSON.parse(profile)));
+      if (profile) {
+        const parsedProfile = normalizeProfile(JSON.parse(profile));
+        if (parsedProfile) {
+          console.log('[App] Loaded profile from AsyncStorage:', parsedProfile.id);
+          setCurrentProfileState(parsedProfile);
+        }
+      } else if (storedId || storedPhone) {
+        console.log('[App] No cached profile, fetching from Supabase...');
+        const { data: freshProfile, error } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq(storedId ? 'id' : 'phone', storedId ?? storedPhone)
+          .maybeSingle();
+        
+        if (!error && freshProfile) {
+          const mappedProfile: User = {
+            id: String(freshProfile.id),
+            name: String(freshProfile.name ?? 'User'),
+            age: Number(freshProfile.age ?? 0),
+            birthday: freshProfile.birthday ? new Date(String(freshProfile.birthday)) : undefined,
+            gender: (freshProfile.gender as 'boy' | 'girl') ?? 'boy',
+            interestedIn: (freshProfile.interested_in as 'boy' | 'girl' | null) ?? undefined,
+            bio: String(freshProfile.bio ?? ''),
+            photos: Array.isArray(freshProfile.photos) ? (freshProfile.photos as string[]) : [],
+            interests: Array.isArray(freshProfile.interests) ? (freshProfile.interests as string[]) : [],
+            location: { 
+              city: String(freshProfile.city ?? ''), 
+              latitude: freshProfile.latitude ? Number(freshProfile.latitude) : undefined, 
+              longitude: freshProfile.longitude ? Number(freshProfile.longitude) : undefined 
+            },
+            heightCm: typeof freshProfile.height_cm === 'number' ? Number(freshProfile.height_cm) : undefined,
+            education: freshProfile.education ? String(freshProfile.education) : undefined,
+            verified: Boolean(freshProfile.verified),
+            lastActive: freshProfile.last_active ? new Date(String(freshProfile.last_active)) : undefined,
+            ownedThemes: Array.isArray(freshProfile.owned_themes) ? (freshProfile.owned_themes as ThemeId[]) : [],
+            profileTheme: (freshProfile.profile_theme as ThemeId | null) ?? null,
+            completed: Boolean(freshProfile.completed),
+          } as User;
+          
+          console.log('[App] Fetched and cached profile from Supabase:', mappedProfile.id);
+          setCurrentProfileState(mappedProfile);
+          await AsyncStorage.setItem('user_profile', JSON.stringify(mappedProfile));
+        }
+      }
       if (storedTier) setTierState(JSON.parse(storedTier));
       if (storedCredits) setCredits(JSON.parse(storedCredits));
       if (history) setSwipeHistory(JSON.parse(history));
@@ -152,8 +197,8 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         console.log('[App] load self profile failed', meLoadErr);
       }
 
-      const storedPhone = await AsyncStorage.getItem('user_phone');
-      console.log('[App] Loading profiles, current user phone:', storedPhone);
+      const userPhone = await AsyncStorage.getItem('user_phone');
+      console.log('[App] Loading profiles, current user phone:', userPhone);
       
       const { data: profiles, error } = await supabase
         .from('profiles')
@@ -167,7 +212,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       } else {
         const mapped: User[] = (profiles as any[])
           .filter((row) => {
-            if (storedPhone && row.phone === storedPhone) {
+            if (userPhone && row.phone === userPhone) {
               console.log('[App] Filtering out current user:', row.phone);
               return false;
             }
@@ -211,11 +256,11 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       }
 
       try {
-        if (storedPhone) {
+        if (userPhone) {
           const { data: myProfile } = await supabase
             .from('profiles')
             .select('id')
-            .eq('phone', storedPhone)
+            .eq('phone', userPhone)
             .maybeSingle();
           
           const myId = myProfile?.id ?? null;
