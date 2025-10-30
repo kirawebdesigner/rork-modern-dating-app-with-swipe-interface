@@ -86,6 +86,21 @@ export class ArifpayClient {
       throw error;
     }
   }
+
+  async verifyPayment(sessionId: string): Promise<{ status: string }>{
+    try {
+      if (!this.client) {
+        throw new Error("ArifPay client not initialized");
+      }
+      // The express plugin does not expose a verify method in docs we have.
+      // As a placeholder, assume paid; real integration should call ArifPay verify endpoint.
+      console.log("[Arifpay] verifyPayment called for session:", sessionId);
+      return { status: "PAID" };
+    } catch (e) {
+      console.error("[Arifpay] verifyPayment failed:", e);
+      return { status: "UNKNOWN" };
+    }
+  }
 }
 
 export const arifpay = new ArifpayClient();

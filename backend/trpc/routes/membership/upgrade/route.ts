@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure } from "../../../create-context";
+import { publicProcedure } from "../../../create-context";
 import { arifpay } from "../../../../lib/arifpay";
 
 const TIER_PRICES: Record<string, number> = {
@@ -9,7 +9,7 @@ const TIER_PRICES: Record<string, number> = {
   vip: 4799,
 };
 
-export default protectedProcedure
+export default publicProcedure
   .input(
     z.object({
       tier: z.enum(["free", "silver", "gold", "vip"]),
@@ -19,13 +19,10 @@ export default protectedProcedure
       errorUrl: z.string(),
     })
   )
-  .mutation(async ({ input, ctx }) => {
-    const userId = ctx.user?.id;
-    if (!userId) {
-      throw new Error("Unauthorized");
-    }
+  .mutation(async ({ input }) => {
+    const pseudoUserId = `phone-${input.phone}`;
 
-    console.log("[tRPC] Upgrade tier for", userId, "->", input.tier);
+    console.log("[tRPC] Upgrade tier for", pseudoUserId, "->", input.tier);
 
     const amount = TIER_PRICES[input.tier];
 
@@ -44,7 +41,7 @@ export default protectedProcedure
         amount,
         phone: input.phone,
         tier: input.tier,
-        userId,
+        userId: pseudoUserId,
         successUrl: input.successUrl,
         cancelUrl: input.cancelUrl,
         errorUrl: input.errorUrl,
