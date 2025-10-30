@@ -1,148 +1,90 @@
 const Arifpay = require("arifpay-express-plugin");
+import { v4 as uuidv4 } from "uuid";
 
 const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "";
 const ARIFPAY_SESSION_EXPIRY = process.env.ARIFPAY_SESSION_EXPIRY || "2026-10-30T15:00:58";
-const ARIFPAY_BASE_URL = "https://gateway.arifpay.net/api";
 
-export interface ArifpayCheckoutOptions {
+export interface ArifpayPaymentOptions {
   amount: number;
-  currency?: string;
-  beneficiaries: Array<{
-    accountNumber: string;
-    bank: string;
-    amount: number;
-  }>;
+  phone: string;
+  tier: string;
+  userId: string;
   cancelUrl: string;
   errorUrl: string;
   notifyUrl: string;
   successUrl: string;
-  merchantId?: string;
 }
 
-export interface ArifpayCheckoutResponse {
+export interface ArifpayPaymentResponse {
   sessionId: string;
-  checkoutUrl: string;
-  transactionId: string;
-}
-
-export interface ArifpayVerifyResponse {
-  transactionId: string;
-  status: "PAID" | "PENDING" | "FAILED" | "CANCELLED";
-  amount: number;
-  currency: string;
-  paymentMethod: string;
-  paidAt?: string;
+  paymentUrl: string;
+  status: string;
 }
 
 export class ArifpayClient {
-  private apiKey: string;
-  private baseUrl: string;
   private client: any;
 
-  constructor(apiKey?: string) {
-    this.apiKey = apiKey || ARIFPAY_API_KEY;
-    this.baseUrl = ARIFPAY_BASE_URL;
-
-    if (!this.apiKey) {
+  constructor() {
+    if (!ARIFPAY_API_KEY) {
       console.warn("[Arifpay] API key not configured");
     }
 
     try {
-      this.client = new Arifpay(this.apiKey, ARIFPAY_SESSION_EXPIRY);
-      console.log("[Arifpay] Express plugin initialized");
+      this.client = new Arifpay(ARIFPAY_API_KEY, ARIFPAY_SESSION_EXPIRY);
+      console.log("[Arifpay] Express plugin initialized with API key:", ARIFPAY_API_KEY.substring(0, 10) + "...");
     } catch (error) {
       console.error("[Arifpay] Failed to initialize Express plugin:", error);
       this.client = null;
     }
   }
 
-  async createCheckout(
-    options: ArifpayCheckoutOptions
-  ): Promise<ArifpayCheckoutResponse> {
-    const payload = {
-      ...options,
-      currency: options.currency || "ETB",
-    };
-
-    console.log("[Arifpay] Creating checkout:", payload);
-
-    const response = await fetch(`${this.baseUrl}/checkout/create`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${this.apiKey}`,
-      },
-      body: JSON.stringify(payload),
-    });
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("[Arifpay] Checkout creation failed:", error);
-      throw new Error(`Arifpay checkout failed: ${error}`);
+  async createPayment(
+    options: ArifpayPaymentOptions
+  ): Promise<ArifpayPaymentResponse> {
+    if (!this.client) {
+      throw new Error("ArifPay client not initialized");
     }
 
-    const data = await response.json();
-    console.log("[Arifpay] Checkout created:", data);
-
-    return {
-      sessionId: data.sessionId || data.session_id,
-      checkoutUrl: data.checkoutUrl || data.checkout_url,
-      transactionId: data.transactionId || data.transaction_id,
-    };
-  }
-
-  async verifyPayment(sessionId: string): Promise<ArifpayVerifyResponse> {
-    console.log("[Arifpay] Verifying payment:", sessionId);
-
-    const response = await fetch(
-      `${this.baseUrl}/checkout/verify/${sessionId}`,
-      {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
+    const paymentInfo = {
+      cancelUrl: options.cancelUrl,
+      errorUrl: options.errorUrl,
+      notifyUrl: options.notifyUrl,
+      successUrl: options.successUrl,
+      phone: options.phone,
+      amount: options.amount,
+      nonce: `${options.userId}-${uuidv4()}`,
+      paymentMethods: ["TELEBIRR"],
+      items: [
+        {
+          name: `Dating App - ${options.tier.toUpperCase()} Plan`,
+          quantity: 1,
+          price: options.amount,
         },
-      }
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("[Arifpay] Payment verification failed:", error);
-      throw new Error(`Arifpay verification failed: ${error}`);
-    }
-
-    const data = await response.json();
-    console.log("[Arifpay] Payment verified:", data);
-
-    return {
-      transactionId: data.transactionId || data.transaction_id,
-      status: data.status,
-      amount: data.amount,
-      currency: data.currency,
-      paymentMethod: data.paymentMethod || data.payment_method,
-      paidAt: data.paidAt || data.paid_at,
+      ],
     };
-  }
 
-  async cancelCheckout(sessionId: string): Promise<void> {
-    console.log("[Arifpay] Cancelling checkout:", sessionId);
+    console.log("[Arifpay] Creating payment:", paymentInfo);
 
-    const response = await fetch(
-      `${this.baseUrl}/checkout/cancel/${sessionId}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${this.apiKey}`,
-        },
+    try {
+      const response = await this.client.Make_payment(paymentInfo);
+      const result = JSON.parse(response);
+
+      console.log("[Arifpay] Payment response:", result);
+
+      if (!result.error && result.data && result.data.paymentUrl) {
+        return {
+          sessionId: result.data.sessionId,
+          paymentUrl: result.data.paymentUrl,
+          status: result.data.status,
+        };
+      } else {
+        console.error("[Arifpay] Payment creation failed:", result.msg);
+        throw new Error(result.msg || "Payment creation failed");
       }
-    );
-
-    if (!response.ok) {
-      const error = await response.text();
-      console.error("[Arifpay] Checkout cancellation failed:", error);
-      throw new Error(`Arifpay cancellation failed: ${error}`);
+    } catch (error) {
+      console.error("[Arifpay] Payment error:", error);
+      throw error;
     }
-
-    console.log("[Arifpay] Checkout cancelled");
   }
 }
 

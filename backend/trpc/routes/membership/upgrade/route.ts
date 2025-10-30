@@ -4,16 +4,19 @@ import { arifpay } from "../../../../lib/arifpay";
 
 const TIER_PRICES: Record<string, number> = {
   free: 0,
-  silver: 499,
-  gold: 999,
-  vip: 1999,
+  silver: 1599,
+  gold: 3199,
+  vip: 4799,
 };
 
 export default protectedProcedure
   .input(
     z.object({
       tier: z.enum(["free", "silver", "gold", "vip"]),
-      returnUrl: z.string().optional(),
+      phone: z.string(),
+      successUrl: z.string(),
+      cancelUrl: z.string(),
+      errorUrl: z.string(),
     })
   )
   .mutation(async ({ input, ctx }) => {
@@ -35,36 +38,30 @@ export default protectedProcedure
     }
 
     try {
-      const baseUrl = input.returnUrl || "exp://192.168.1.1:8081";
+      const baseUrl = process.env.EXPO_PUBLIC_API_URL || "https://your-app.com";
 
-      const checkout = await arifpay.createCheckout({
+      const payment = await arifpay.createPayment({
         amount,
-        currency: "ETB",
-        beneficiaries: [
-          {
-            accountNumber: process.env.ARIFPAY_ACCOUNT_NUMBER || "1000000000",
-            bank: "CBE",
-            amount,
-          },
-        ],
-        successUrl: `${baseUrl}/payment-verification?status=success&tier=${input.tier}`,
-        cancelUrl: `${baseUrl}/payment-verification?status=cancelled&tier=${input.tier}`,
-        errorUrl: `${baseUrl}/payment-verification?status=error&tier=${input.tier}`,
+        phone: input.phone,
+        tier: input.tier,
+        userId,
+        successUrl: input.successUrl,
+        cancelUrl: input.cancelUrl,
+        errorUrl: input.errorUrl,
         notifyUrl: `${baseUrl}/api/webhooks/arifpay`,
       });
 
-      console.log("[tRPC] Payment checkout created:", checkout);
+      console.log("[tRPC] Payment created:", payment);
 
       return {
         success: true as const,
         requiresPayment: true,
-        checkoutUrl: checkout.checkoutUrl,
-        sessionId: checkout.sessionId,
-        transactionId: checkout.transactionId,
+        paymentUrl: payment.paymentUrl,
+        sessionId: payment.sessionId,
         amount,
       };
     } catch (error) {
       console.error("[tRPC] Payment creation failed:", error);
-      throw new Error("Failed to create payment checkout");
+      throw new Error("Failed to create payment");
     }
   });

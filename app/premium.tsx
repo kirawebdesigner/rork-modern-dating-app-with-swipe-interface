@@ -10,6 +10,7 @@ import {
   Modal,
   Platform,
   Image,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, ArrowRight, Info, BadgePercent, Phone } from 'lucide-react-native';
@@ -19,7 +20,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
 import { MembershipTier, ThemeId } from '@/types';
 import { useApp } from '@/hooks/app-context';
-
+import { trpc } from '@/lib/trpc';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
 
@@ -111,6 +112,9 @@ export default function PremiumScreen() {
   const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [userPhone, setUserPhone] = useState<string>('');
+  const [isProcessing, setIsProcessing] = useState(false);
+
+  const upgradeMutation = trpc.membership.upgrade.useMutation();
 
 
 
@@ -130,11 +134,64 @@ export default function PremiumScreen() {
 
   const handleUpgrade = async () => {
     try {
-      console.log('[Premium] Upgrade pressed', selectedTier);
-      router.push({ pathname: '/payment-verification', params: { tier: selectedTier } } as any);
+      if (!userPhone) {
+        Alert.alert('Phone Required', 'Please set up your phone number first.');
+        return;
+      }
+
+      if (selectedTier === 'free' || selectedTier === tier) {
+        Alert.alert('Already Subscribed', `You are already on the ${selectedTier} plan.`);
+        return;
+      }
+
+      setIsProcessing(true);
+      console.log('[Premium] Creating payment for tier:', selectedTier);
+
+      const result = await upgradeMutation.mutateAsync({
+        tier: selectedTier,
+        phone: userPhone,
+        successUrl: 'https://your-app.com/payment-success',
+        cancelUrl: 'https://your-app.com/payment-cancelled',
+        errorUrl: 'https://your-app.com/payment-error',
+      });
+
+      if (result.requiresPayment && result.paymentUrl) {
+        console.log('[Premium] Opening payment URL:', result.paymentUrl);
+        const supported = await Linking.canOpenURL(result.paymentUrl);
+        if (supported) {
+          await Linking.openURL(result.paymentUrl);
+          Alert.alert(
+            'Payment Opened',
+            'Complete the payment in your browser. We will notify you when the payment is confirmed.',
+            [
+              {
+                text: 'OK',
+                onPress: () => {
+                  if (router.canGoBack()) {
+                    router.back();
+                  } else {
+                    router.replace('/(tabs)/profile' as any);
+                  }
+                },
+              },
+            ]
+          );
+        } else {
+          Alert.alert('Error', 'Cannot open payment link.');
+        }
+      } else {
+        Alert.alert('Success', 'Tier upgraded successfully!');
+        if (router.canGoBack()) {
+          router.back();
+        } else {
+          router.replace('/(tabs)/profile' as any);
+        }
+      }
     } catch (e) {
-      console.error('[Premium] handleUpgrade nav error', (e as any)?.message || e);
-      Alert.alert('Navigation failed', 'Please try again.');
+      console.error('[Premium] handleUpgrade error:', e);
+      Alert.alert('Payment Failed', 'Failed to create payment. Please try again.');
+    } finally {
+      setIsProcessing(false);
     }
   };
 
@@ -182,7 +239,7 @@ export default function PremiumScreen() {
           <View style={styles.badgesRow}>
             <View style={styles.bonusBadge}>
               <Info size={14} color={Colors.text.white} />
-              <Text style={styles.bonusText}>Manual Telebirr supported</Text>
+              <Text style={styles.bonusText}>ArifPay • Telebirr</Text>
             </View>
             <View style={styles.offBadge}>
               <BadgePercent size={14} color={Colors.text.white} />
@@ -208,7 +265,7 @@ export default function PremiumScreen() {
           <Text style={styles.priceHighlight}>{selectedPriceLabel}</Text>
           <View style={styles.telebirrRow}>
             <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/bdshjzcr8c9zb8mhnshfy' }} style={styles.telebirrLogo} resizeMode="contain" />
-            <Text style={styles.telebirrText}>Pay via Telebirr 0944120739 (Tesnim meftuh)</Text>
+            <Text style={styles.telebirrText}>Secure payment via Telebirr</Text>
           </View>
         </LinearGradient>
 
@@ -292,13 +349,14 @@ export default function PremiumScreen() {
 
         <View style={styles.footer}>
           <GradientButton
-            title={`Upgrade to ${tierData[selectedTier].name}`}
+            title={isProcessing ? 'Processing...' : `Upgrade to ${tierData[selectedTier].name}`}
             onPress={handleUpgrade}
-            style={styles.button}
+            style={[styles.button, isProcessing && styles.disabledButton]}
             testID="upgrade-btn"
+            disabled={isProcessing}
           />
           <Text style={styles.disclaimer}>
-            You will be redirected to manual payment verification.
+            You will be redirected to ArifPay to complete your payment securely.
           </Text>
         </View>
 
