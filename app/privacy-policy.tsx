@@ -113,12 +113,20 @@ export default function PrivacyPolicyScreen() {
           We may update this Privacy Policy from time to time. We will notify you of significant changes through the app or email. Your continued use after changes constitutes acceptance.
         </Text>
 
-        <Text style={styles.sectionTitle}>12. {t('Contact Us')}</Text>
+        <Text style={styles.sectionTitle}>12. {t('Third-Party Services')}</Text>
+        <Text style={styles.paragraph}>
+          We use ArifPay for payment processing. When you make a purchase, your payment information is processed by ArifPay according to their privacy policy. We do not store your payment card information on our servers.
+        </Text>
+
+        <Text style={styles.sectionTitle}>13. {t('Contact Us')}</Text>
         <Text style={styles.paragraph}>
           If you have questions about this Privacy Policy or how we handle your data, please contact us:
           {'\n'}{'\n'}
           Email: privacy@datingapp.com
+          {'\n'}Phone: +251 944 120 739
           {'\n'}Support: support@datingapp.com
+          {'\n'}{'\n'}
+          We aim to respond to all inquiries within 48 hours.
         </Text>
 
         <View style={styles.bottomSpacing} />

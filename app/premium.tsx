@@ -135,12 +135,17 @@ export default function PremiumScreen() {
   const handleUpgrade = async () => {
     try {
       if (!userPhone) {
-        Alert.alert('Phone Required', 'Please set up your phone number first.');
+        Alert.alert('Phone Required', 'Please log in first to upgrade your membership.');
         return;
       }
 
-      if (selectedTier === 'free' || selectedTier === tier) {
-        Alert.alert('Already Subscribed', `You are already on the ${selectedTier} plan.`);
+      if (selectedTier === 'free') {
+        Alert.alert('Free Tier', 'You are currently on the free plan. Select a paid tier to upgrade.');
+        return;
+      }
+
+      if (selectedTier === tier) {
+        Alert.alert('Current Plan', `You are already subscribed to the ${tierData[selectedTier].name} plan.`);
         return;
       }
 
@@ -161,11 +166,11 @@ export default function PremiumScreen() {
         if (supported) {
           await Linking.openURL(result.paymentUrl);
           Alert.alert(
-            'Payment Opened',
-            'Complete the payment in your browser. We will notify you when the payment is confirmed.',
+            '💳 Payment in Progress',
+            'You will be redirected to Telebirr to complete your payment. Once completed, your membership will be activated automatically.',
             [
               {
-                text: 'OK',
+                text: 'Got it',
                 onPress: () => {
                   if (router.canGoBack()) {
                     router.back();
@@ -177,10 +182,10 @@ export default function PremiumScreen() {
             ]
           );
         } else {
-          Alert.alert('Error', 'Cannot open payment link.');
+          Alert.alert('Error', 'Cannot open payment link. Please try again later.');
         }
       } else {
-        Alert.alert('Success', 'Tier upgraded successfully!');
+        Alert.alert('✅ Success', 'Your membership has been upgraded successfully!');
         if (router.canGoBack()) {
           router.back();
         } else {
@@ -189,7 +194,8 @@ export default function PremiumScreen() {
       }
     } catch (e) {
       console.error('[Premium] handleUpgrade error:', e);
-      Alert.alert('Payment Failed', 'Failed to create payment. Please try again.');
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
+      Alert.alert('❌ Payment Failed', `Failed to create payment: ${errorMessage}. Please try again.`);
     } finally {
       setIsProcessing(false);
     }
@@ -305,7 +311,7 @@ export default function PremiumScreen() {
                 )}
 
                 <View style={styles.tierHeader}>
-                  <Text style={[styles.tierName, { color: tierInfo.color }]}>\
+                  <Text style={[styles.tierName, { color: tierInfo.color }]}>
                     {tierInfo.name}
                   </Text>
                   <View style={styles.tierPricing}>
@@ -356,7 +362,7 @@ export default function PremiumScreen() {
             disabled={isProcessing}
           />
           <Text style={styles.disclaimer}>
-            You will be redirected to ArifPay to complete your payment securely.
+            🔒 Secure payment powered by ArifPay. You will be redirected to Telebirr to complete your transaction.
           </Text>
         </View>
 
@@ -370,7 +376,7 @@ export default function PremiumScreen() {
               <BadgePercent size={18} color={Colors.primary} />
               <Text style={styles.modalTitle}>Yearly Savings</Text>
             </View>
-            <Text style={styles.modalBody}>Save 50% on yearly plans and get a 1st Month Bonus automatically.</Text>
+            <Text style={styles.modalBody}>Save 50% when you choose yearly billing. Lock in the best price and enjoy uninterrupted premium features all year long!</Text>
             <GradientButton title="Got it" onPress={() => setShowPromo(false)} />
           </View>
         </View>

@@ -83,9 +83,19 @@ export default function TermsScreen() {
           We reserve the right to modify these terms at any time. We will notify users of significant changes. Continued use of the service after changes constitutes acceptance.
         </Text>
 
-        <Text style={styles.sectionTitle}>12. {t('Contact Us')}</Text>
+        <Text style={styles.sectionTitle}>12. {t('Refund Policy')}</Text>
         <Text style={styles.paragraph}>
-          If you have questions about these terms, please contact us at support@datingapp.com
+          Refunds for premium subscriptions are handled on a case-by-case basis within 7 days of purchase. After 7 days, no refunds will be issued. To request a refund, contact our support team with your purchase details.
+        </Text>
+
+        <Text style={styles.sectionTitle}>13. {t('Contact Us')}</Text>
+        <Text style={styles.paragraph}>
+          If you have questions about these terms, please contact us:
+          {'\n'}{'\n'}
+          Email: support@datingapp.com
+          {'\n'}Phone: +251 944 120 739
+          {'\n'}{'\n'}
+          We are here to help and will respond within 48 hours.
         </Text>
 
         <View style={styles.bottomSpacing} />
