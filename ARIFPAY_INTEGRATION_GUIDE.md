@@ -1,332 +1,177 @@
 # Arifpay Payment Integration Guide
 
 ## Overview
-This app now supports **Arifpay** payment gateway for automated payment processing, in addition to manual Telebirr payments.
+Your dating app now has **Arifpay payment gateway** integrated for membership upgrades and credit purchases using the Hono backend.
 
-## Features
-- ✅ Automated payment flow via Arifpay
-- ✅ Real-time payment verification
-- ✅ Support for membership upgrades (Silver, Gold, VIP)
-- ✅ Support for credit purchases
-- ✅ Fallback to manual payment (Telebirr)
-- ✅ Web and mobile compatible
+## What's Been Integrated
 
----
+### 1. Backend Payment Client (`backend/lib/arifpay.ts`)
+- `createCheckout()` - Creates payment checkout session
+- `verifyPayment()` - Verifies payment status
+- `cancelCheckout()` - Cancels payment session
+
+### 2. Updated tRPC Routes
+
+#### Membership Upgrade (`backend/trpc/routes/membership/upgrade/route.ts`)
+```typescript
+const result = await trpc.membership.upgrade.useMutation();
+// Returns: { checkoutUrl, sessionId, transactionId, amount }
+```
+
+**Pricing:**
+- Free: 0 ETB
+- Silver: 499 ETB
+- Gold: 999 ETB  
+- VIP: 1999 ETB
+
+#### Credits Purchase (`backend/trpc/routes/credits/buy/route.ts`)
+```typescript
+const result = await trpc.credits.buy.useMutation();
+```
+
+**Pricing:**
+- Super Likes: 50 ETB each
+- Boosts: 100 ETB each
+- Compliments: 30 ETB each
+- Messages: 20 ETB each
+- Unlocks: 75 ETB each
+
+#### Payment Verification (`backend/trpc/routes/payment/verify/route.ts`)
+```typescript
+const result = await trpc.payment.verify.useMutation({ sessionId });
+// Returns: { status: "PAID" | "PENDING" | "FAILED" | "CANCELLED" }
+```
+
+### 3. Webhook Handler (`backend/hono-webhooks.ts`)
+Receives payment notifications from Arifpay at `/api/webhooks/arifpay`
 
 ## Setup Instructions
 
-### 1. Install Dependencies
-The following packages are already installed:
-```bash
-bun add arifpay-express-plugin dotenv uuid
-```
+### 1. Get Arifpay Credentials
+1. Sign up at [Arifpay Dashboard](https://gateway.arifpay.net)
+2. Get your API Key
+3. Get your Account Number for payments
 
 ### 2. Configure Environment Variables
-Create a `.env` file in your project root with the following:
+Create `.env` file in your project root:
 
-```env
-# Arifpay Configuration
-ARIFPAY_API_KEY=your_api_key_here
-ARIFPAY_MERCHANT_ID=your_merchant_id_here
-ARIFPAY_PACKAGE_NAME=app.rork.modern-dating-app-swipe
-ARIFPAY_SANDBOX=true  # Set to false for production
+```bash
+ARIFPAY_API_KEY=your_arifpay_api_key_here
+ARIFPAY_ACCOUNT_NUMBER=your_account_number_here
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
 ```
 
-**How to get your Arifpay credentials:**
-1. Sign up at [https://arifpay.net](https://arifpay.net)
-2. Complete merchant verification
-3. Navigate to **Settings** → **API Keys**
-4. Copy your **API Key** and **Merchant ID**
-5. Use **Sandbox Mode** for testing
+### 3. Update Frontend to Use Arifpay
 
-### 3. Backend Structure
-The backend payment routes are located in:
-```
-backend/
-├── lib/
-│   ├── arifpay-config.ts      # Configuration & validation
-│   └── arifpay-client.ts      # Payment API client
-└── trpc/
-    └── routes/
-        └── payment/
-            ├── create-checkout/route.ts       # Create payment session
-            ├── verify/route.ts                # Verify payment status
-            └── credits-checkout/route.ts      # Credits purchase
+#### In `app/premium.tsx`:
+```typescript
+const upgradeMutation = trpc.membership.upgrade.useMutation();
+
+const handleUpgrade = async () => {
+  const result = await upgradeMutation.mutateAsync({
+    tier: selectedTier,
+    returnUrl: Linking.createURL('/'),
+  });
+
+  if (result.requiresPayment) {
+    // Open Arifpay checkout URL
+    await WebBrowser.openBrowserAsync(result.checkoutUrl);
+  }
+};
 ```
 
-### 4. Frontend Screens
-- **`/premium`** - Plan selection with payment method choice
-- **`/arifpay-checkout`** - Automated Arifpay payment flow
-- **`/payment-verification`** - Manual Telebirr payment
+#### In `app/payment-verification.tsx`:
+```typescript
+const verifyMutation = trpc.payment.verify.useMutation();
 
----
+useEffect(() => {
+  const sessionId = searchParams.get('sessionId');
+  if (sessionId) {
+    verifyMutation.mutate({ sessionId });
+  }
+}, []);
+```
 
 ## Payment Flow
 
-### Membership Upgrade Flow
-1. User navigates to `/premium`
-2. User selects a plan (Silver, Gold, VIP)
-3. User clicks "Upgrade" button
-4. Alert shows payment method options:
-   - **Arifpay (Automatic)** → Opens `/arifpay-checkout`
-   - **Manual Payment** → Opens `/payment-verification`
-5. For Arifpay:
-   - Creates checkout session via `trpc.payment.createCheckout`
-   - Opens payment page in browser/webview
-   - User completes payment on Arifpay
-   - Returns to app and verifies via `trpc.payment.verify`
-   - Success → Membership activated
-   - Failure → Retry or switch to manual payment
-
-### Credits Purchase Flow
-Similar to membership upgrade, but uses `trpc.payment.creditsCheckout` endpoint.
-
----
-
-## API Reference
-
-### tRPC Routes
-
-#### `payment.createCheckout`
-Creates an Arifpay checkout session for membership upgrades.
-
-**Input:**
-```typescript
-{
-  tier: 'silver' | 'gold' | 'vip',
-  successUrl?: string,  // Default: myapp://payment-success
-  cancelUrl?: string,   // Default: myapp://payment-cancelled
-}
+### 1. User Initiates Payment
+```
+User clicks "Upgrade" → tRPC creates checkout → Returns checkoutUrl
 ```
 
-**Output:**
-```typescript
-{
-  success: true,
-  sessionId: string,
-  checkoutUrl: string,
-  orderId: string,
-  amount: number,      // Amount in ETB
-  currency: 'ETB',
-}
+### 2. User Completes Payment
+```
+Open checkoutUrl → User pays via Telebirr/etc → Arifpay processes
 ```
 
-#### `payment.verify`
-Verifies payment status for a given session.
-
-**Input:**
-```typescript
-{
-  sessionId: string,
-}
+### 3. Callback Handling
+```
+Success: /payment-verification?status=success&sessionId=xxx
+Cancel: /payment-verification?status=cancelled
+Error: /payment-verification?status=error
 ```
 
-**Output:**
-```typescript
-{
-  success: boolean,
-  status: 'completed' | 'pending' | 'failed' | 'cancelled',
-  sessionId: string,
-  orderId: string,
-  amount?: number,
-  currency?: string,
-  transactionId?: string,
-  paidAt?: string,
-}
+### 4. Verification
+```
+App calls payment.verify → Backend checks with Arifpay → Update user tier
 ```
 
-#### `payment.creditsCheckout`
-Creates an Arifpay checkout session for credit purchases.
+## Arifpay API Endpoints Used
 
-**Input:**
 ```typescript
-{
-  kind: 'superLikes' | 'boosts' | 'compliments' | 'messages' | 'unlocks',
-  amount: number,      // Package size (e.g., 5, 10, 25)
-  successUrl?: string,
-  cancelUrl?: string,
-}
+// Create Checkout
+POST https://gateway.arifpay.net/api/checkout/create
+Headers: { Authorization: "Bearer {API_KEY}" }
+Body: { amount, currency, beneficiaries, successUrl, cancelUrl, errorUrl, notifyUrl }
+
+// Verify Payment  
+GET https://gateway.arifpay.net/api/checkout/verify/{sessionId}
+Headers: { Authorization: "Bearer {API_KEY}" }
+
+// Cancel Checkout
+POST https://gateway.arifpay.net/api/checkout/cancel/{sessionId}
+Headers: { Authorization: "Bearer {API_KEY}" }
 ```
-
-**Output:** Same as `payment.createCheckout`
-
----
-
-## Pricing
-
-### Membership Plans (Monthly)
-| Plan   | USD    | ETB (×160) |
-|--------|--------|------------|
-| Silver | $9.99  | 1,598 ETB  |
-| Gold   | $19.99 | 3,198 ETB  |
-| VIP    | $29.99 | 4,798 ETB  |
-
-### Credit Packages
-| Type        | Amount | USD    | ETB (×160) |
-|-------------|--------|--------|------------|
-| Super Likes | 5      | $4.99  | 798 ETB    |
-| Super Likes | 10     | $8.99  | 1,438 ETB  |
-| Super Likes | 25     | $19.99 | 3,198 ETB  |
-| Boosts      | 1      | $4.99  | 798 ETB    |
-| Boosts      | 5      | $19.99 | 3,198 ETB  |
-| Boosts      | 10     | $34.99 | 5,598 ETB  |
-
----
 
 ## Testing
 
-### Sandbox Mode
-When `ARIFPAY_SANDBOX=true`, all payments are test transactions:
-- Use Arifpay test cards
-- No real money is charged
-- Test payment verification flow
+### Test Payment Flow:
+1. Start your app: `npm start`
+2. Navigate to Premium screen
+3. Select a tier (Silver/Gold/VIP)
+4. Click "Upgrade"
+5. Complete payment in Arifpay checkout
+6. Verify callback and tier update
 
-### Test Scenarios
-1. **Successful Payment**
-   - Complete payment on Arifpay page
-   - Verify status shows "completed"
-   - Membership/credits activated
-
-2. **Failed Payment**
-   - Cancel payment on Arifpay page
-   - Verify status shows "failed" or "cancelled"
-   - User can retry or switch to manual payment
-
-3. **Verification Timeout**
-   - Close payment page without completing
-   - Manual verification button available
-   - User can reopen payment page
-
----
-
-## Error Handling
-
-### Common Errors
-
-**"Payment gateway not configured"**
-- Cause: Missing `ARIFPAY_API_KEY` or `ARIFPAY_MERCHANT_ID`
-- Solution: Add credentials to `.env` file
-
-**"Failed to create checkout session"**
-- Cause: Invalid API credentials or network issue
-- Solution: Verify credentials and check logs
-
-**"Payment was not completed"**
-- Cause: User cancelled or payment failed
-- Solution: Offer retry or manual payment option
-
-### Fallback Strategy
-If Arifpay is unavailable:
-1. App shows both payment options
-2. User can choose "Manual Payment"
-3. Redirects to Telegram-based verification
-4. Admin approves manually (see `ADMIN_PAYMENT_GUIDE.md`)
-
----
-
-## Security Best Practices
-
-1. **Never expose API keys in client code**
-   - ✅ Kept in backend `.env` file
-   - ✅ Only accessible via tRPC routes
-
-2. **Validate payment server-side**
-   - ✅ All verification done in backend
-   - ✅ Client cannot spoof payment status
-
-3. **Use HTTPS in production**
-   - Set `ARIFPAY_SANDBOX=false`
-   - Update base URL in `arifpay-client.ts` if needed
-
-4. **Store transaction records**
-   - Consider adding a `payments` table in Supabase
-   - Log all transactions for audit trail
-
----
-
-## Troubleshooting
-
-### Logs
-Check console logs for debugging:
-```
-[Arifpay] Configuration loaded
-[Arifpay] Creating checkout for user...
-[Arifpay] Checkout session created: xxx
-[Arifpay] Verifying payment for user...
-[Arifpay] Verification result: completed
+### Test Webhook (Local):
+Use ngrok or similar to expose your local backend:
+```bash
+ngrok http 8081
+# Update notifyUrl in checkout to: https://xxx.ngrok.io/api/webhooks/arifpay
 ```
 
-### Common Issues
+## Important Notes
 
-**Payment page doesn't open**
-- Check `expo-web-browser` is installed
-- Verify URL is valid
-- Check browser permissions on mobile
-
-**Verification stuck on "pending"**
-- Payment may still be processing
-- User should wait or contact support
-- Admin can verify manually in Arifpay dashboard
-
-**Wrong amount charged**
-- Verify `ETB_RATE` is correct (currently 160)
-- Check Arifpay currency settings
-- Update pricing in route files if needed
-
----
-
-## Production Checklist
-
-Before going live:
-- [ ] Set `ARIFPAY_SANDBOX=false`
-- [ ] Add real Arifpay credentials
-- [ ] Test with real payment cards
-- [ ] Set up webhook for payment notifications (optional)
-- [ ] Add payment history in user profile
-- [ ] Enable transaction logging to database
-- [ ] Test on both iOS and Android devices
-- [ ] Verify deep linking works (success/cancel URLs)
-- [ ] Update app privacy policy with payment terms
-
----
-
-## Support
-
-For Arifpay-related issues:
-- **Arifpay Documentation**: [https://developer.arifpay.net](https://developer.arifpay.net)
-- **Arifpay Support**: support@arifpay.net
-- **Integration Help**: Check logs in backend console
-
-For app-specific issues:
-- Check `ADMIN_PAYMENT_GUIDE.md` for manual payment flow
-- Review database schema in `database-schema.sql`
-- Contact technical support
-
----
+⚠️ **Production Checklist:**
+- [ ] Replace `ARIFPAY_ACCOUNT_NUMBER` with your real account
+- [ ] Use production API keys (not sandbox)
+- [ ] Implement proper error handling
+- [ ] Add database logging for transactions
+- [ ] Implement idempotency for webhook processing
+- [ ] Add retry logic for failed verifications
+- [ ] Store transaction history in Supabase
 
 ## Next Steps
 
-### Recommended Enhancements
-1. **Add payment history screen**
-   - Show past transactions
-   - Allow users to download receipts
+1. **Update Frontend**: Modify `premium.tsx` to call tRPC mutations and open WebBrowser
+2. **Database Schema**: Add `transactions` table to store payment records
+3. **Admin Panel**: Create admin interface to view/manage payments
+4. **Email Notifications**: Send receipts after successful payments
+5. **Refund System**: Implement refund handling
 
-2. **Implement webhooks**
-   - Real-time payment notifications
-   - Automatic membership activation
+## Support
 
-3. **Add subscription management**
-   - Auto-renewal for monthly plans
-   - Cancellation flow
-   - Downgrade options
-
-4. **Analytics integration**
-   - Track conversion rates
-   - Monitor failed payments
-   - A/B test payment flows
-
----
-
-**Last Updated**: 2025-10-15
-**Arifpay Express Plugin Version**: v1.0.0.0
-**App Version**: 1.0.0
+- Arifpay Docs: https://developer.arifpay.net
+- Your Backend API: `http://localhost:8081/api`
+- tRPC Endpoint: `http://localhost:8081/api/trpc`
