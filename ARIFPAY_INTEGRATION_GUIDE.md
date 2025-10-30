@@ -51,16 +51,21 @@ Receives payment notifications from Arifpay at `/api/webhooks/arifpay`
 1. Sign up at [Arifpay Dashboard](https://gateway.arifpay.net)
 2. Get your API Key
 3. Get your Account Number for payments
+4. Set your Session Expiry Date
 
 ### 2. Configure Environment Variables
-Create `.env` file in your project root:
+Your `.env` file has been configured with:
 
 ```bash
-ARIFPAY_API_KEY=your_arifpay_api_key_here
-ARIFPAY_ACCOUNT_NUMBER=your_account_number_here
-EXPO_PUBLIC_SUPABASE_URL=your_supabase_url
-EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_key
+ARIFPAY_API_KEY=hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY
+ARIFPAY_SESSION_EXPIRY=2026-10-30T15:00:58
+ARIFPAY_ACCOUNT_NUMBER=0944120739
+EXPO_PUBLIC_SUPABASE_URL=your_supabase_url_here
+EXPO_PUBLIC_SUPABASE_ANON_KEY=your_supabase_anon_key_here
 ```
+
+### 3. Install Arifpay Express Plugin
+The `arifpay-express-plugin` has been installed via npm.
 
 ### 3. Update Frontend to Use Arifpay
 

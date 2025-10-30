@@ -1,6 +1,7 @@
-import { createClient } from "@supabase/supabase-js";
+const Arifpay = require("arifpay-express-plugin");
 
 const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "";
+const ARIFPAY_SESSION_EXPIRY = process.env.ARIFPAY_SESSION_EXPIRY || "2026-10-30T15:00:58";
 const ARIFPAY_BASE_URL = "https://gateway.arifpay.net/api";
 
 export interface ArifpayCheckoutOptions {
@@ -36,6 +37,7 @@ export interface ArifpayVerifyResponse {
 export class ArifpayClient {
   private apiKey: string;
   private baseUrl: string;
+  private client: any;
 
   constructor(apiKey?: string) {
     this.apiKey = apiKey || ARIFPAY_API_KEY;
@@ -43,6 +45,14 @@ export class ArifpayClient {
 
     if (!this.apiKey) {
       console.warn("[Arifpay] API key not configured");
+    }
+
+    try {
+      this.client = new Arifpay(this.apiKey, ARIFPAY_SESSION_EXPIRY);
+      console.log("[Arifpay] Express plugin initialized");
+    } catch (error) {
+      console.error("[Arifpay] Failed to initialize Express plugin:", error);
+      this.client = null;
     }
   }
 
