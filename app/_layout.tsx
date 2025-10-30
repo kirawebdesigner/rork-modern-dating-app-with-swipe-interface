@@ -12,6 +12,7 @@ import { Platform, View, Text, ActivityIndicator, StyleSheet } from "react-nativ
 import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
+import { trpc, trpcClient } from "@/lib/trpc";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -126,21 +127,23 @@ export default function RootLayout() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <GestureHandlerRootView style={{ flex: 1 }}>
-          <AuthProvider>
-            <AppProvider>
-              <MembershipProvider>
-                <I18nProvider>
-                  <ThemeProvider>
-                    <RootLayoutNav />
-                  </ThemeProvider>
-                </I18nProvider>
-              </MembershipProvider>
-            </AppProvider>
-          </AuthProvider>
-        </GestureHandlerRootView>
-      </QueryClientProvider>
+      <trpc.Provider client={trpcClient} queryClient={queryClient}>
+        <QueryClientProvider client={queryClient}>
+          <GestureHandlerRootView style={{ flex: 1 }}>
+            <AuthProvider>
+              <AppProvider>
+                <MembershipProvider>
+                  <I18nProvider>
+                    <ThemeProvider>
+                      <RootLayoutNav />
+                    </ThemeProvider>
+                  </I18nProvider>
+                </MembershipProvider>
+              </AppProvider>
+            </AuthProvider>
+          </GestureHandlerRootView>
+        </QueryClientProvider>
+      </trpc.Provider>
     </ErrorBoundary>
   );
 }
