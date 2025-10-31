@@ -71,12 +71,21 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   useEffect(() => {
     const checkAndReload = async () => {
       const storedPhone = await AsyncStorage.getItem('user_phone');
-      if (storedPhone && (!currentProfile || currentProfile.id === '')) {
-        console.log('[App] User logged in but no profile loaded, reloading...');
+      const storedProfile = await AsyncStorage.getItem('user_profile');
+      
+      if (storedPhone && !storedProfile) {
+        console.log('[App] User logged in but no profile in cache, reloading...');
+        await loadAppData();
+      } else if (storedPhone && (!currentProfile || currentProfile.id === '')) {
+        console.log('[App] User logged in but profile state not set, reloading...');
         await loadAppData();
       }
     };
+    
+    const interval = setInterval(checkAndReload, 2000);
     checkAndReload();
+    
+    return () => clearInterval(interval);
   }, [currentProfile]);
 
   useEffect(() => {

@@ -186,6 +186,14 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     if (!profile) throw new Error('Phone number not found. Please sign up first.');
 
     console.log('[Auth] Profile fetched successfully:', profile.id);
+    console.log('[Auth] Profile data:', JSON.stringify({
+      id: profile.id,
+      name: profile.name,
+      completed: profile.completed,
+      hasPhotos: profile.photos?.length > 0,
+      hasBio: !!profile.bio
+    }));
+    
     await AsyncStorage.multiSet([
       ['user_phone', cleanPhone],
       ['user_id', profile.id],

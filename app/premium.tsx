@@ -361,9 +361,9 @@ export default function PremiumScreen() {
             testID="upgrade-btn"
             disabled={isProcessing}
           />
-          <Text style={styles.disclaimer}>
-            🔒 Secure payment powered by ArifPay. You will be redirected to Telebirr to complete your transaction.
-          </Text>
+          <View style={styles.disclaimerContainer}>
+            <Text style={styles.disclaimer}>🔒 Secure payment powered by ArifPay. You will be redirected to Telebirr to complete your transaction.</Text>
+          </View>
         </View>
 
         {/* Store section temporarily removed as requested */}
@@ -560,6 +560,9 @@ const styles = StyleSheet.create({
   },
   disabledButton: {
     opacity: 0.6,
+  },
+  disclaimerContainer: {
+    width: '100%',
   },
   disclaimer: {
     fontSize: 12,
