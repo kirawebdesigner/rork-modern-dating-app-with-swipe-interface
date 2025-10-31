@@ -25,6 +25,19 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: Platform.OS === 'web',
   },
+  global: {
+    headers: {
+      'Content-Type': 'application/json',
+    },
+  },
+  db: {
+    schema: 'public',
+  },
+  realtime: {
+    params: {
+      eventsPerSecond: 10,
+    },
+  },
 });
 
 if (!isSupabaseConfigured) {
@@ -34,14 +47,58 @@ if (!isSupabaseConfigured) {
 console.log('[Supabase] Client initialized for', Platform.OS, 'with URL:', supabaseUrl);
 console.log('[Supabase] Config status:', isSupabaseConfigured ? 'Configured' : 'Using defaults');
 
-// Test connection
-supabase.from('profiles').select('count').limit(1).then(({ error }) => {
-  if (error) {
-    console.error('[Supabase] Connection test failed:', JSON.stringify(error, null, 2));
-    console.error('[Supabase] Error message:', error.message);
-    console.error('[Supabase] Error details:', error.details);
-    console.error('[Supabase] Error hint:', error.hint);
-  } else {
-    console.log('[Supabase] Connection test successful');
+let connectionTested = false;
+export const testConnection = async () => {
+  if (connectionTested) return;
+  connectionTested = true;
+  
+  try {
+    const { error } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .limit(1);
+    
+    if (error) {
+      console.error('[Supabase] ❌ Connection test failed!');
+      console.error('[Supabase] Error message:', error.message);
+      
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('fetch')) {
+        console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('🚨 SUPABASE CONNECTION ERROR');
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+        console.error('Your Supabase project is likely PAUSED or UNAVAILABLE.');
+        console.error('');
+        console.error('📋 TO FIX:');
+        console.error('1. Go to: https://supabase.com/dashboard');
+        console.error('2. Find your project: nizdrhdfhddtrukeemhp');
+        console.error('3. Click "Resume Project" if paused');
+        console.error('4. Wait 1-2 minutes for it to wake up');
+        console.error('5. Restart your development server');
+        console.error('');
+        console.error('📖 See SUPABASE_CONNECTION_FIX.md for detailed instructions');
+        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      } else {
+        console.error('[Supabase] Error details:', error.details);
+        console.error('[Supabase] Error hint:', error.hint);
+      }
+    } else {
+      console.log('[Supabase] ✅ Connection test successful, profiles table exists');
+    }
+  } catch (err) {
+    console.error('[Supabase] ❌ Connection test exception:', err);
+    if (err instanceof Error && (err.message?.includes('Failed to fetch') || err.message?.includes('fetch'))) {
+      console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('🚨 SUPABASE CONNECTION ERROR');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('Cannot connect to Supabase. Possible causes:');
+      console.error('1. Supabase project is PAUSED (most likely)');
+      console.error('2. Network/firewall blocking connection');
+      console.error('3. Supabase project does not exist');
+      console.error('');
+      console.error('📖 See SUPABASE_CONNECTION_FIX.md for solution');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+    }
   }
-});
+};
+
+testConnection();

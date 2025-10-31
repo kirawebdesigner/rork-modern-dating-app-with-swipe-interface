@@ -3,6 +3,7 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { AuthUser, User, ThemeId } from '@/types';
 import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { Alert } from 'react-native';
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -124,10 +125,11 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
     }
   };
 
-  const fetchProfileByPhone = async (phone: string): Promise<User | null> => {
+  const fetchProfileByPhone = async (phone: string, retryCount = 0): Promise<User | null> => {
+    const maxRetries = 2;
     try {
       const masked = phone.length > 4 ? phone.slice(0, -4).replace(/\d/g, '*') + phone.slice(-4) : '***';
-      console.log('[Auth] fetchProfileByPhone', masked);
+      console.log('[Auth] fetchProfileByPhone', masked, retryCount > 0 ? `(retry ${retryCount})` : '');
       
       const { data, error } = await supabase
         .from('profiles')
@@ -136,6 +138,11 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
         .maybeSingle();
       
       if (error) {
+        if (error.message?.includes('Failed to fetch') && retryCount < maxRetries) {
+          console.log('[Auth] Network error, retrying in 1s...');
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          return fetchProfileByPhone(phone, retryCount + 1);
+        }
         console.error('[Auth] fetchProfileByPhone error:', JSON.stringify(error, null, 2));
         console.error('[Auth] Error message:', error.message);
         console.error('[Auth] Error details:', error.details);
@@ -151,6 +158,11 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => 
       console.log('[Auth] Profile found successfully');
       return mapProfile(data);
     } catch (err) {
+      if (err instanceof Error && err.message?.includes('Failed to fetch') && retryCount < maxRetries) {
+        console.log('[Auth] Network error (catch), retrying in 1s...');
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        return fetchProfileByPhone(phone, retryCount + 1);
+      }
       console.error('[Auth] fetchProfileByPhone unexpected error:', err);
       console.error('[Auth] Error type:', typeof err);
       if (err instanceof Error) {
