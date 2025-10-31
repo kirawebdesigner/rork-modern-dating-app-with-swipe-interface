@@ -1,19 +1,14 @@
 import { z } from "zod";
-import { protectedProcedure } from "../../../create-context";
+import { publicProcedure } from "../../../create-context";
 import { arifpay } from "../../../../lib/arifpay";
 
-export default protectedProcedure
+export default publicProcedure
   .input(
     z.object({
       sessionId: z.string(),
     })
   )
-  .mutation(async ({ input, ctx }) => {
-    const userId = ctx.user?.id;
-    if (!userId) {
-      throw new Error("Unauthorized");
-    }
-
+  .query(async ({ input }) => {
     console.log("[tRPC] Verifying payment:", input.sessionId);
 
     try {

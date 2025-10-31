@@ -58,7 +58,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
   },
   silver: {
     name: 'Silver',
-    priceMonthly: 9.99,
+    priceMonthly: 10,
     color: '#C0C0C0',
     gradient: ['#C0C0C0', '#9CA3AF'],
     features: [
@@ -73,7 +73,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
   },
   gold: {
     name: 'Gold',
-    priceMonthly: 19.99,
+    priceMonthly: 20,
     color: '#FFD700',
     gradient: ['#FFE55C', '#FFD700'],
     popular: true,
@@ -89,7 +89,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
   },
   vip: {
     name: 'VIP',
-    priceMonthly: 29.99,
+    priceMonthly: 30,
     color: '#8A2BE2',
     gradient: ['#9932CC', '#8A2BE2'],
     features: [
@@ -155,9 +155,9 @@ export default function PremiumScreen() {
       const result = await upgradeMutation.mutateAsync({
         tier: selectedTier,
         phone: userPhone,
-        successUrl: 'https://your-app.com/payment-success',
-        cancelUrl: 'https://your-app.com/payment-cancelled',
-        errorUrl: 'https://your-app.com/payment-error',
+        successUrl: 'myapp://payment-success',
+        cancelUrl: 'myapp://payment-cancelled',
+        errorUrl: 'myapp://payment-error',
       });
 
       if (result.requiresPayment && result.paymentUrl) {
@@ -208,9 +208,8 @@ export default function PremiumScreen() {
 
 
   const USD_TO_ETB = 160;
-  const formatUSD = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'USD' }).format(amount);
-  const formatETB = (amount: number) => new Intl.NumberFormat(undefined, { style: 'currency', currency: 'ETB', maximumFractionDigits: 0 }).format(amount);
-  const formatDual = useCallback((usdAmount: number) => `${formatUSD(usdAmount)} • ${formatETB(usdAmount * USD_TO_ETB)}`, []);
+  const formatETB = (amount: number) => `${amount * USD_TO_ETB} ETB`;
+  const formatDual = useCallback((usdAmount: number) => formatETB(usdAmount), []);
 
   const selectedPriceLabel = useMemo(() => {
     const info = tierData[selectedTier];
@@ -233,9 +232,7 @@ export default function PremiumScreen() {
         >
           <Crown size={60} color={Colors.text.white} />
           <Text style={styles.heroTitle}>Choose Your Plan</Text>
-          <Text style={styles.heroSubtitle} testID="current-plan">
-            Current plan: {tierData[tier].name}
-          </Text>
+          <Text style={styles.heroSubtitle} testID="current-plan">Current plan: {tierData[tier].name}</Text>
           {userPhone && (
             <View style={styles.phoneRow}>
               <Phone size={14} color={Colors.text.white} />

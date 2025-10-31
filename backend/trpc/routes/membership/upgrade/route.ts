@@ -4,9 +4,9 @@ import { arifpay } from "../../../../lib/arifpay";
 
 const TIER_PRICES: Record<string, number> = {
   free: 0,
-  silver: 1599,
-  gold: 3199,
-  vip: 4799,
+  silver: 1600,
+  gold: 3200,
+  vip: 4800,
 };
 
 export default publicProcedure
