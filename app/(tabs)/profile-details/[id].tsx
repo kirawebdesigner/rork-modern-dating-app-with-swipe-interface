@@ -9,6 +9,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useI18n } from '@/hooks/i18n-context';
 import { supabase } from '@/lib/supabase';
 import { User } from '@/types';
+import { useAuth } from '@/hooks/auth-context';
 
 export default function ProfileDetails() {
   const [complimentOpen, setComplimentOpen] = useState<boolean>(false);
@@ -18,6 +19,7 @@ export default function ProfileDetails() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { potentialMatches, blockUser } = useApp();
+  const { user: me } = useAuth();
   const { remainingProfileViews, tier, useDaily } = useMembership();
   const { t } = useI18n();
 
@@ -231,7 +233,52 @@ export default function ProfileDetails() {
             <TouchableOpacity style={[styles.fabBtn, styles.super]} onPress={() => Alert.alert(t('Super Like'), `You super liked ${user.name}`)}>
               <Zap size={24} color={Colors.text.white} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.fabBtn, styles.message]} onPress={() => router.push('/(tabs)/messages' as any)}>
+            <TouchableOpacity
+              style={[styles.fabBtn, styles.message]}
+              onPress={async () => {
+                try {
+                  if (!me?.id) {
+                    router.push('/(tabs)/messages' as any);
+                    return;
+                  }
+                  const otherId = user.id;
+                  const { data: existingParts } = await supabase
+                    .from('conversation_participants')
+                    .select('conversation_id')
+                    .in('user_id', [me.id, otherId]);
+
+                  let convId: string | null = null;
+                  if (existingParts && existingParts.length > 0) {
+                    const group = existingParts.reduce<Record<string, number>>((acc, r: any) => {
+                      const cid = String(r.conversation_id);
+                      acc[cid] = (acc[cid] ?? 0) + 1;
+                      return acc;
+                    }, {});
+                    const found = Object.entries(group).find(([, count]) => count >= 2);
+                    if (found) convId = String(found[0]);
+                  }
+
+                  if (!convId) {
+                    const { data: convIns, error: convErr } = await supabase
+                      .from('conversations')
+                      .insert({ created_by: me.id })
+                      .select('id')
+                      .single();
+                    if (convErr) throw convErr;
+                    convId = String(convIns.id);
+                    await supabase.from('conversation_participants').insert([
+                      { conversation_id: convId, user_id: me.id },
+                      { conversation_id: convId, user_id: otherId },
+                    ]);
+                  }
+
+                  router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId: convId } } as any);
+                } catch (e) {
+                  console.log('[ProfileDetails] open chat failed', e);
+                  router.push('/(tabs)/messages' as any);
+                }
+              }}
+            >
               <MessageCircle size={24} color={Colors.text.white} />
             </TouchableOpacity>
           </View>
