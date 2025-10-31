@@ -19,7 +19,7 @@ export default publicProcedure
       errorUrl: z.string(),
     })
   )
-  .mutation(async ({ input }) => {
+  .mutation(async ({ input, ctx }) => {
     const pseudoUserId = `phone-${input.phone}`;
 
     console.log("[tRPC] Upgrade tier for", pseudoUserId, "->", input.tier);
@@ -35,7 +35,29 @@ export default publicProcedure
     }
 
     try {
-      const baseUrl = process.env.EXPO_PUBLIC_API_URL || "https://your-app.com";
+      const envBase = process.env.EXPO_PUBLIC_API_URL;
+      const isPlaceholder = (url?: string) => !!url && url.includes("your-app.com");
+
+      let baseUrl: string | undefined = undefined;
+      if (envBase && !isPlaceholder(envBase)) baseUrl = envBase;
+
+      if (!baseUrl) {
+        const origin = ctx.req.headers.get("origin") || ctx.req.headers.get("referer");
+        if (origin) {
+          try {
+            const u = new URL(origin);
+            baseUrl = `${u.protocol}//${u.host}`;
+          } catch {}
+        }
+      }
+
+      if (!baseUrl) {
+        const host = ctx.req.headers.get("x-forwarded-host") || ctx.req.headers.get("host");
+        const proto = ctx.req.headers.get("x-forwarded-proto") || "http";
+        if (host) baseUrl = `${proto}://${host}`;
+      }
+
+      if (!baseUrl) baseUrl = "http://localhost:3000";
 
       const payment = await arifpay.createPayment({
         amount,

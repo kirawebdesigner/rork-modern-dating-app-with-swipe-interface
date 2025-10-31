@@ -7,14 +7,24 @@ import { Platform } from "react-native";
 
 export const trpc = createTRPCReact<AppRouter>();
 
+const isPlaceholder = (url: string | undefined) => {
+  if (!url) return false;
+  try {
+    const u = new URL(url);
+    return u.hostname.includes('your-app.com');
+  } catch {
+    return url.includes('your-app.com');
+  }
+};
+
 const getBaseUrl = () => {
   const env = process.env as Record<string, string | undefined>;
-  if (env.EXPO_PUBLIC_RORK_API_BASE_URL) return env.EXPO_PUBLIC_RORK_API_BASE_URL;
-  if (env.EXPO_PUBLIC_API_URL) return env.EXPO_PUBLIC_API_URL;
+  const envUrl = env.EXPO_PUBLIC_RORK_API_BASE_URL || env.EXPO_PUBLIC_API_URL;
+  if (envUrl && !isPlaceholder(envUrl)) return envUrl;
 
   const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, any>;
   const fromExtra = extra.EXPO_PUBLIC_RORK_API_BASE_URL || extra.RORK_API_BASE_URL || extra.EXPO_PUBLIC_API_URL || extra.API_URL;
-  if (fromExtra) return String(fromExtra);
+  if (fromExtra && !isPlaceholder(String(fromExtra))) return String(fromExtra);
 
   if (Platform.OS === 'web' && typeof location !== 'undefined') {
     return location.origin;
