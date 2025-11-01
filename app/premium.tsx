@@ -167,7 +167,7 @@ export default function PremiumScreen() {
           await Linking.openURL(result.paymentUrl);
           Alert.alert(
             '💳 Payment in Progress',
-            'You will be redirected to Telebirr to complete your payment. Once completed, your membership will be activated automatically.',
+            'Complete your payment on ArifPay. Once confirmed, your membership will be activated automatically.',
             [
               {
                 text: 'Got it',
@@ -242,7 +242,7 @@ export default function PremiumScreen() {
           <View style={styles.badgesRow}>
             <View style={styles.bonusBadge}>
               <Info size={14} color={Colors.text.white} />
-              <Text style={styles.bonusText}>ArifPay • Telebirr</Text>
+              <Text style={styles.bonusText}>Secure Payment</Text>
             </View>
             <View style={styles.offBadge}>
               <BadgePercent size={14} color={Colors.text.white} />
@@ -266,9 +266,10 @@ export default function PremiumScreen() {
             </TouchableOpacity>
           </View>
           <Text style={styles.priceHighlight}>{selectedPriceLabel}</Text>
-          <View style={styles.telebirrRow}>
-            <Image source={{ uri: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/bdshjzcr8c9zb8mhnshfy' }} style={styles.telebirrLogo} resizeMode="contain" />
-            <Text style={styles.telebirrText}>Secure payment via Telebirr</Text>
+          <View style={styles.securePaymentRow}>
+            <View style={styles.securePaymentBadge}>
+              <Text style={styles.securePaymentText}>🔒 Powered by ArifPay</Text>
+            </View>
           </View>
         </LinearGradient>
 
@@ -359,7 +360,7 @@ export default function PremiumScreen() {
             disabled={isProcessing}
           />
           <View style={styles.disclaimerContainer}>
-            <Text style={styles.disclaimer}>🔒 Secure payment powered by ArifPay. You will be redirected to Telebirr to complete your transaction.</Text>
+            <Text style={styles.disclaimer}>🔒 Secure payment powered by ArifPay. Your transaction is encrypted and protected.</Text>
           </View>
         </View>
 
@@ -581,7 +582,7 @@ const styles = StyleSheet.create({
   modalHeader: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   modalTitle: { color: Colors.text.primary, fontWeight: '700', fontSize: 16 },
   modalBody: { color: Colors.text.secondary },
-  telebirrRow: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 10 },
-  telebirrLogo: { width: 28, height: 28, borderRadius: 6, backgroundColor: 'white' },
-  telebirrText: { color: Colors.text.white, fontWeight: '700' },
+  securePaymentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10 },
+  securePaymentBadge: { backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
+  securePaymentText: { color: Colors.text.white, fontWeight: '700', fontSize: 13 },
 });
