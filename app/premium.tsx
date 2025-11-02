@@ -9,6 +9,7 @@ import {
   Alert,
   Modal,
   Linking,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Phone, Shield, CreditCard, Calendar } from 'lucide-react-native';
@@ -19,6 +20,7 @@ import { useMembership } from '@/hooks/membership-context';
 import { MembershipTier } from '@/types';
 import { trpc } from '@/lib/trpc';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as WebBrowser from 'expo-web-browser';
 
 interface TierFeature {
   icon: any;
@@ -159,42 +161,26 @@ export default function PremiumScreen() {
         tier: selectedTier,
         phone: userPhone,
         paymentMethod: paymentMethod,
-        successUrl: 'myapp://payment-success',
-        cancelUrl: 'myapp://payment-cancelled',
-        errorUrl: 'myapp://payment-error',
       });
 
       if (result.requiresPayment && result.paymentUrl) {
         console.log('[Premium] Opening payment URL:', result.paymentUrl);
         const supported = await Linking.canOpenURL(result.paymentUrl);
         if (supported) {
-          await Linking.openURL(result.paymentUrl);
-          Alert.alert(
-            '💳 Payment in Progress',
-            `Complete your payment using ${paymentMethods.find(m => m.id === paymentMethod)?.name || 'your preferred method'}. Your membership will be activated automatically once payment is confirmed.`,
-            [
-              {
-                text: 'Got it',
-                onPress: () => {
-                  if (router.canGoBack()) {
-                    router.back();
-                  } else {
-                    router.replace('/(tabs)/profile' as any);
-                  }
-                },
-              },
-            ]
-          );
+          if (Platform.OS === 'web') {
+            window.open(result.paymentUrl, '_blank', 'noopener');
+          } else {
+            await WebBrowser.openBrowserAsync(result.paymentUrl, {
+              readerMode: false,
+              enableBarCollapsing: true,
+              showTitle: true,
+            });
+          }
         } else {
           Alert.alert('Error', 'Cannot open payment link. Please try again later.');
         }
       } else {
         Alert.alert('✅ Success', 'Your membership has been upgraded successfully!');
-        if (router.canGoBack()) {
-          router.back();
-        } else {
-          router.replace('/(tabs)/profile' as any);
-        }
       }
     } catch (e) {
       console.error('[Premium] handleUpgrade error:', e);

@@ -15,9 +15,9 @@ export default publicProcedure
       tier: z.enum(["free", "silver", "gold", "vip"]),
       phone: z.string(),
       paymentMethod: z.string().optional(),
-      successUrl: z.string(),
-      cancelUrl: z.string(),
-      errorUrl: z.string(),
+      successUrl: z.string().optional(),
+      cancelUrl: z.string().optional(),
+      errorUrl: z.string().optional(),
     })
   )
   .mutation(async ({ input, ctx }) => {
@@ -60,15 +60,19 @@ export default publicProcedure
 
       if (!baseUrl) baseUrl = "http://localhost:3000";
 
+      const successUrl = `${baseUrl}/payments/success`;
+      const cancelUrl = `${baseUrl}/payments/cancel`;
+      const errorUrl = `${baseUrl}/payments/error`;
+
       const payment = await arifpay.createPayment({
         amount,
         phone: input.phone,
         tier: input.tier,
         userId: pseudoUserId,
         paymentMethod: input.paymentMethod || 'TELEBIRR',
-        successUrl: input.successUrl,
-        cancelUrl: input.cancelUrl,
-        errorUrl: input.errorUrl,
+        successUrl,
+        cancelUrl,
+        errorUrl,
         notifyUrl: `${baseUrl}/webhooks/arifpay`,
       });
 
