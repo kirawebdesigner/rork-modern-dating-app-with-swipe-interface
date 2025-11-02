@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 
 const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "";
-const ARIFPAY_BASE_URL = "https://gateway.arifpay.org/api/sandbox";
+const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.org/api/sandbox";
 const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "0944120739";
 
 export interface ArifpayPaymentOptions {
@@ -80,6 +80,7 @@ export class ArifpayClient {
 
     const selectedMethod = paymentMethodsMap[options.paymentMethod] || 'TELEBIRR';
 
+    const totalAmount = options.amount;
     const payload = {
       cancelUrl: options.cancelUrl,
       phone: phone,
@@ -95,14 +96,14 @@ export class ArifpayClient {
         {
           name: `Dating App - ${options.tier.toUpperCase()} Membership`,
           quantity: 1,
-          price: options.amount,
+          price: totalAmount,
         },
       ],
       beneficiaries: [
         {
           accountNumber: ARIFPAY_ACCOUNT_NUMBER,
           bank: "ARIFPAY",
-          amount: options.amount,
+          amount: totalAmount,
         },
       ],
     };

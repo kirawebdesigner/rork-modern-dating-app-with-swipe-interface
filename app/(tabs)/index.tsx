@@ -186,7 +186,7 @@ export default function DiscoverScreen() {
     setHistory(prev => prev.slice(1));
   };
 
-  const isFree = tier === 'free';
+
   const viewsLeftText = useMemo(() => {
     if (features.profileViews === 'unlimited') return '∞';
     if (typeof remainingProfileViews === 'number') return String(remainingProfileViews);
@@ -222,7 +222,7 @@ export default function DiscoverScreen() {
         </View>
       </View>
 
-      {isFree && (
+      {tier === 'free' && (
         <TouchableOpacity 
           style={[styles.limitsBanner, { backgroundColor: colors.gradient.start }]}
           onPress={() => router.push('/premium' as any)}
@@ -318,7 +318,7 @@ export default function DiscoverScreen() {
         </>
       )}
 
-      {isFree && (
+      {tier === 'free' && (
         <View style={[styles.adBanner, { borderColor: colors.border, backgroundColor: '#E9ECF2' }]} testID="ad-banner-bottom">
           <Text style={[styles.adText, { color: colors.text.secondary }]}>Ad Placeholder</Text>
         </View>

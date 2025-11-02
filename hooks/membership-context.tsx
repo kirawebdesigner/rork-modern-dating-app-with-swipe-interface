@@ -352,29 +352,39 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
 
   const useDaily = useCallback(async (type: 'messages' | 'views' | 'rightSwipes' | 'compliments'): Promise<boolean> => {
     const f = TIER_FEATURES[tier];
+    
     if (type === 'messages') {
-      if (remainingDailyMessages <= 0) return f.dailyMessages === 99999;
+      if (tier === 'vip') return true;
+      if (f.dailyMessages === 99999) return true;
+      if (remainingDailyMessages <= 0) return false;
       setRemainingDailyMessages(prev => prev - 1);
       return true;
     }
+    
     if (type === 'views') {
+      if (tier === 'vip') return true;
       if (f.profileViews === 'unlimited') return true;
       if (typeof remainingProfileViews === 'number' && remainingProfileViews <= 0) return false;
       if (typeof remainingProfileViews === 'number') setRemainingProfileViews(remainingProfileViews - 1);
       return true;
     }
+    
     if (type === 'rightSwipes') {
+      if (tier === 'vip' || tier === 'gold') return true;
       if (f.dailyRightSwipes === 'unlimited') return true;
       if (typeof remainingRightSwipes === 'number' && remainingRightSwipes <= 0) return false;
       if (typeof remainingRightSwipes === 'number') setRemainingRightSwipes(remainingRightSwipes - 1);
       return true;
     }
+    
     if (type === 'compliments') {
+      if (tier === 'vip') return true;
       if (f.dailyCompliments === 99999) return true;
       if (typeof remainingCompliments === 'number' && remainingCompliments <= 0) return false;
       if (typeof remainingCompliments === 'number') setRemainingCompliments(remainingCompliments - 1);
       return true;
     }
+    
     return false;
   }, [remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, tier]);
 
