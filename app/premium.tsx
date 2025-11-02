@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,21 +8,17 @@ import {
   SafeAreaView,
   Alert,
   Modal,
-  Platform,
-  Image,
   Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, ArrowRight, Info, BadgePercent, Phone } from 'lucide-react-native';
+import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Phone, Shield, CreditCard, Calendar } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
-import { MembershipTier, ThemeId } from '@/types';
-import { useApp } from '@/hooks/app-context';
+import { MembershipTier } from '@/types';
 import { trpc } from '@/lib/trpc';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { supabase } from '@/lib/supabase';
 
 interface TierFeature {
   icon: any;
@@ -106,15 +102,22 @@ const tierData: Record<MembershipTier, TierInfo> = {
 
 export default function PremiumScreen() {
   const router = useRouter();
-  const { tier, upgradeTier, addCredits, resetDailyLimits, grantMonthlyAllowancesIfNeeded } = useMembership();
-  const { unlockTheme, setTier: setAppTier } = useApp();
+  const { tier } = useMembership();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
-  const [billingPeriod, setBillingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [userPhone, setUserPhone] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [paymentMethod, setPaymentMethod] = useState<string>('TELEBIRR');
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
+
+  const paymentMethods = [
+    { id: 'TELEBIRR', name: 'TeleBirr', icon: '📱' },
+    { id: 'CBE', name: 'CBE Birr', icon: '🏦' },
+    { id: 'AMOLE', name: 'Amole', icon: '💳' },
+    { id: 'MPESSA', name: 'M-PESA', icon: '💰' },
+  ];
 
 
 
@@ -155,6 +158,7 @@ export default function PremiumScreen() {
       const result = await upgradeMutation.mutateAsync({
         tier: selectedTier,
         phone: userPhone,
+        paymentMethod: paymentMethod,
         successUrl: 'myapp://payment-success',
         cancelUrl: 'myapp://payment-cancelled',
         errorUrl: 'myapp://payment-error',
@@ -167,7 +171,7 @@ export default function PremiumScreen() {
           await Linking.openURL(result.paymentUrl);
           Alert.alert(
             '💳 Payment in Progress',
-            'Complete your payment on ArifPay. Once confirmed, your membership will be activated automatically.',
+            `Complete your payment using ${paymentMethods.find(m => m.id === paymentMethod)?.name || 'your preferred method'}. Your membership will be activated automatically once payment is confirmed.`,
             [
               {
                 text: 'Got it',
@@ -201,21 +205,12 @@ export default function PremiumScreen() {
     }
   };
 
-  const onBuyPack = async (type: 'superLikes' | 'boosts' | 'compliments', amount: number) => {
-    await addCredits(type as any, amount);
-    Alert.alert('Purchased', `Added ${amount} ${type}.`);
-  };
+
 
 
   const USD_TO_ETB = 160;
   const formatETB = (amount: number) => `${amount * USD_TO_ETB} ETB`;
   const formatDual = useCallback((usdAmount: number) => formatETB(usdAmount), []);
-
-  const selectedPriceLabel = useMemo(() => {
-    const info = tierData[selectedTier];
-    if (billingPeriod === 'monthly') return `${formatDual(info.priceMonthly)}/month`;
-    return `${formatDual(info.priceMonthly * 6)}/year (-50%)`;
-  }, [selectedTier, billingPeriod, formatDual]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -227,48 +222,30 @@ export default function PremiumScreen() {
 
       <ScrollView contentContainerStyle={styles.content}>
         <LinearGradient
-          colors={tierData[selectedTier].gradient as [string, string]}
+          colors={['#6366F1', '#8B5CF6']}
           style={styles.heroSection}
         >
-          <Crown size={60} color={Colors.text.white} />
-          <Text style={styles.heroTitle}>Choose Your Plan</Text>
-          <Text style={styles.heroSubtitle} testID="current-plan">Current plan: {tierData[tier].name}</Text>
+          <View style={styles.heroIcon}>
+            <Crown size={48} color={Colors.text.white} strokeWidth={2.5} />
+          </View>
+          <Text style={styles.heroTitle}>Upgrade Your Experience</Text>
+          <Text style={styles.heroSubtitle} testID="current-plan">Currently on {tierData[tier].name} plan</Text>
+          
           {userPhone && (
             <View style={styles.phoneRow}>
-              <Phone size={14} color={Colors.text.white} />
+              <Phone size={12} color={Colors.text.white} />
               <Text style={styles.phoneText}>{userPhone}</Text>
             </View>
           )}
-          <View style={styles.badgesRow}>
-            <View style={styles.bonusBadge}>
-              <Info size={14} color={Colors.text.white} />
-              <Text style={styles.bonusText}>Secure Payment</Text>
+
+          <View style={styles.featuresBadges}>
+            <View style={styles.featureBadge}>
+              <Shield size={14} color={Colors.text.white} />
+              <Text style={styles.featureBadgeText}>Secure Payment</Text>
             </View>
-            <View style={styles.offBadge}>
-              <BadgePercent size={14} color={Colors.text.white} />
-              <Text style={styles.offText}>Yearly -50% OFF</Text>
-            </View>
-          </View>
-          <View style={styles.billingToggle}>
-            <TouchableOpacity
-              style={[styles.billingPill, billingPeriod === 'monthly' && styles.billingPillActive]}
-              onPress={() => setBillingPeriod('monthly')}
-              testID="billing-monthly"
-            >
-              <Text style={[styles.billingText, billingPeriod === 'monthly' && styles.billingTextActive]}>Monthly</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.billingPill, billingPeriod === 'yearly' && styles.billingPillActive]}
-              onPress={() => { setBillingPeriod('yearly'); setShowPromo(true); }}
-              testID="billing-yearly"
-            >
-              <Text style={[styles.billingText, billingPeriod === 'yearly' && styles.billingTextActive]}>Yearly</Text>
-            </TouchableOpacity>
-          </View>
-          <Text style={styles.priceHighlight}>{selectedPriceLabel}</Text>
-          <View style={styles.securePaymentRow}>
-            <View style={styles.securePaymentBadge}>
-              <Text style={styles.securePaymentText}>🔒 Powered by ArifPay</Text>
+            <View style={styles.featureBadge}>
+              <Calendar size={14} color={Colors.text.white} />
+              <Text style={styles.featureBadgeText}>Cancel Anytime</Text>
             </View>
           </View>
         </LinearGradient>
@@ -351,6 +328,33 @@ export default function PremiumScreen() {
           })}
         </View>
 
+        <View style={styles.paymentMethodSection}>
+          <Text style={styles.sectionTitle}>Select Payment Method</Text>
+          <View style={styles.paymentMethodsGrid}>
+            {paymentMethods.map((method) => (
+              <TouchableOpacity
+                key={method.id}
+                style={[
+                  styles.paymentMethodCard,
+                  paymentMethod === method.id && styles.paymentMethodCardActive,
+                ]}
+                onPress={() => setPaymentMethod(method.id)}
+              >
+                <Text style={styles.paymentMethodIcon}>{method.icon}</Text>
+                <Text style={[
+                  styles.paymentMethodName,
+                  paymentMethod === method.id && styles.paymentMethodNameActive,
+                ]}>{method.name}</Text>
+                {paymentMethod === method.id && (
+                  <View style={styles.selectedBadge}>
+                    <Check size={14} color={Colors.text.white} />
+                  </View>
+                )}
+              </TouchableOpacity>
+            ))}
+          </View>
+        </View>
+
         <View style={styles.footer}>
           <GradientButton
             title={isProcessing ? 'Processing...' : `Upgrade to ${tierData[selectedTier].name}`}
@@ -359,12 +363,19 @@ export default function PremiumScreen() {
             testID="upgrade-btn"
             disabled={isProcessing}
           />
-          <View style={styles.disclaimerContainer}>
-            <Text style={styles.disclaimer}>🔒 Secure payment powered by ArifPay. Your transaction is encrypted and protected.</Text>
+          <View style={styles.securityBadges}>
+            <View style={styles.securityBadge}>
+              <Shield size={14} color={Colors.text.secondary} />
+              <Text style={styles.securityText}>Encrypted & Secure</Text>
+            </View>
+            <View style={styles.securityBadge}>
+              <CreditCard size={14} color={Colors.text.secondary} />
+              <Text style={styles.securityText}>Powered by ArifPay</Text>
+            </View>
           </View>
+          <Text style={styles.disclaimer}>Subscription renews monthly. Cancel anytime from settings.</Text>
         </View>
 
-        {/* Store section temporarily removed as requested */}
       </ScrollView>
 
       <Modal visible={showPromo} transparent animationType="fade" onRequestClose={() => setShowPromo(false)}>
@@ -383,35 +394,7 @@ export default function PremiumScreen() {
   );
 }
 
-function PackCard({ label, onPress }: { label: string; onPress: () => void }) {
-  return (
-    <TouchableOpacity style={styles.packCard} onPress={onPress} testID={`pack-${label.replace(/\s+/g,'-').toLowerCase()}`}>
-      <Text style={styles.packLabel}>{label}</Text>
-      <ArrowRight size={16} color={Colors.text.primary} />
-    </TouchableOpacity>
-  );
-}
 
-type ThemeCardProps = {
-  id: string;
-  name: string;
-  type: 'gradient' | 'pattern';
-  colors?: [string, string];
-  onPress: () => void;
-};
-
-function ThemeCard({ id, name, type, colors, onPress }: ThemeCardProps) {
-  return (
-    <TouchableOpacity style={styles.themeCard} onPress={onPress} testID={`theme-${id}`}>
-      {type === 'gradient' ? (
-        <LinearGradient colors={(colors ?? (['#111827', '#0B1022'] as [string, string]))} style={styles.themePreview} />
-      ) : (
-        <View style={[styles.themePreview, styles.patternPreview]} />
-      )}
-      <Text style={styles.themeLabel}>{name}</Text>
-    </TouchableOpacity>
-  );
-}
 
 const styles = StyleSheet.create({
   container: {
@@ -430,37 +413,68 @@ const styles = StyleSheet.create({
   },
   heroSection: {
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingVertical: 40,
     marginHorizontal: 20,
-    borderRadius: 20,
+    borderRadius: 24,
     marginBottom: 24,
+    shadowColor: '#8B5CF6',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 16,
+    elevation: 8,
+  },
+  heroIcon: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
   },
   heroTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
+    fontSize: 32,
+    fontWeight: '800',
     color: Colors.text.white,
-    marginTop: 16,
     marginBottom: 8,
+    textAlign: 'center',
   },
   heroSubtitle: {
-    fontSize: 16,
-    color: Colors.text.white,
+    fontSize: 15,
+    color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
-    opacity: 0.9,
+    marginBottom: 4,
   },
-  phoneRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 8, backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 999 },
-  phoneText: { color: Colors.text.white, fontWeight: '700', fontSize: 14 },
-  badgesRow: { flexDirection: 'row', gap: 8, marginTop: 12 },
-  bonusBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  bonusText: { color: Colors.text.white, fontWeight: '700' },
-  offBadge: { flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 999 },
-  offText: { color: Colors.text.white, fontWeight: '700' },
-  billingToggle: { flexDirection: 'row', gap: 8, backgroundColor: 'rgba(255,255,255,0.2)', padding: 6, borderRadius: 999, marginTop: 14 },
-  billingPill: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 999 },
-  billingPillActive: { backgroundColor: Colors.text.white },
-  billingText: { color: Colors.text.white, fontWeight: '700' },
-  billingTextActive: { color: Colors.text.primary },
-  priceHighlight: { color: Colors.text.white, marginTop: 8, fontWeight: '700' },
+  phoneRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    marginTop: 12, 
+    backgroundColor: 'rgba(255,255,255,0.15)', 
+    paddingHorizontal: 12, 
+    paddingVertical: 6, 
+    borderRadius: 999 
+  },
+  phoneText: { color: Colors.text.white, fontWeight: '600', fontSize: 13 },
+  featuresBadges: { 
+    flexDirection: 'row', 
+    gap: 12, 
+    marginTop: 20 
+  },
+  featureBadge: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 6, 
+    backgroundColor: 'rgba(255,255,255,0.15)', 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    borderRadius: 999 
+  },
+  featureBadgeText: { 
+    color: Colors.text.white, 
+    fontWeight: '600', 
+    fontSize: 12 
+  },
   tiersSection: {
     paddingHorizontal: 20,
     marginBottom: 30,
@@ -559,30 +573,87 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-  disclaimerContainer: {
-    width: '100%',
-  },
   disclaimer: {
-    fontSize: 12,
+    fontSize: 11,
     color: Colors.text.secondary,
     textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 8,
   },
-  storeSection: { paddingHorizontal: 20, paddingBottom: 30 },
-  storeTitle: { fontSize: 18, fontWeight: '700', color: Colors.text.primary, marginBottom: 12 },
-  packsRow: { flexDirection: 'row', justifyContent: 'space-between', gap: 10, marginBottom: 10 },
-  packCard: { flex: 1, backgroundColor: Colors.backgroundSecondary, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
-  packLabel: { color: Colors.text.primary, fontWeight: '600' },
-  themesRow: { flexDirection: 'row', gap: 10 },
-  themeCard: { flex: 1, backgroundColor: Colors.backgroundSecondary, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, padding: 12, alignItems: 'center' },
-  themePreview: { width: '100%', height: 80, borderRadius: 10, marginBottom: 8 },
-  patternPreview: { backgroundColor: Colors.card, overflow: 'hidden' },
-  themeLabel: { color: Colors.text.primary, fontWeight: '600' },
+  paymentMethodSection: {
+    paddingHorizontal: 20,
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 16,
+  },
+  paymentMethodsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  paymentMethodCard: {
+    flex: 1,
+    minWidth: '45%',
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    borderRadius: 16,
+    padding: 16,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  paymentMethodCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.background,
+  },
+  paymentMethodIcon: {
+    fontSize: 32,
+    marginBottom: 8,
+  },
+  paymentMethodName: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.secondary,
+  },
+  paymentMethodNameActive: {
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  selectedBadge: {
+    position: 'absolute',
+    top: 8,
+    right: 8,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityBadges: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 16,
+    marginTop: 12,
+  },
+  securityBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  securityText: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
   modalCard: { width: '100%', maxWidth: 420, backgroundColor: Colors.background, borderRadius: 16, padding: 16, gap: 10 },
   modalHeader: { flexDirection: 'row', gap: 8, alignItems: 'center' },
   modalTitle: { color: Colors.text.primary, fontWeight: '700', fontSize: 16 },
   modalBody: { color: Colors.text.secondary },
-  securePaymentRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 10 },
-  securePaymentBadge: { backgroundColor: 'rgba(255,255,255,0.14)', paddingHorizontal: 14, paddingVertical: 8, borderRadius: 999 },
-  securePaymentText: { color: Colors.text.white, fontWeight: '700', fontSize: 13 },
+
 });

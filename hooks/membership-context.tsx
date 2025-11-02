@@ -210,6 +210,35 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     }
   }, [authUser?.id, tier, credits, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, allowances, lastAllowanceGrantISO]);
 
+  const checkExpiration = useCallback(async (userId: string) => {
+    try {
+      const { data } = await supabase
+        .from('memberships')
+        .select('tier, expires_at')
+        .eq('user_id', userId)
+        .maybeSingle();
+      
+      if (data && data.expires_at && data.tier !== 'free') {
+        const expiresAt = new Date(data.expires_at);
+        const now = new Date();
+        
+        if (now >= expiresAt) {
+          console.log('[Membership] Membership expired, downgrading to free');
+          await supabase
+            .from('memberships')
+            .update({ tier: 'free', expires_at: null, updated_at: now.toISOString() })
+            .eq('user_id', userId);
+          return 'free';
+        }
+      }
+      
+      return data?.tier || 'free';
+    } catch (e: any) {
+      console.log('[Membership] checkExpiration failed:', e?.message || e);
+      return null;
+    }
+  }, []);
+
   const loadFromServer = useCallback(async () => {
     try {
       if (!isSupabaseConfigured) {
@@ -240,9 +269,11 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       
       console.log('[Membership] Loading from server for user:', userId);
       
+      const checkedTier = await checkExpiration(userId);
+      
       const { data, error } = await supabase
         .from('memberships')
-        .select('tier, message_credits, boost_credits, superlike_credits, compliment_credits, unlock_credits, remaining_daily_messages, remaining_profile_views, remaining_right_swipes, remaining_compliments, last_reset, monthly_allowances, last_allowance_grant')
+        .select('tier, message_credits, boost_credits, superlike_credits, compliment_credits, unlock_credits, remaining_daily_messages, remaining_profile_views, remaining_right_swipes, remaining_compliments, last_reset, monthly_allowances, last_allowance_grant, expires_at')
         .eq('user_id', userId)
         .maybeSingle();
       if (error) {
@@ -252,7 +283,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       }
       if (data) {
         console.log('[Membership] Loaded from server:', data);
-        const serverTier = (data.tier as MembershipTier | null) ?? 'free';
+        const serverTier = (checkedTier || data.tier) as MembershipTier;
         setTier(serverTier);
         setCredits({
           messages: Number((data as any).message_credits ?? 0),
@@ -270,6 +301,13 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         setAllowances((data.monthly_allowances as MonthlyAllowances) ?? { monthlyBoosts: 0, monthlySuperLikes: 0 });
         setLastAllowanceGrantISO(String(data.last_allowance_grant ?? ''));
         setLastReset(normalizeISODate((data as any).last_reset ?? null));
+        
+        if (data.expires_at) {
+          const expiresAt = new Date(data.expires_at);
+          const now = new Date();
+          const daysLeft = Math.ceil((expiresAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+          console.log(`[Membership] Membership expires in ${daysLeft} days (${expiresAt.toISOString()})`);
+        }
       } else {
         console.log('[Membership] No membership found, creating one');
         await loadFromLocalStorage();
@@ -279,7 +317,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       console.log('[Membership] loadFromServer failed (using local fallback):', e?.message || e);
       await loadFromLocalStorage();
     }
-  }, [authUser?.id, loadFromLocalStorage, syncToServer]);
+  }, [authUser?.id, loadFromLocalStorage, syncToServer, checkExpiration]);
 
   const resetDailyLimits = useCallback(async () => {
     const f = TIER_FEATURES[tier];

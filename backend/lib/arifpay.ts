@@ -9,6 +9,7 @@ export interface ArifpayPaymentOptions {
   phone: string;
   tier: string;
   userId: string;
+  paymentMethod: string;
   cancelUrl: string;
   errorUrl: string;
   notifyUrl: string;
@@ -64,6 +65,21 @@ export class ArifpayClient {
     expireDate.setHours(expireDate.getHours() + 24);
     const expireDateStr = expireDate.toISOString().split('.')[0];
 
+    const paymentMethodsMap: Record<string, string> = {
+      'TELEBIRR': 'TELEBIRR',
+      'CBE': 'CBE',
+      'AMOLE': 'AMOLE',
+      'MPESSA': 'MPESSA',
+      'AWAASH': 'AWAASH',
+      'AWAASH_WALLET': 'AWAASH_WALLET',
+      'PSS': 'PSS',
+      'BOA': 'BOA',
+      'KACHA': 'KACHA',
+      'HELLOCASH': 'HELLOCASH',
+    };
+
+    const selectedMethod = paymentMethodsMap[options.paymentMethod] || 'TELEBIRR';
+
     const payload = {
       cancelUrl: options.cancelUrl,
       phone: phone,
@@ -73,7 +89,7 @@ export class ArifpayClient {
       notifyUrl: options.notifyUrl,
       successUrl: options.successUrl,
       expireDate: expireDateStr,
-      paymentMethods: ["TELEBIRR"],
+      paymentMethods: [selectedMethod],
       lang: "EN",
       items: [
         {

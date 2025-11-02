@@ -14,6 +14,7 @@ export default publicProcedure
     z.object({
       tier: z.enum(["free", "silver", "gold", "vip"]),
       phone: z.string(),
+      paymentMethod: z.string().optional(),
       successUrl: z.string(),
       cancelUrl: z.string(),
       errorUrl: z.string(),
@@ -64,6 +65,7 @@ export default publicProcedure
         phone: input.phone,
         tier: input.tier,
         userId: pseudoUserId,
+        paymentMethod: input.paymentMethod || 'TELEBIRR',
         successUrl: input.successUrl,
         cancelUrl: input.cancelUrl,
         errorUrl: input.errorUrl,

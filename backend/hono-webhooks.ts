@@ -39,7 +39,7 @@ webhooks.post("/arifpay", async (c) => {
             .from('profiles')
             .select('id')
             .eq('phone', phone)
-            .single();
+            .maybeSingle();
 
           if (profileError || !profile) {
             console.error("[Webhook] Profile not found for phone:", phone, profileError);
@@ -52,24 +52,28 @@ webhooks.post("/arifpay", async (c) => {
           else if (amount >= 3200) tier = 'gold';
           else if (amount >= 1600) tier = 'silver';
 
+          const now = new Date();
           const expiresAt = new Date();
           expiresAt.setMonth(expiresAt.getMonth() + 1);
 
+          console.log(`[Webhook] Setting tier to ${tier} with expiration at ${expiresAt.toISOString()}`);
+
           const { error: updateError } = await supabase
             .from('memberships')
-            .update({
+            .upsert({
+              user_id: profile.id,
+              phone_number: phone,
               tier,
               expires_at: expiresAt.toISOString(),
-              updated_at: new Date().toISOString(),
-            })
-            .eq('user_id', profile.id);
+              updated_at: now.toISOString(),
+            }, { onConflict: 'user_id' });
 
           if (updateError) {
             console.error("[Webhook] Failed to update membership:", updateError);
             return c.json({ error: "Failed to update membership" }, 500);
           }
 
-          console.log("[Webhook] Membership updated to:", tier, "for user:", profile.id);
+          console.log("[Webhook] Membership updated successfully. Tier:", tier, "User:", profile.id, "Expires:", expiresAt.toISOString());
         }
       }
     }
