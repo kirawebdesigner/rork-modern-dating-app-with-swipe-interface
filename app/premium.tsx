@@ -110,16 +110,11 @@ export default function PremiumScreen() {
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [userPhone, setUserPhone] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<string>('TELEBIRR');
+  const [paymentMethod] = useState<string>('ARIFPAY');
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
 
-  const paymentMethods = [
-    { id: 'TELEBIRR', name: 'TeleBirr', icon: '📱' },
-    { id: 'CBE', name: 'CBE Birr', icon: '🏦' },
-    { id: 'AMOLE', name: 'Amole', icon: '💳' },
-    { id: 'MPESSA', name: 'M-PESA', icon: '💰' },
-  ];
+  const paymentMethods: never[] = [] as const;
 
 
 
@@ -372,29 +367,15 @@ export default function PremiumScreen() {
         </View>
 
         <View style={styles.paymentMethodSection}>
-          <Text style={styles.sectionTitle}>Select Payment Method</Text>
-          <View style={styles.paymentMethodsGrid}>
-            {paymentMethods.map((method) => (
-              <TouchableOpacity
-                key={method.id}
-                style={[
-                  styles.paymentMethodCard,
-                  paymentMethod === method.id && styles.paymentMethodCardActive,
-                ]}
-                onPress={() => setPaymentMethod(method.id)}
-              >
-                <Text style={styles.paymentMethodIcon}>{method.icon}</Text>
-                <Text style={[
-                  styles.paymentMethodName,
-                  paymentMethod === method.id && styles.paymentMethodNameActive,
-                ]}>{method.name}</Text>
-                {paymentMethod === method.id && (
-                  <View style={styles.selectedBadge}>
-                    <Check size={14} color={Colors.text.white} />
-                  </View>
-                )}
-              </TouchableOpacity>
-            ))}
+          <Text style={styles.sectionTitle}>Payment</Text>
+          <View style={styles.arifCard}>
+            <View style={styles.arifRow}>
+              <CreditCard size={22} color={Colors.primary} />
+              <View style={styles.arifTexts}>
+                <Text style={styles.arifTitle}>ArifPay Checkout</Text>
+                <Text style={styles.arifSubtitle}>Secure payment with multiple methods</Text>
+              </View>
+            </View>
           </View>
         </View>
 
@@ -633,50 +614,17 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: 16,
   },
-  paymentMethodsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 12,
-  },
-  paymentMethodCard: {
-    flex: 1,
-    minWidth: '45%',
+  arifCard: {
     backgroundColor: Colors.backgroundSecondary,
     borderWidth: 2,
     borderColor: Colors.border,
     borderRadius: 16,
     padding: 16,
-    alignItems: 'center',
-    position: 'relative',
   },
-  paymentMethodCardActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.background,
-  },
-  paymentMethodIcon: {
-    fontSize: 32,
-    marginBottom: 8,
-  },
-  paymentMethodName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.secondary,
-  },
-  paymentMethodNameActive: {
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  selectedBadge: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+  arifRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  arifTexts: { flex: 1 },
+  arifTitle: { fontSize: 16, fontWeight: '700', color: Colors.text.primary },
+  arifSubtitle: { fontSize: 12, color: Colors.text.secondary },
   securityBadges: {
     flexDirection: 'row',
     justifyContent: 'center',
