@@ -11,39 +11,51 @@ const isPlaceholder = (url: string | undefined) => {
   if (!url) return false;
   try {
     const u = new URL(url);
-    return u.hostname.includes('your-app.com');
+    return u.hostname.includes("your-app.com");
   } catch {
-    return url.includes('your-app.com');
+    return url.includes("your-app.com");
   }
 };
+
+const normalize = (base: string) => base.replace(/\/$/, "");
 
 const getBaseUrl = () => {
   const env = process.env as Record<string, string | undefined>;
   const envUrl = env.EXPO_PUBLIC_RORK_API_BASE_URL || env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !isPlaceholder(envUrl)) return envUrl;
+  if (envUrl && !isPlaceholder(envUrl)) return normalize(envUrl);
 
   const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, any>;
-  const fromExtra = extra.EXPO_PUBLIC_RORK_API_BASE_URL || extra.RORK_API_BASE_URL || extra.EXPO_PUBLIC_API_URL || extra.API_URL;
-  if (fromExtra && !isPlaceholder(String(fromExtra))) return String(fromExtra);
+  const fromExtra =
+    extra.EXPO_PUBLIC_RORK_API_BASE_URL ||
+    extra.RORK_API_BASE_URL ||
+    extra.EXPO_PUBLIC_API_URL ||
+    extra.API_URL;
+  if (fromExtra && !isPlaceholder(String(fromExtra))) return normalize(String(fromExtra));
 
-  if (Platform.OS === 'web' && typeof location !== 'undefined') {
-    return location.origin;
+  if (Platform.OS === "web" && typeof location !== "undefined") {
+    return normalize(location.origin);
   }
 
   const hostUri = (Constants as any)?.expoGo?.hostUri as string | undefined;
   if (hostUri) {
-    const sanitized = hostUri.startsWith('http') ? hostUri : `http://${hostUri}`;
+    const sanitized = hostUri.startsWith("http") ? hostUri : `http://${hostUri}`;
     const url = new URL(sanitized);
     return `${url.protocol}//${url.host}`;
   }
 
-  return 'http://localhost:3000';
+  const isAndroid = Platform.OS === "android";
+  if (isAndroid) return "http://10.0.2.2:3000";
+
+  return "http://localhost:3000";
 };
+
+const baseUrl = `${getBaseUrl()}`;
+console.log("[tRPC] Using base URL:", baseUrl);
 
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${getBaseUrl()}/api/trpc`,
+      url: `${baseUrl}/api/trpc`,
       transformer: superjson,
     }),
   ],
