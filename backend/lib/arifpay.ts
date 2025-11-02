@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 
-const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "";
+const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
 const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.org/api/sandbox";
 const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "0944120739";
 

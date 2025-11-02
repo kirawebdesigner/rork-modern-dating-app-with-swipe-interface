@@ -165,49 +165,60 @@ export default function PremiumScreen() {
         paymentMethod: paymentMethod,
       });
 
-      console.log('[Premium] Mutation result:', result);
+      console.log('[Premium] Mutation result:', JSON.stringify(result, null, 2));
 
       if (result.requiresPayment && result.paymentUrl) {
         console.log('[Premium] Opening payment URL:', result.paymentUrl);
         
         if (Platform.OS === 'web') {
-          const newWindow = window.open(result.paymentUrl, '_blank', 'noopener,noreferrer');
-          if (newWindow) {
-            console.log('[Premium] Payment window opened successfully');
-            Alert.alert(
-              '💳 Payment Started',
-              'Complete your payment in the new window. Your membership will be automatically updated after successful payment.',
-              [
-                { text: 'OK', onPress: () => router.back() }
-              ]
-            );
-          } else {
-            Alert.alert('Error', 'Please allow popups to complete payment.');
-          }
-        } else {
-          const supported = await Linking.canOpenURL(result.paymentUrl);
-          if (supported) {
-            const webResult = await WebBrowser.openBrowserAsync(result.paymentUrl, {
-              readerMode: false,
-              enableBarCollapsing: true,
-              showTitle: true,
-            });
-            
-            console.log('[Premium] Browser result:', webResult);
-            
-            if (webResult.type === 'cancel') {
-              Alert.alert('Payment Cancelled', 'You cancelled the payment process.');
-            } else if (webResult.type === 'dismiss') {
+          try {
+            const newWindow = window.open(result.paymentUrl, '_blank', 'noopener,noreferrer');
+            if (newWindow) {
+              console.log('[Premium] Payment window opened successfully');
               Alert.alert(
-                'Payment Window Closed',
-                'Your membership will be automatically updated if payment was successful.',
+                '💳 Payment Started',
+                'Complete your payment in the new window. Your membership will be automatically updated after successful payment.',
                 [
                   { text: 'OK', onPress: () => router.back() }
                 ]
               );
+            } else {
+              Alert.alert('Error', 'Please allow popups to complete payment.');
             }
-          } else {
-            Alert.alert('Error', 'Cannot open payment link. Please try again later.');
+          } catch (webErr) {
+            console.error('[Premium] Web browser error:', webErr);
+            Alert.alert('Error', 'Failed to open payment window. Please try again.');
+          }
+        } else {
+          try {
+            const supported = await Linking.canOpenURL(result.paymentUrl);
+            if (supported) {
+              const webResult = await WebBrowser.openBrowserAsync(result.paymentUrl, {
+                readerMode: false,
+                enableBarCollapsing: true,
+                showTitle: true,
+              });
+              
+              console.log('[Premium] Browser result:', webResult);
+              
+              if (webResult.type === 'cancel') {
+                Alert.alert('Payment Cancelled', 'You cancelled the payment process.');
+              } else if (webResult.type === 'dismiss') {
+                Alert.alert(
+                  'Payment Window Closed',
+                  'Your membership will be automatically updated if payment was successful.',
+                  [
+                    { text: 'OK', onPress: () => router.back() }
+                  ]
+                );
+              }
+            } else {
+              console.error('[Premium] Cannot open URL:', result.paymentUrl);
+              Alert.alert('Error', 'Cannot open payment link. Please try again later.');
+            }
+          } catch (linkErr) {
+            console.error('[Premium] Linking error:', linkErr);
+            Alert.alert('Error', 'Failed to open payment page. Please try again.');
           }
         }
       } else if (result.requiresPayment === false) {
@@ -220,7 +231,7 @@ export default function PremiumScreen() {
       console.error('[Premium] handleUpgrade error:', e);
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
       
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch')) {
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch') || errorMessage.includes('Network')) {
         Alert.alert(
           '❌ Connection Error',
           'Unable to connect to payment service. Please check your internet connection and try again.',

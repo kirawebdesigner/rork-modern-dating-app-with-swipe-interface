@@ -14,21 +14,38 @@ webhooks.post("/arifpay", async (c) => {
     const body = await c.req.json();
     console.log("[Webhook] Arifpay notification received:", JSON.stringify(body, null, 2));
 
-    const { sessionId, status, transactionId } = body;
+    const { uuid, sessionId, status, transactionId, nonce } = body;
+    const actualSessionId = uuid || sessionId;
 
-    if (status === "SUCCESS" || status === "PAID") {
+    console.log("[Webhook] Processing sessionId:", actualSessionId, "status:", status);
+
+    if (status === "SUCCESS" || status === "PAID" || status === "success") {
       console.log("[Webhook] Payment successful, verifying...");
-      const verification = await arifpay.verifyPayment(sessionId);
+      
+      if (!actualSessionId) {
+        console.error("[Webhook] No sessionId found in webhook payload");
+        return c.json({ error: "Missing sessionId" }, 400);
+      }
+
+      const verification = await arifpay.verifyPayment(actualSessionId);
 
       console.log("[Webhook] Verification result:", JSON.stringify(verification, null, 2));
 
-      if (verification.status === "SUCCESS" || verification.status === "PAID") {
+      if (verification.status === "SUCCESS" || verification.status === "PAID" || verification.status === "success") {
         console.log("[Webhook] Payment confirmed:", transactionId);
 
-        const parts = sessionId.split('-');
-        const userId = parts.length > 1 ? parts.slice(0, 2).join('-') : '';
+        let userId = '';
+        if (nonce) {
+          const parts = nonce.split('-');
+          userId = parts.length >= 2 ? parts.slice(0, 2).join('-') : '';
+        }
 
-        console.log('[Webhook] Extracted userId from sessionId:', userId);
+        if (!userId && actualSessionId) {
+          const parts = actualSessionId.split('-');
+          userId = parts.length > 1 ? parts.slice(0, 2).join('-') : '';
+        }
+
+        console.log('[Webhook] Extracted userId:', userId);
 
         if (userId && userId.startsWith('phone-')) {
           const phone = userId.replace('phone-', '');
@@ -74,8 +91,14 @@ webhooks.post("/arifpay", async (c) => {
           }
 
           console.log("[Webhook] Membership updated successfully. Tier:", tier, "User:", profile.id, "Expires:", expiresAt.toISOString());
+        } else {
+          console.error("[Webhook] Invalid userId extracted:", userId);
         }
+      } else {
+        console.log("[Webhook] Payment not verified. Status:", verification.status);
       }
+    } else {
+      console.log("[Webhook] Payment status not successful:", status);
     }
 
     return c.json({ success: true });

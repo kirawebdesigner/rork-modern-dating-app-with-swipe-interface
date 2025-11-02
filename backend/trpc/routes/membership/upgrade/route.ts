@@ -58,11 +58,11 @@ export default publicProcedure
         if (host) baseUrl = `${proto}://${host}`;
       }
 
-      if (!baseUrl) baseUrl = "http://localhost:3000";
+      if (!baseUrl) baseUrl = "http://localhost:8081";
 
-      const successUrl = `${baseUrl}/payments/success`;
-      const cancelUrl = `${baseUrl}/payments/cancel`;
-      const errorUrl = `${baseUrl}/payments/error`;
+      const successUrl = `${baseUrl}/payment-success`;
+      const cancelUrl = `${baseUrl}/payment-cancel`;
+      const errorUrl = `${baseUrl}/payment-error`;
 
       const payment = await arifpay.createPayment({
         amount,
@@ -77,6 +77,8 @@ export default publicProcedure
       });
 
       console.log("[tRPC] Payment created:", payment);
+      console.log("[tRPC] Payment URL:", payment.paymentUrl);
+      console.log("[tRPC] Session ID:", payment.sessionId);
 
       return {
         success: true as const,
