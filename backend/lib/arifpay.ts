@@ -60,10 +60,91 @@ export class ArifpayClient {
     }
     
     console.log('[Arifpay] Normalized phone number:', phone);
+    console.log('[Arifpay] Payment method:', options.paymentMethod);
+    
     const nonce = `${options.userId}-${uuidv4()}`;
     const expireDate = new Date();
     expireDate.setHours(expireDate.getHours() + 24);
     const expireDateStr = expireDate.toISOString().split('.')[0];
+
+    const totalAmount = options.amount;
+    
+    if (options.paymentMethod === 'CBE') {
+      console.log('[Arifpay] Using CBE Direct Payment (V2)');
+      
+      const payload = {
+        cancelUrl: options.cancelUrl,
+        phone: phone,
+        email: `${options.userId}@app.com`,
+        nonce: nonce,
+        errorUrl: options.errorUrl,
+        notifyUrl: options.notifyUrl,
+        successUrl: options.successUrl,
+        expireDate: expireDateStr,
+        paymentMethods: ['CBE'],
+        lang: "EN",
+        items: [
+          {
+            name: `Dating App - ${options.tier.toUpperCase()} Membership`,
+            quantity: 1,
+            price: totalAmount,
+          },
+        ],
+        beneficiaries: [
+          {
+            accountNumber: ARIFPAY_ACCOUNT_NUMBER,
+            bank: "ARIFPAY",
+            amount: totalAmount,
+          },
+        ],
+      };
+
+      console.log("[Arifpay] Creating CBE direct payment with payload:", JSON.stringify(payload, null, 2));
+
+      try {
+        const response = await fetch(`${this.baseUrl}/checkout/v2/cbe/direct/transfer`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "x-arifpay-key": this.apiKey,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const responseText = await response.text();
+        console.log("[Arifpay] CBE Raw response:", responseText);
+
+        let result;
+        try {
+          result = JSON.parse(responseText);
+        } catch (e) {
+          console.error("[Arifpay] Failed to parse CBE response:", e);
+          throw new Error(`Invalid response from ArifPay: ${responseText}`);
+        }
+
+        console.log("[Arifpay] CBE Parsed response:", JSON.stringify(result, null, 2));
+
+        if (!response.ok) {
+          console.error("[Arifpay] CBE payment creation failed with status:", response.status);
+          throw new Error(result.msg || result.message || `CBE payment creation failed with status ${response.status}`);
+        }
+
+        if (!result.error && result.data && result.data.paymentUrl) {
+          return {
+            sessionId: result.data.sessionId,
+            paymentUrl: result.data.paymentUrl,
+            status: result.data.status || "PENDING",
+            totalAmount: result.data.totalAmount || options.amount,
+          };
+        } else {
+          console.error("[Arifpay] Invalid CBE response structure:", result);
+          throw new Error(result.msg || "CBE payment creation failed - invalid response");
+        }
+      } catch (error) {
+        console.error("[Arifpay] CBE Payment error:", error);
+        throw error;
+      }
+    }
 
     const paymentMethodsMap: Record<string, string> = {
       'TELEBIRR': 'TELEBIRR',
@@ -80,7 +161,6 @@ export class ArifpayClient {
 
     const selectedMethod = paymentMethodsMap[options.paymentMethod] || 'TELEBIRR';
 
-    const totalAmount = options.amount;
     const payload = {
       cancelUrl: options.cancelUrl,
       phone: phone,

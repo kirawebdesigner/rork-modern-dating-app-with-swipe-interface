@@ -69,11 +69,11 @@ export default publicProcedure
         phone: input.phone,
         tier: input.tier,
         userId: pseudoUserId,
-        paymentMethod: input.paymentMethod || 'TELEBIRR',
+        paymentMethod: input.paymentMethod || 'CBE',
         successUrl,
         cancelUrl,
         errorUrl,
-        notifyUrl: `${baseUrl}/webhooks/arifpay`,
+        notifyUrl: `${baseUrl}/api/webhooks/arifpay`,
       });
 
       console.log("[tRPC] Payment created:", payment);

@@ -110,11 +110,15 @@ export default function PremiumScreen() {
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [userPhone, setUserPhone] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod] = useState<string>('ARIFPAY');
+  const [paymentMethod, setPaymentMethod] = useState<string>('CBE');
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
 
-  const paymentMethods: never[] = [] as const;
+  const paymentMethods = [
+    { id: 'CBE', name: 'CBE Bank', icon: CreditCard, description: 'Direct payment with popup' },
+    { id: 'TELEBIRR', name: 'TeleBirr', icon: Phone, description: 'Mobile wallet payment' },
+    { id: 'AMOLE', name: 'Amole', icon: Phone, description: 'Mobile wallet payment' },
+  ] as const;
 
 
 
@@ -367,15 +371,40 @@ export default function PremiumScreen() {
         </View>
 
         <View style={styles.paymentMethodSection}>
-          <Text style={styles.sectionTitle}>Payment</Text>
-          <View style={styles.arifCard}>
-            <View style={styles.arifRow}>
-              <CreditCard size={22} color={Colors.primary} />
-              <View style={styles.arifTexts}>
-                <Text style={styles.arifTitle}>ArifPay Checkout</Text>
-                <Text style={styles.arifSubtitle}>Secure payment with multiple methods</Text>
-              </View>
-            </View>
+          <Text style={styles.sectionTitle}>Select Payment Method</Text>
+          {paymentMethods.map((method) => {
+            const IconComponent = method.icon;
+            const isSelected = paymentMethod === method.id;
+            return (
+              <TouchableOpacity
+                key={method.id}
+                style={[
+                  styles.paymentCard,
+                  isSelected && styles.selectedPaymentCard,
+                ]}
+                onPress={() => setPaymentMethod(method.id)}
+                testID={`payment-${method.id}`}
+              >
+                <View style={styles.paymentRow}>
+                  <View style={styles.paymentIconBox}>
+                    <IconComponent size={24} color={isSelected ? Colors.primary : Colors.text.secondary} />
+                  </View>
+                  <View style={styles.paymentTexts}>
+                    <Text style={styles.paymentTitle}>{method.name}</Text>
+                    <Text style={styles.paymentSubtitle}>{method.description}</Text>
+                  </View>
+                  {isSelected && (
+                    <View style={styles.checkmarkBox}>
+                      <Check size={20} color={Colors.primary} />
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })}
+          <View style={styles.securityNote}>
+            <Shield size={14} color={Colors.text.secondary} />
+            <Text style={styles.securityNoteText}>All payments are secured by ArifPay</Text>
           </View>
         </View>
 
@@ -614,17 +643,62 @@ const styles = StyleSheet.create({
     color: Colors.text.primary,
     marginBottom: 16,
   },
-  arifCard: {
+  paymentCard: {
     backgroundColor: Colors.backgroundSecondary,
     borderWidth: 2,
     borderColor: Colors.border,
     borderRadius: 16,
     padding: 16,
+    marginBottom: 12,
   },
-  arifRow: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  arifTexts: { flex: 1 },
-  arifTitle: { fontSize: 16, fontWeight: '700', color: Colors.text.primary },
-  arifSubtitle: { fontSize: 12, color: Colors.text.secondary },
+  selectedPaymentCard: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.background,
+  },
+  paymentRow: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 12 
+  },
+  paymentIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  paymentTexts: { flex: 1 },
+  paymentTitle: { 
+    fontSize: 16, 
+    fontWeight: '700', 
+    color: Colors.text.primary,
+    marginBottom: 2,
+  },
+  paymentSubtitle: { 
+    fontSize: 13, 
+    color: Colors.text.secondary 
+  },
+  checkmarkBox: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: Colors.primary + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  securityNote: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingTop: 12,
+    paddingHorizontal: 4,
+  },
+  securityNoteText: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    fontWeight: '500',
+  },
   securityBadges: {
     flexDirection: 'row',
     justifyContent: 'center',
