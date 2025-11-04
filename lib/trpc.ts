@@ -50,12 +50,13 @@ const getBaseUrl = () => {
 };
 
 const baseUrl = `${getBaseUrl()}`;
-console.log("[tRPC] Using base URL:", baseUrl);
+const apiUrl = Platform.OS === "web" ? "/api/trpc" : `${baseUrl}/api/trpc`;
+console.log("[tRPC] Using base URL:", baseUrl, "api:", apiUrl);
 
 export const trpcClient = trpc.createClient({
   links: [
     httpLink({
-      url: `${baseUrl}/api/trpc`,
+      url: apiUrl,
       transformer: superjson,
     }),
   ],

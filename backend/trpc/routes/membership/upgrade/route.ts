@@ -73,7 +73,7 @@ export default publicProcedure
         successUrl,
         cancelUrl,
         errorUrl,
-        notifyUrl: `${baseUrl}/api/webhooks/arifpay`,
+        notifyUrl: `${baseUrl}/webhooks/arifpay`,
       });
 
       console.log("[tRPC] Payment created:", payment);
