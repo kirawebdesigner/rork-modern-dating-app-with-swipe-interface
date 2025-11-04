@@ -19,6 +19,19 @@ const isPlaceholder = (url: string | undefined) => {
 
 const normalize = (base: string) => base.replace(/\/$/, "");
 
+const toHttpOrigin = (hostLike: string) => {
+  try {
+    const raw = hostLike.trim();
+    const withoutScheme = raw.includes("://") ? raw.split("://")[1] : raw;
+    const justHost = withoutScheme.replace(/^exp\+?\w*:\/\//, "");
+    const url = new URL(`http://${justHost}`);
+    return `${url.protocol}//${url.host}`;
+  } catch (e) {
+    console.log("[tRPC] Failed to parse hostUri, falling back:", hostLike, e);
+    return "http://localhost:3000";
+  }
+};
+
 const getBaseUrl = () => {
   const env = process.env as Record<string, string | undefined>;
   const envUrl = env.EXPO_PUBLIC_RORK_API_BASE_URL || env.EXPO_PUBLIC_API_URL;
@@ -38,9 +51,7 @@ const getBaseUrl = () => {
 
   const hostUri = (Constants as any)?.expoGo?.hostUri as string | undefined;
   if (hostUri) {
-    const sanitized = hostUri.startsWith("http") ? hostUri : `http://${hostUri}`;
-    const url = new URL(sanitized);
-    return `${url.protocol}//${url.host}`;
+    return toHttpOrigin(hostUri);
   }
 
   const isAndroid = Platform.OS === "android";
