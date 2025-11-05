@@ -120,8 +120,6 @@ export default function PremiumScreen() {
     { id: 'AMOLE', name: 'Amole', icon: Phone, description: 'Mobile wallet payment' },
   ] as const;
 
-
-
   useEffect(() => {
     const loadPhone = async () => {
       try {
@@ -175,7 +173,7 @@ export default function PremiumScreen() {
             if (newWindow) {
               console.log('[Premium] Payment window opened successfully');
               Alert.alert(
-                '💳 Payment Started',
+                'Payment Started',
                 'Complete your payment in the new window. Your membership will be automatically updated after successful payment.',
                 [
                   { text: 'OK', onPress: () => router.back() }
@@ -221,7 +219,7 @@ export default function PremiumScreen() {
           }
         }
       } else if (result.requiresPayment === false) {
-        Alert.alert('✅ Success', 'Your membership has been upgraded successfully!');
+        Alert.alert('Success', 'Your membership has been upgraded successfully!');
         router.back();
       } else {
         throw new Error('Invalid response from server');
@@ -232,7 +230,7 @@ export default function PremiumScreen() {
       
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch') || errorMessage.includes('Network')) {
         Alert.alert(
-          '❌ Connection Error',
+          'Connection Error',
           'Unable to connect to payment service. Please check your internet connection and try again.',
           [
             { text: 'OK', style: 'cancel' },
@@ -240,15 +238,12 @@ export default function PremiumScreen() {
           ]
         );
       } else {
-        Alert.alert('❌ Payment Failed', `Failed to create payment: ${errorMessage}. Please try again.`);
+        Alert.alert('Payment Failed', `Failed to create payment: ${errorMessage}. Please try again.`);
       }
     } finally {
       setIsProcessing(false);
     }
   };
-
-
-
 
   const USD_TO_ETB = 160;
   const formatETB = (amount: number) => `${amount * USD_TO_ETB} ETB`;
@@ -273,12 +268,12 @@ export default function PremiumScreen() {
           <Text style={styles.heroTitle}>Upgrade Your Experience</Text>
           <Text style={styles.heroSubtitle} testID="current-plan">Currently on {tierData[tier].name} plan</Text>
           
-          {userPhone && (
+          {userPhone ? (
             <View style={styles.phoneRow}>
               <Phone size={12} color={Colors.text.white} />
               <Text style={styles.phoneText}>{userPhone}</Text>
             </View>
-          )}
+          ) : null}
 
           <View style={styles.featuresBadges}>
             <View style={styles.featureBadge}>
@@ -315,28 +310,28 @@ export default function PremiumScreen() {
                 onPress={() => setSelectedTier(tierKey)}
                 testID={`tier-${tierKey}`}
               >
-                {tierInfo.popular && (
+                {tierInfo.popular ? (
                   <View style={styles.popularBadge}>
                     <Text style={styles.popularText}>MOST POPULAR</Text>
                   </View>
-                )}
+                ) : null}
                 
-                {isCurrent && (
+                {isCurrent ? (
                   <View style={styles.currentBadge}>
                     <Text style={styles.currentText}>CURRENT</Text>
                   </View>
-                )}
+                ) : null}
 
                 <View style={styles.tierHeader}>
                   <Text style={[styles.tierName, { color: tierInfo.color }]}>
                     {tierInfo.name}
                   </Text>
                   <View style={styles.tierPricing}>
-                    {tierKey !== 'free' && billingPeriod === 'yearly' && (
+                    {tierKey !== 'free' && billingPeriod === 'yearly' ? (
                       <View style={styles.offPill}>
                         <Text style={styles.offPillText}>-50%</Text>
                       </View>
-                    )}
+                    ) : null}
                     <Text style={styles.tierPrice}>{billingPeriod === 'monthly' && tierKey !== 'free' ? `${formatDual(tierInfo.priceMonthly)}/mo` : priceText}</Text>
                   </View>
                 </View>
@@ -393,11 +388,11 @@ export default function PremiumScreen() {
                     <Text style={styles.paymentTitle}>{method.name}</Text>
                     <Text style={styles.paymentSubtitle}>{method.description}</Text>
                   </View>
-                  {isSelected && (
+                  {isSelected ? (
                     <View style={styles.checkmarkBox}>
                       <Check size={20} color={Colors.primary} />
                     </View>
-                  )}
+                  ) : null}
                 </View>
               </TouchableOpacity>
             );
@@ -446,8 +441,6 @@ export default function PremiumScreen() {
     </SafeAreaView>
   );
 }
-
-
 
 const styles = StyleSheet.create({
   container: {
@@ -508,7 +501,11 @@ const styles = StyleSheet.create({
     paddingVertical: 6, 
     borderRadius: 999 
   },
-  phoneText: { color: Colors.text.white, fontWeight: '600', fontSize: 13 },
+  phoneText: { 
+    color: Colors.text.white, 
+    fontWeight: '600', 
+    fontSize: 13 
+  },
   featuresBadges: { 
     flexDirection: 'row', 
     gap: 12, 
@@ -591,8 +588,17 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  offPill: { backgroundColor: '#FFE8E8', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 8 },
-  offPillText: { color: Colors.primary, fontWeight: '700', fontSize: 12 },
+  offPill: { 
+    backgroundColor: '#FFE8E8', 
+    paddingHorizontal: 8, 
+    paddingVertical: 2, 
+    borderRadius: 8 
+  },
+  offPillText: { 
+    color: Colors.primary, 
+    fontWeight: '700', 
+    fontSize: 12 
+  },
   tierPrice: {
     fontSize: 20,
     fontWeight: 'bold',
@@ -668,7 +674,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  paymentTexts: { flex: 1 },
+  paymentTexts: { 
+    flex: 1 
+  },
   paymentTitle: { 
     fontSize: 16, 
     fontWeight: '700', 
@@ -715,10 +723,32 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     fontWeight: '500',
   },
-  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  modalCard: { width: '100%', maxWidth: 420, backgroundColor: Colors.background, borderRadius: 16, padding: 16, gap: 10 },
-  modalHeader: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  modalTitle: { color: Colors.text.primary, fontWeight: '700', fontSize: 16 },
-  modalBody: { color: Colors.text.secondary },
-
+  modalOverlay: { 
+    flex: 1, 
+    backgroundColor: 'rgba(0,0,0,0.4)', 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    padding: 24 
+  },
+  modalCard: { 
+    width: '100%', 
+    maxWidth: 420, 
+    backgroundColor: Colors.background, 
+    borderRadius: 16, 
+    padding: 16, 
+    gap: 10 
+  },
+  modalHeader: { 
+    flexDirection: 'row', 
+    gap: 8, 
+    alignItems: 'center' 
+  },
+  modalTitle: { 
+    color: Colors.text.primary, 
+    fontWeight: '700', 
+    fontSize: 16 
+  },
+  modalBody: { 
+    color: Colors.text.secondary 
+  },
 });
