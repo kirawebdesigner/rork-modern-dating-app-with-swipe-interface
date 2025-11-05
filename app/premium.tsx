@@ -228,7 +228,19 @@ export default function PremiumScreen() {
       console.error('[Premium] handleUpgrade error:', e);
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
       
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch') || errorMessage.includes('Network')) {
+      if (errorMessage.includes('Backend server is not responding') || 
+          errorMessage.includes('<!DOCTYPE') || 
+          errorMessage.includes('<html') ||
+          errorMessage.includes('Unexpected token')) {
+        Alert.alert(
+          'Server Error',
+          'The payment server is currently unavailable. This may be because:\n\n1. The backend server is not running\n2. The server is restarting\n\nPlease wait a moment and try again, or contact support if the issue persists.',
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Retry', onPress: () => handleUpgrade() }
+          ]
+        );
+      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch') || errorMessage.includes('Network')) {
         Alert.alert(
           'Connection Error',
           'Unable to connect to payment service. Please check your internet connection and try again.',

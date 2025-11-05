@@ -15,11 +15,15 @@ app.use("*", cors({
 
 app.onError((err, c) => {
   console.error('[Hono] Error:', err);
-  return c.json({ error: err.message }, 500);
+  return c.json({ 
+    error: true,
+    message: err.message,
+    timestamp: new Date().toISOString()
+  }, 500);
 });
 
 app.use(
-  "/api/*",
+  "/api/trpc/*",
   trpcServer({
     endpoint: "/api/trpc",
     router: appRouter,

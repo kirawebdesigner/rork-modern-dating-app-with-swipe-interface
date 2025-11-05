@@ -89,7 +89,19 @@ export const upgradeProcedure = publicProcedure
       };
     } catch (error) {
       console.error("[tRPC] Payment creation failed:", error);
-      const errorMsg = error instanceof Error ? error.message : "Failed to create payment";
+      
+      let errorMsg = "Failed to create payment";
+      
+      if (error instanceof Error) {
+        errorMsg = error.message;
+        
+        if (errorMsg.includes('<!DOCTYPE') || errorMsg.includes('<html')) {
+          errorMsg = "Payment service is unavailable. Please try again later.";
+        } else if (errorMsg.includes('fetch failed') || errorMsg.includes('ECONNREFUSED')) {
+          errorMsg = "Cannot connect to payment service. Please check your internet connection.";
+        }
+      }
+      
       throw new Error(errorMsg);
     }
   });

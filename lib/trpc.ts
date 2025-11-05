@@ -99,7 +99,7 @@ export const trpcClient = trpc.createClient({
             console.error("[tRPC] Fetch error:", res.status, text.substring(0, 500));
             
             if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
-              throw new Error(`Server returned HTML instead of JSON. Status: ${res.status}. Check if backend is running.`);
+              throw new Error(`Backend server is not responding correctly. Please ensure the server is running on ${baseUrl}`);
             }
           }
           
