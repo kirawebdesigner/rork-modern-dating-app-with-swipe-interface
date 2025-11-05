@@ -9,7 +9,7 @@ const TIER_PRICES: Record<string, number> = {
   vip: 4800,
 };
 
-export default publicProcedure
+export const upgradeProcedure = publicProcedure
   .input(
     z.object({
       tier: z.enum(["free", "silver", "gold", "vip"]),
@@ -89,6 +89,9 @@ export default publicProcedure
       };
     } catch (error) {
       console.error("[tRPC] Payment creation failed:", error);
-      throw new Error("Failed to create payment");
+      const errorMsg = error instanceof Error ? error.message : "Failed to create payment";
+      throw new Error(errorMsg);
     }
   });
+
+export default upgradeProcedure;

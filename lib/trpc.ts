@@ -35,7 +35,10 @@ const toHttpOrigin = (hostLike: string) => {
 const getBaseUrl = () => {
   const env = process.env as Record<string, string | undefined>;
   const envUrl = env.EXPO_PUBLIC_RORK_API_BASE_URL || env.EXPO_PUBLIC_API_URL;
-  if (envUrl && !isPlaceholder(envUrl)) return normalize(envUrl);
+  if (envUrl && !isPlaceholder(envUrl)) {
+    console.log("[tRPC] Using env URL:", envUrl);
+    return normalize(envUrl);
+  }
 
   const extra = (Constants.expoConfig?.extra ?? {}) as Record<string, any>;
   const fromExtra =
@@ -43,21 +46,27 @@ const getBaseUrl = () => {
     extra.RORK_API_BASE_URL ||
     extra.EXPO_PUBLIC_API_URL ||
     extra.API_URL;
-  if (fromExtra && !isPlaceholder(String(fromExtra))) return normalize(String(fromExtra));
+  if (fromExtra && !isPlaceholder(String(fromExtra))) {
+    console.log("[tRPC] Using extra URL:", fromExtra);
+    return normalize(String(fromExtra));
+  }
 
   if (Platform.OS === "web" && typeof location !== "undefined") {
+    console.log("[tRPC] Using web origin:", location.origin);
     return normalize(location.origin);
   }
 
   const hostUri = (Constants as any)?.expoGo?.hostUri as string | undefined;
   if (hostUri) {
-    return toHttpOrigin(hostUri);
+    const origin = toHttpOrigin(hostUri);
+    console.log("[tRPC] Using Expo Go hostUri:", origin);
+    return origin;
   }
 
   const isAndroid = Platform.OS === "android";
-  if (isAndroid) return "http://10.0.2.2:3000";
-
-  return "http://localhost:3000";
+  const fallback = isAndroid ? "http://10.0.2.2:8081" : "http://localhost:8081";
+  console.log("[tRPC] Using fallback:", fallback);
+  return fallback;
 };
 
 const baseUrl = `${getBaseUrl()}`;
@@ -69,6 +78,25 @@ export const trpcClient = trpc.createClient({
     httpLink({
       url: apiUrl,
       transformer: superjson,
+      fetch(url, options) {
+        console.log("[tRPC] Fetching:", url);
+        return fetch(url, {
+          ...options,
+          headers: {
+            ...options?.headers,
+            'Content-Type': 'application/json',
+          },
+        }).then(async (res) => {
+          if (!res.ok) {
+            const text = await res.text();
+            console.error("[tRPC] Fetch error:", res.status, text);
+          }
+          return res;
+        }).catch((err) => {
+          console.error("[tRPC] Network error:", err);
+          throw err;
+        });
+      },
     }),
   ],
 });
