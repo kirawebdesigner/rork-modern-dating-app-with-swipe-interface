@@ -2,7 +2,7 @@ import { v4 as uuidv4 } from "uuid";
 
 const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
 const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.org/api/sandbox";
-const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "0944120739";
+const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "01320811436100";
 
 export interface ArifpayPaymentOptions {
   amount: number;
@@ -42,6 +42,8 @@ export class ArifpayClient {
       console.warn("[Arifpay] API key not configured");
     } else {
       console.log("[Arifpay] Client initialized with API key:", this.apiKey.substring(0, 10) + "...");
+      console.log("[Arifpay] Base URL:", this.baseUrl);
+      console.log("[Arifpay] Account Number:", ARIFPAY_ACCOUNT_NUMBER);
     }
   }
 
@@ -86,14 +88,16 @@ export class ArifpayClient {
         items: [
           {
             name: `Dating App - ${options.tier.toUpperCase()} Membership`,
+            description: `Premium ${options.tier} membership subscription`,
             quantity: 1,
             price: totalAmount,
+            image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
           },
         ],
         beneficiaries: [
           {
             accountNumber: ARIFPAY_ACCOUNT_NUMBER,
-            bank: "ARIFPAY",
+            bank: "AWINETAA",
             amount: totalAmount,
           },
         ],
@@ -119,7 +123,7 @@ export class ArifpayClient {
           result = JSON.parse(responseText);
         } catch (e) {
           console.error("[Arifpay] Failed to parse CBE response:", e);
-          throw new Error(`Invalid response from ArifPay: ${responseText}`);
+          throw new Error(`Invalid response from ArifPay: ${responseText.substring(0, 200)}`);
         }
 
         console.log("[Arifpay] CBE Parsed response:", JSON.stringify(result, null, 2));
@@ -175,14 +179,16 @@ export class ArifpayClient {
       items: [
         {
           name: `Dating App - ${options.tier.toUpperCase()} Membership`,
+          description: `Premium ${options.tier} membership subscription`,
           quantity: 1,
           price: totalAmount,
+          image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
         },
       ],
       beneficiaries: [
         {
           accountNumber: ARIFPAY_ACCOUNT_NUMBER,
-          bank: "ARIFPAY",
+          bank: "AWINETAA",
           amount: totalAmount,
         },
       ],
@@ -208,7 +214,7 @@ export class ArifpayClient {
         result = JSON.parse(responseText);
       } catch (e) {
         console.error("[Arifpay] Failed to parse response:", e);
-        throw new Error(`Invalid response from ArifPay: ${responseText}`);
+        throw new Error(`Invalid response from ArifPay: ${responseText.substring(0, 200)}`);
       }
 
       console.log("[Arifpay] Parsed response:", JSON.stringify(result, null, 2));
@@ -258,7 +264,7 @@ export class ArifpayClient {
         result = JSON.parse(responseText);
       } catch (e) {
         console.error("[Arifpay] Failed to parse verification response:", e);
-        throw new Error(`Invalid verification response: ${responseText}`);
+        throw new Error(`Invalid verification response: ${responseText.substring(0, 200)}`);
       }
 
       console.log("[Arifpay] Verification parsed response:", JSON.stringify(result, null, 2));

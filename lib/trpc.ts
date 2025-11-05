@@ -78,24 +78,36 @@ export const trpcClient = trpc.createClient({
     httpLink({
       url: apiUrl,
       transformer: superjson,
-      fetch(url, options) {
+      async fetch(url, options) {
         console.log("[tRPC] Fetching:", url);
-        return fetch(url, {
-          ...options,
-          headers: {
-            ...options?.headers,
-            'Content-Type': 'application/json',
-          },
-        }).then(async (res) => {
+        console.log("[tRPC] Request body:", options?.body);
+        
+        try {
+          const res = await fetch(url, {
+            ...options,
+            headers: {
+              ...options?.headers,
+              'Content-Type': 'application/json',
+            },
+          });
+          
+          console.log("[tRPC] Response status:", res.status);
+          console.log("[tRPC] Response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
+          
           if (!res.ok) {
-            const text = await res.text();
-            console.error("[tRPC] Fetch error:", res.status, text);
+            const text = await res.clone().text();
+            console.error("[tRPC] Fetch error:", res.status, text.substring(0, 500));
+            
+            if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
+              throw new Error(`Server returned HTML instead of JSON. Status: ${res.status}. Check if backend is running.`);
+            }
           }
+          
           return res;
-        }).catch((err) => {
+        } catch (err) {
           console.error("[tRPC] Network error:", err);
           throw err;
-        });
+        }
       },
     }),
   ],
