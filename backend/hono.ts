@@ -7,18 +7,34 @@ import webhooks from "./hono-webhooks";
 
 const app = new Hono();
 
+console.log('[Hono] Initializing server...');
+console.log('[Hono] Environment:', {
+  hasArifpayKey: !!process.env.ARIFPAY_API_KEY,
+  arifpayBaseUrl: process.env.ARIFPAY_BASE_URL,
+});
+
 app.use("*", cors({
   origin: '*',
-  allowHeaders: ['Content-Type', 'Authorization'],
+  allowHeaders: ['Content-Type', 'Authorization', 'Accept'],
   allowMethods: ['POST', 'GET', 'OPTIONS'],
+  credentials: true,
 }));
+
+app.use('*', async (c, next) => {
+  console.log(`[Hono] ${c.req.method} ${c.req.url}`);
+  await next();
+  console.log(`[Hono] Response status: ${c.res.status}`);
+});
 
 app.onError((err, c) => {
   console.error('[Hono] Error:', err);
+  console.error('[Hono] Error stack:', err.stack);
+  
   return c.json({ 
     error: true,
-    message: err.message,
-    timestamp: new Date().toISOString()
+    message: err.message || 'Internal server error',
+    timestamp: new Date().toISOString(),
+    path: c.req.path,
   }, 500);
 });
 
@@ -34,15 +50,28 @@ app.use(
         path,
         error: error.message,
         stack: error.stack,
+        input: JSON.stringify(input),
       });
     },
   })
 );
 
+console.log('[Hono] tRPC server mounted at /api/trpc');
+
 app.route("/webhooks", webhooks);
 
 app.get("/", (c) => {
-  return c.json({ status: "ok", message: "API is running" });
+  console.log('[Hono] Root endpoint accessed');
+  return c.json({ 
+    status: "ok", 
+    message: "API is running",
+    timestamp: new Date().toISOString(),
+    endpoints: {
+      health: '/health',
+      trpc: '/api/trpc',
+      webhooks: '/webhooks'
+    }
+  });
 });
 
 app.get("/health", (c) => {

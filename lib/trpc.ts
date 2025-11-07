@@ -88,6 +88,7 @@ export const trpcClient = trpc.createClient({
             headers: {
               ...options?.headers,
               'Content-Type': 'application/json',
+              'Accept': 'application/json',
             },
           });
           
@@ -99,13 +100,19 @@ export const trpcClient = trpc.createClient({
             console.error("[tRPC] Fetch error:", res.status, text.substring(0, 500));
             
             if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
-              throw new Error(`Backend server is not responding correctly. Please ensure the server is running on ${baseUrl}`);
+              const errorMsg = `❌ Backend not available\n\nThe server is not responding at ${baseUrl}.\n\nPlease ensure:\n1. The Rork server is running\n2. The backend port (8081) is accessible\n3. Check firewall/network settings`;
+              throw new Error(errorMsg);
             }
           }
           
           return res;
         } catch (err) {
           console.error("[tRPC] Network error:", err);
+          
+          if (err instanceof TypeError && err.message.includes('fetch')) {
+            throw new Error(`Cannot connect to backend server at ${baseUrl}. Please check if the server is running.`);
+          }
+          
           throw err;
         }
       },
