@@ -225,32 +225,67 @@ export default function PremiumScreen() {
         throw new Error('Invalid response from server');
       }
     } catch (e) {
-      console.error('[Premium] handleUpgrade error:', e);
+      console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('[Premium] ❌ Payment Error');
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+      console.error('[Premium] Error:', e);
+      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+      
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
       
-      if (errorMessage.includes('Backend server is not responding') || 
+      if (errorMessage.includes('Backend server not responding') || 
           errorMessage.includes('<!DOCTYPE') || 
           errorMessage.includes('<html') ||
           errorMessage.includes('Unexpected token')) {
         Alert.alert(
-          'Server Error',
-          'The payment server is currently unavailable. This may be because:\n\n1. The backend server is not running\n2. The server is restarting\n\nPlease wait a moment and try again, or contact support if the issue persists.',
+          '🔌 Server Offline',
+          'The backend server is not running.\n\n' +
+          'This typically means:\n' +
+          '• The server needs to be started\n' +
+          '• The server is restarting\n' +
+          '• Network configuration issue\n\n' +
+          'If you are a developer, run:\n' +
+          'bun backend/hono.ts\n\n' +
+          'Otherwise, please contact support.',
           [
             { text: 'OK', style: 'cancel' },
             { text: 'Retry', onPress: () => handleUpgrade() }
           ]
         );
-      } else if (errorMessage.includes('Failed to fetch') || errorMessage.includes('fetch') || errorMessage.includes('Network')) {
+      } else if (errorMessage.includes('Cannot connect to backend server') || 
+                 errorMessage.includes('Failed to fetch') || 
+                 errorMessage.includes('Network request failed')) {
         Alert.alert(
-          'Connection Error',
-          'Unable to connect to payment service. Please check your internet connection and try again.',
+          '📡 Connection Error',
+          'Unable to connect to the payment server.\n\n' +
+          'Please check:\n' +
+          '• Your internet connection\n' +
+          '• WiFi or mobile data is enabled\n' +
+          '• Server is accessible\n\n' +
+          'Then try again.',
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Retry', onPress: () => handleUpgrade() }
+          ]
+        );
+      } else if (errorMessage.includes('ArifPay') || errorMessage.includes('Payment service')) {
+        Alert.alert(
+          '💳 Payment Service Error',
+          errorMessage,
           [
             { text: 'OK', style: 'cancel' },
             { text: 'Retry', onPress: () => handleUpgrade() }
           ]
         );
       } else {
-        Alert.alert('Payment Failed', `Failed to create payment: ${errorMessage}. Please try again.`);
+        Alert.alert(
+          '❌ Payment Failed', 
+          `${errorMessage}\n\nPlease try again or contact support if the issue persists.`,
+          [
+            { text: 'OK', style: 'cancel' },
+            { text: 'Retry', onPress: () => handleUpgrade() }
+          ]
+        );
       }
     } finally {
       setIsProcessing(false);

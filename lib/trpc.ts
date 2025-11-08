@@ -36,7 +36,7 @@ const getBaseUrl = () => {
   const env = process.env as Record<string, string | undefined>;
   const envUrl = env.EXPO_PUBLIC_RORK_API_BASE_URL || env.EXPO_PUBLIC_API_URL;
   if (envUrl && !isPlaceholder(envUrl)) {
-    console.log("[tRPC] Using env URL:", envUrl);
+    console.log("[tRPC] ✅ Using env URL:", envUrl);
     return normalize(envUrl);
   }
 
@@ -47,31 +47,37 @@ const getBaseUrl = () => {
     extra.EXPO_PUBLIC_API_URL ||
     extra.API_URL;
   if (fromExtra && !isPlaceholder(String(fromExtra))) {
-    console.log("[tRPC] Using extra URL:", fromExtra);
+    console.log("[tRPC] ✅ Using extra URL:", fromExtra);
     return normalize(String(fromExtra));
   }
 
   if (Platform.OS === "web" && typeof location !== "undefined") {
-    console.log("[tRPC] Using web origin:", location.origin);
+    console.log("[tRPC] 🌐 Using web origin:", location.origin);
     return normalize(location.origin);
   }
 
   const hostUri = (Constants as any)?.expoGo?.hostUri as string | undefined;
   if (hostUri) {
     const origin = toHttpOrigin(hostUri);
-    console.log("[tRPC] Using Expo Go hostUri:", origin);
+    console.log("[tRPC] 📱 Using Expo Go hostUri:", origin);
     return origin;
   }
 
   const isAndroid = Platform.OS === "android";
   const fallback = isAndroid ? "http://10.0.2.2:8081" : "http://localhost:8081";
-  console.log("[tRPC] Using fallback:", fallback);
+  console.warn("[tRPC] ⚠️ Using fallback (backend may not be running):", fallback);
   return fallback;
 };
 
 const baseUrl = `${getBaseUrl()}`;
 const apiUrl = Platform.OS === "web" ? "/api/trpc" : `${baseUrl}/api/trpc`;
-console.log("[tRPC] Using base URL:", baseUrl, "api:", apiUrl);
+console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+console.log("[tRPC] 🚀 Client Configuration");
+console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+console.log("[tRPC] Platform:", Platform.OS);
+console.log("[tRPC] Base URL:", baseUrl);
+console.log("[tRPC] API URL:", apiUrl);
+console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
 export const trpcClient = trpc.createClient({
   links: [
@@ -79,8 +85,11 @@ export const trpcClient = trpc.createClient({
       url: apiUrl,
       transformer: superjson,
       async fetch(url, options) {
-        console.log("[tRPC] Fetching:", url);
-        console.log("[tRPC] Request body:", options?.body);
+        console.log("\n[tRPC] 📤 Request:", url);
+        console.log("[tRPC] Method:", options?.method || 'GET');
+        if (options?.body) {
+          console.log("[tRPC] Body (first 200 chars):", String(options.body).substring(0, 200));
+        }
         
         try {
           const res = await fetch(url, {
@@ -92,25 +101,60 @@ export const trpcClient = trpc.createClient({
             },
           });
           
-          console.log("[tRPC] Response status:", res.status);
-          console.log("[tRPC] Response headers:", JSON.stringify(Object.fromEntries(res.headers.entries())));
+          console.log("[tRPC] 📥 Response status:", res.status);
           
           if (!res.ok) {
             const text = await res.clone().text();
-            console.error("[tRPC] Fetch error:", res.status, text.substring(0, 500));
+            console.error("[tRPC] ❌ Error response:", text.substring(0, 500));
             
             if (text.startsWith('<!DOCTYPE') || text.startsWith('<html')) {
-              const errorMsg = `❌ Backend not available\n\nThe server is not responding at ${baseUrl}.\n\nPlease ensure:\n1. The Rork server is running\n2. The backend port (8081) is accessible\n3. Check firewall/network settings`;
-              throw new Error(errorMsg);
+              console.error("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+              console.error("[tRPC] ❌ BACKEND CONNECTION ERROR");
+              console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+              console.error("[tRPC] URL attempted:", baseUrl);
+              console.error("[tRPC] Full endpoint:", url);
+              console.error("[tRPC] Response: HTML page (not API)");
+              console.error("\n[tRPC] ⚠️ TROUBLESHOOTING:");
+              console.error("[tRPC] 1. Is the backend server running?");
+              console.error("[tRPC]    Run: bun backend/hono.ts");
+              console.error("[tRPC] 2. Check EXPO_PUBLIC_API_URL in .env");
+              console.error("[tRPC]    Current: " + (process.env.EXPO_PUBLIC_API_URL || 'not set'));
+              console.error("[tRPC] 3. Verify the backend is on port 8081");
+              console.error("[tRPC] 4. Test: curl " + baseUrl + "/health");
+              console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+              
+              throw new Error(
+                `Backend server not responding at ${baseUrl}\n\n` +
+                `Please ensure the backend is running:\n` +
+                `  1. Open a terminal\n` +
+                `  2. Run: bun backend/hono.ts\n` +
+                `  3. Verify it starts on port 8081\n\n` +
+                `Current API URL: ${baseUrl}`
+              );
             }
+          } else {
+            console.log("[tRPC] ✅ Request successful");
           }
           
           return res;
         } catch (err) {
-          console.error("[tRPC] Network error:", err);
+          console.error("\n[tRPC] ❌ Network error:", err);
           
-          if (err instanceof TypeError && err.message.includes('fetch')) {
-            throw new Error(`Cannot connect to backend server at ${baseUrl}. Please check if the server is running.`);
+          if (err instanceof Error && err.message.includes('Backend server not responding')) {
+            throw err;
+          }
+          
+          if (err instanceof TypeError && (err.message.includes('fetch') || err.message.includes('Network'))) {
+            console.error("[tRPC] ⚠️ Cannot connect to:", baseUrl);
+            throw new Error(
+              `Cannot connect to backend server\n\n` +
+              `Attempted URL: ${baseUrl}\n\n` +
+              `Possible causes:\n` +
+              `  1. Backend server is not running\n` +
+              `  2. Wrong URL in .env file\n` +
+              `  3. Network/firewall blocking connection\n\n` +
+              `To fix: Run 'bun backend/hono.ts' in terminal`
+            );
           }
           
           throw err;
