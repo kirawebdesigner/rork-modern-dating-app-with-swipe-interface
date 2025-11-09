@@ -25,10 +25,11 @@ const toHttpOrigin = (hostLike: string) => {
     const withoutScheme = raw.includes("://") ? raw.split("://")[1] : raw;
     const justHost = withoutScheme.replace(/^exp\+?\w*:\/\//, "");
     const url = new URL(`http://${justHost}`);
-    return `${url.protocol}//${url.host}`;
+    const backendPort = process.env.EXPO_PUBLIC_API_PORT || "8081";
+    return `${url.protocol}//${url.hostname}:${backendPort}`;
   } catch (e) {
     console.log("[tRPC] Failed to parse hostUri, falling back:", hostLike, e);
-    return "http://localhost:3000";
+    return "http://localhost:8081";
   }
 };
 
@@ -52,8 +53,21 @@ const getBaseUrl = () => {
   }
 
   if (Platform.OS === "web" && typeof location !== "undefined") {
-    console.log("[tRPC] 🌐 Using web origin:", location.origin);
-    return normalize(location.origin);
+    try {
+      const webUrl = new URL(location.origin);
+      const bundlerPorts = new Set(["19000", "19001", "19002", "19006", "8081"]);
+      const backendPort = process.env.EXPO_PUBLIC_API_PORT || "8081";
+      if (bundlerPorts.has(webUrl.port)) {
+        const derived = `${webUrl.protocol}//${webUrl.hostname}:${backendPort}`;
+        console.log("[tRPC] 🌐 Derived backend from web origin:", derived);
+        return normalize(derived);
+      }
+      console.log("[tRPC] 🌐 Using web origin:", location.origin);
+      return normalize(location.origin);
+    } catch (e) {
+      console.log("[tRPC] Failed to parse web origin, using location.origin", e);
+      return normalize(location.origin);
+    }
   }
 
   const hostUri = (Constants as any)?.expoGo?.hostUri as string | undefined;
@@ -70,20 +84,24 @@ const getBaseUrl = () => {
 };
 
 const baseUrl = `${getBaseUrl()}`;
-const apiUrl = Platform.OS === "web" ? "/api/trpc" : `${baseUrl}/api/trpc`;
+const apiUrl = `${baseUrl}/api/trpc`;
+const webApiUrl = Platform.OS === "web" && typeof location !== "undefined"
+  ? `${location.origin === baseUrl ? "" : baseUrl}/api/trpc`
+  : apiUrl;
+
 console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 console.log("[tRPC] 🚀 Client Configuration");
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
 console.log("[tRPC] Platform:", Platform.OS);
 console.log("[tRPC] Base URL:", baseUrl);
-console.log("[tRPC] API URL:", apiUrl);
+console.log("[tRPC] API URL:", Platform.OS === "web" ? webApiUrl : apiUrl);
 console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
 export const trpcClient = trpc.createClient({
+  transformer: superjson,
   links: [
     httpLink({
-      url: apiUrl,
-      transformer: superjson,
+      url: Platform.OS === "web" ? webApiUrl : apiUrl,
       async fetch(url, options) {
         console.log("\n[tRPC] 📤 Request:", url);
         console.log("[tRPC] Method:", options?.method || 'GET');
