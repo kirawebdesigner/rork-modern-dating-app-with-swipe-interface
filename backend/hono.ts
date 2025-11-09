@@ -85,4 +85,26 @@ app.get("/health", (c) => {
   });
 });
 
+if (import.meta.main) {
+  const PORT = process.env.PORT || 8081;
+  
+  console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log("🚀 Backend Server Starting");
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
+  console.log(`📍 Port: ${PORT}`);
+  console.log(`🔑 ArifPay API Key: ${process.env.ARIFPAY_API_KEY ? '✅ Set' : '❌ Missing'}`);
+  console.log(`🏦 ArifPay Base URL: ${process.env.ARIFPAY_BASE_URL || 'Using default'}`);
+  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
+  
+  const server = Bun.serve({
+    port: PORT,
+    fetch: app.fetch,
+  });
+  
+  console.log(`\n✅ Backend server is running!`);
+  console.log(`🌐 URL: http://localhost:${PORT}`);
+  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+  console.log(`📡 tRPC endpoint: http://localhost:${PORT}/api/trpc\n`);
+}
+
 export default app;

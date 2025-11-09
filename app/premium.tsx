@@ -15,6 +15,7 @@ import { useRouter } from 'expo-router';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Phone, Shield, CreditCard, Calendar } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
+import BackendWarning from '@/components/BackendWarning';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
 import { MembershipTier } from '@/types';
@@ -333,6 +334,8 @@ export default function PremiumScreen() {
             </View>
           </View>
         </LinearGradient>
+
+        <BackendWarning />
 
         <View style={styles.tiersSection}>
           {(Object.keys(tierData) as MembershipTier[]).map((tierKey) => {
