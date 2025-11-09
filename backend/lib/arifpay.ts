@@ -1,7 +1,7 @@
 import { v4 as uuidv4 } from "uuid";
 
 const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
-const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.org/api/sandbox";
+const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.net";
 const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "01320811436100";
 
 export interface ArifpayPaymentOptions {
@@ -106,7 +106,11 @@ export class ArifpayClient {
       console.log("[Arifpay] Creating CBE direct payment with payload:", JSON.stringify(payload, null, 2));
 
       try {
-        const response = await fetch(`${this.baseUrl}/checkout/v2/cbe/direct/transfer`, {
+        const url = `${this.baseUrl}/api/checkout/v2/cbe/direct/transfer`;
+        console.log("[Arifpay] CBE Full URL:", url);
+        console.log("[Arifpay] CBE API Key:", this.apiKey.substring(0, 10) + "...");
+        
+        const response = await fetch(url, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -116,14 +120,28 @@ export class ArifpayClient {
         });
 
         const responseText = await response.text();
-        console.log("[Arifpay] CBE Raw response:", responseText);
+        console.log("[Arifpay] CBE Response status:", response.status);
+        console.log("[Arifpay] CBE Response headers:", JSON.stringify(Object.fromEntries(response.headers.entries())));
+        console.log("[Arifpay] CBE Raw response (first 500 chars):", responseText.substring(0, 500));
 
         let result;
         try {
           result = JSON.parse(responseText);
         } catch (e) {
           console.error("[Arifpay] Failed to parse CBE response:", e);
-          throw new Error(`Invalid response from ArifPay: ${responseText.substring(0, 200)}`);
+          console.error("[Arifpay] Response was:", responseText);
+          
+          if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
+            throw new Error(
+              `ArifPay API returned HTML instead of JSON. ` +
+              `This usually means the endpoint URL is incorrect or the API key is invalid. ` +
+              `Check: 1) Base URL is correct (${this.baseUrl}), ` +
+              `2) API key is valid (${this.apiKey.substring(0, 10)}...), ` +
+              `3) Endpoint path is correct`
+            );
+          }
+          
+          throw new Error(`Invalid JSON response from ArifPay: ${responseText.substring(0, 200)}`);
         }
 
         console.log("[Arifpay] CBE Parsed response:", JSON.stringify(result, null, 2));
@@ -197,7 +215,10 @@ export class ArifpayClient {
     console.log("[Arifpay] Creating checkout session with payload:", JSON.stringify(payload, null, 2));
 
     try {
-      const response = await fetch(`${this.baseUrl}/checkout/session`, {
+      const url = `${this.baseUrl}/api/checkout/session`;
+      console.log("[Arifpay] Checkout Full URL:", url);
+      
+      const response = await fetch(url, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -249,7 +270,10 @@ export class ArifpayClient {
     console.log("[Arifpay] Verifying payment for session:", sessionId);
 
     try {
-      const response = await fetch(`${this.baseUrl}/ms/transaction/status/${sessionId}`, {
+      const url = `${this.baseUrl}/api/ms/transaction/status/${sessionId}`;
+      console.log("[Arifpay] Verification URL:", url);
+      
+      const response = await fetch(url, {
         method: "GET",
         headers: {
           "x-arifpay-key": this.apiKey,
