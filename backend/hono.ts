@@ -96,15 +96,37 @@ if (import.meta.main) {
   console.log(`🏦 ArifPay Base URL: ${process.env.ARIFPAY_BASE_URL || 'Using default'}`);
   console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
   
-  const server = Bun.serve({
-    port: PORT,
-    fetch: app.fetch,
-  });
-  
-  console.log(`\n✅ Backend server is running!`);
-  console.log(`🌐 URL: http://localhost:${PORT}`);
-  console.log(`🔗 Health check: http://localhost:${PORT}/health`);
-  console.log(`📡 tRPC endpoint: http://localhost:${PORT}/api/trpc\n`);
+  try {
+    const server = Bun.serve({
+      port: PORT,
+      fetch: app.fetch,
+      error(error) {
+        console.error('[Bun Server Error]', error);
+        return new Response('Internal Server Error', { status: 500 });
+      },
+    });
+    
+    console.log(`\n✅ Backend server is running!`);
+    console.log(`🌐 URL: http://localhost:${PORT}`);
+    console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+    console.log(`📡 tRPC endpoint: http://localhost:${PORT}/api/trpc`);
+    console.log(`\n💡 Tip: This server will auto-restart on file changes\n`);
+    
+    process.on('SIGINT', () => {
+      console.log('\n👋 Shutting down backend server...');
+      server.stop();
+      process.exit(0);
+    });
+
+    process.on('SIGTERM', () => {
+      console.log('\n👋 Shutting down backend server...');
+      server.stop();
+      process.exit(0);
+    });
+  } catch (error) {
+    console.error('\n❌ Failed to start backend server:', error);
+    process.exit(1);
+  }
 }
 
 export default app;
