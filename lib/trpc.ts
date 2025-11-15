@@ -37,6 +37,22 @@ const getBaseUrl = () => {
   const env = process.env as Record<string, string | undefined>;
   const envUrl = env.EXPO_PUBLIC_RORK_API_BASE_URL || env.EXPO_PUBLIC_API_URL;
   if (envUrl && !isPlaceholder(envUrl)) {
+    if (
+      Platform.OS === "web" &&
+      typeof location !== "undefined" &&
+      location.hostname.includes("exp.direct") &&
+      envUrl.includes("rorktest.dev")
+    ) {
+      const origin = normalize(location.origin);
+      console.warn(
+        "[tRPC] ⚠️ Ignoring remote env URL on web because exp.direct tunnel is active:",
+        envUrl,
+        "→",
+        origin
+      );
+      return origin;
+    }
+
     console.log("[tRPC] ✅ Using env URL:", envUrl);
     return normalize(envUrl);
   }
@@ -48,8 +64,25 @@ const getBaseUrl = () => {
     extra.EXPO_PUBLIC_API_URL ||
     extra.API_URL;
   if (fromExtra && !isPlaceholder(String(fromExtra))) {
-    console.log("[tRPC] ✅ Using extra URL:", fromExtra);
-    return normalize(String(fromExtra));
+    const next = String(fromExtra);
+    if (
+      Platform.OS === "web" &&
+      typeof location !== "undefined" &&
+      location.hostname.includes("exp.direct") &&
+      next.includes("rorktest.dev")
+    ) {
+      const origin = normalize(location.origin);
+      console.warn(
+        "[tRPC] ⚠️ Ignoring extra URL on web because exp.direct tunnel is active:",
+        next,
+        "→",
+        origin
+      );
+      return origin;
+    }
+
+    console.log("[tRPC] ✅ Using extra URL:", next);
+    return normalize(next);
   }
 
   if (Platform.OS === "web" && typeof location !== "undefined") {

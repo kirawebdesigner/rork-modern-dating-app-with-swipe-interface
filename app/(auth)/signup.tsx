@@ -12,7 +12,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, CheckSquare, Square } from 'lucide-react-native';
+import { ArrowLeft, CheckSquare, Square, Mail, Lock, User as UserIcon, Eye, EyeOff } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/hooks/auth-context';
@@ -22,49 +22,52 @@ export default function SignupScreen() {
   const router = useRouter();
   const { signup } = useAuth();
   const { t } = useI18n();
-  const [name, setName] = useState('');
-  const [phone, setPhone] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [agreedToTerms, setAgreedToTerms] = useState(false);
-  const [confirmedAge, setConfirmedAge] = useState(false);
+  const [name, setName] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
+  const [confirmPassword, setConfirmPassword] = useState<string>('');
+  const [agreedToTerms, setAgreedToTerms] = useState<boolean>(false);
+  const [confirmedAge, setConfirmedAge] = useState<boolean>(false);
+  const [loading, setLoading] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
+  const [showConfirm, setShowConfirm] = useState<boolean>(false);
 
   const handleSignup = async () => {
-    console.log('[Signup] handleSignup called', { name, phone });
-    const nameTrim = name.trim();
-    const phoneTrim = phone.trim();
-    
-    if (!nameTrim || !phoneTrim) {
-      console.log('[Signup] Validation failed: empty fields');
+    const trimmedName = name.trim();
+    const trimmedEmail = email.trim().toLowerCase();
+
+    if (!trimmedName || !trimmedEmail || !password || !confirmPassword) {
       alert(t('Error') + ': ' + t('Please fill in all fields'));
       return;
     }
-    
+
+    if (password.length < 8) {
+      alert(t('Error') + ': ' + t('Password must be at least 8 characters long'));
+      return;
+    }
+
+    if (password !== confirmPassword) {
+      alert(t('Error') + ': ' + t('Passwords do not match'));
+      return;
+    }
+
     if (!confirmedAge) {
       alert(t('Error') + ': ' + t('Please confirm you are 18 or older'));
       return;
     }
-    
+
     if (!agreedToTerms) {
       alert(t('Error') + ': ' + t('Please agree to the Terms & Conditions and Privacy Policy'));
       return;
     }
-    
-    if (!/^[0-9+\s-]{10,15}$/.test(phoneTrim)) {
-      console.log('[Signup] Validation failed: invalid phone format');
-      alert(t('Error') + ': ' + t('Please enter a valid phone number'));
-      return;
-    }
 
-    console.log('[Signup] Starting signup process');
     setLoading(true);
     try {
-      await signup(phoneTrim, nameTrim);
-      console.log('[Signup] Signup successful, navigating to profile-setup');
+      await signup(trimmedEmail, password, trimmedName);
       router.push('/profile-setup');
-    } catch (e: unknown) {
-      const msg = (e as Error)?.message ?? '';
-      console.log('[Signup] Signup failed:', msg);
-      alert(t('Error') + ': ' + (msg || t('Signup failed. Please try again.')));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : t('Signup failed. Please try again.');
+      alert(t('Error') + ': ' + message);
     } finally {
       setLoading(false);
     }
@@ -107,33 +110,91 @@ export default function SignupScreen() {
           <View style={styles.form}>
             <View style={styles.inputContainer}>
               <Text style={styles.label}>{t('Name')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('Your name')}
-                value={name}
-                onChangeText={setName}
-                autoCapitalize="words"
-                testID="signup-name"
-              />
+              <View style={styles.inputWrapper}>
+                <UserIcon size={18} color={Colors.text.secondary} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('Your name')}
+                  value={name}
+                  onChangeText={setName}
+                  autoCapitalize="words"
+                  testID="signup-name"
+                />
+              </View>
             </View>
 
             <View style={styles.inputContainer}>
-              <Text style={styles.label}>{t('Phone Number')}</Text>
-              <TextInput
-                style={styles.input}
-                placeholder={t('Phone number (e.g., 0944120739)')}
-                value={phone}
-                onChangeText={setPhone}
-                keyboardType="phone-pad"
-                autoCapitalize="none"
-                testID="signup-phone"
-              />
+              <Text style={styles.label}>{t('Email')}</Text>
+              <View style={styles.inputWrapper}>
+                <Mail size={18} color={Colors.text.secondary} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('you@example.com')}
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoComplete="email"
+                  textContentType="emailAddress"
+                  testID="signup-email"
+                />
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>{t('Password')}</Text>
+              <View style={styles.inputWrapper}>
+                <Lock size={18} color={Colors.text.secondary} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('Create a password')}
+                  value={password}
+                  onChangeText={setPassword}
+                  secureTextEntry={!showPassword}
+                  autoCapitalize="none"
+                  autoComplete="password"
+                  textContentType="newPassword"
+                  testID="signup-password"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowPassword((prev) => !prev)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  testID="signup-toggle-password"
+                >
+                  {showPassword ? <EyeOff size={18} color={Colors.text.secondary} /> : <Eye size={18} color={Colors.text.secondary} />}
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>{t('Confirm Password')}</Text>
+              <View style={styles.inputWrapper}>
+                <Lock size={18} color={Colors.text.secondary} />
+                <TextInput
+                  style={styles.input}
+                  placeholder={t('Confirm your password')}
+                  value={confirmPassword}
+                  onChangeText={setConfirmPassword}
+                  secureTextEntry={!showConfirm}
+                  autoCapitalize="none"
+                  autoComplete="password"
+                  textContentType="newPassword"
+                  testID="signup-confirm-password"
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirm((prev) => !prev)}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  testID="signup-toggle-confirm"
+                >
+                  {showConfirm ? <EyeOff size={18} color={Colors.text.secondary} /> : <Eye size={18} color={Colors.text.secondary} />}
+                </TouchableOpacity>
+              </View>
             </View>
 
             <View style={styles.checkboxContainer}>
               <TouchableOpacity
                 style={styles.checkboxRow}
-                onPress={() => setConfirmedAge(!confirmedAge)}
+                onPress={() => setConfirmedAge((prev) => !prev)}
                 testID="age-checkbox"
               >
                 {confirmedAge ? (
@@ -148,7 +209,7 @@ export default function SignupScreen() {
 
               <TouchableOpacity
                 style={styles.checkboxRow}
-                onPress={() => setAgreedToTerms(!agreedToTerms)}
+                onPress={() => setAgreedToTerms((prev) => !prev)}
                 testID="terms-checkbox"
               >
                 {agreedToTerms ? (
@@ -160,8 +221,8 @@ export default function SignupScreen() {
                   {t('I agree to the')}{' '}
                   <Text
                     style={styles.linkText}
-                    onPress={(e) => {
-                      e.stopPropagation();
+                    onPress={(event) => {
+                      event.stopPropagation();
                       router.push('/terms' as any);
                     }}
                   >
@@ -170,8 +231,8 @@ export default function SignupScreen() {
                   {' '}{t('and')}{' '}
                   <Text
                     style={styles.linkText}
-                    onPress={(e) => {
-                      e.stopPropagation();
+                    onPress={(event) => {
+                      event.stopPropagation();
                       router.push('/privacy-policy' as any);
                     }}
                   >
@@ -182,14 +243,12 @@ export default function SignupScreen() {
             </View>
 
             <GradientButton
-              title={t('Sign Up')}
+              title={loading ? t('Signing Up...') : t('Sign Up')}
               onPress={handleSignup}
               loading={loading}
               style={styles.button}
               testID="signup-submit"
             />
-
-
           </View>
 
           <View style={styles.footer}>
@@ -245,76 +304,35 @@ const styles = StyleSheet.create({
   },
   form: {
     flex: 1,
+    gap: 18,
   },
   inputContainer: {
-    marginBottom: 16,
+    gap: 10,
   },
   label: {
     fontSize: 14,
     color: Colors.text.secondary,
-    marginBottom: 8,
     fontWeight: '500',
   },
-  input: {
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
-    color: Colors.text.primary,
     backgroundColor: Colors.background,
   },
-  button: {
-    marginTop: 24,
-    marginBottom: 20,
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  dividerLine: {
+  input: {
     flex: 1,
-    height: 1,
-    backgroundColor: Colors.border,
-  },
-  dividerText: {
-    marginHorizontal: 16,
-    color: Colors.text.secondary,
-    fontSize: 14,
-  },
-  socialButton: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 30,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  socialButtonText: {
     fontSize: 16,
     color: Colors.text.primary,
-    fontWeight: '500',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    paddingVertical: 20,
-    flexWrap: 'wrap',
-  },
-  footerText: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-  },
-  footerLink: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
   },
   checkboxContainer: {
-    marginTop: 16,
     gap: 16,
+    marginTop: 8,
   },
   checkboxRow: {
     flexDirection: 'row',
@@ -331,5 +349,23 @@ const styles = StyleSheet.create({
     color: Colors.primary,
     fontWeight: '600',
     textDecorationLine: 'underline',
+  },
+  button: {
+    marginTop: 12,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    flexWrap: 'wrap',
+  },
+  footerText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+  },
+  footerLink: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });

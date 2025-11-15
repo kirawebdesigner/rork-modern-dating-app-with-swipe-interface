@@ -26,6 +26,7 @@ interface ProfileData {
   city?: string;
   heightCm?: string;
   education?: string;
+  phone?: string;
 }
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'] as const;
@@ -46,6 +47,7 @@ export default function ProfileSetup() {
     interestedIn: null,
     interests: [],
     photoUri: null,
+    phone: '',
   });
 
   const { setCurrentProfile, setFilters, filters } = useApp();

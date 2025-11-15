@@ -1,300 +1,288 @@
 import createContextHook from '@nkzw/create-context-hook';
-import { useEffect, useState, useCallback, useMemo } from 'react';
-import { AuthUser, User, ThemeId } from '@/types';
-import { supabase } from '@/lib/supabase';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Alert } from 'react-native';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { supabase } from '@/lib/supabase';
+import { AuthUser, User, ThemeId } from '@/types';
 
-interface AuthContextType {
+type SupabaseProfileRow = {
+  id: string;
+  name: string | null;
+  age: number | null;
+  birthday: string | null;
+  gender: 'boy' | 'girl' | null;
+  interested_in: 'boy' | 'girl' | null;
+  bio: string | null;
+  photos: string[] | null;
+  interests: string[] | null;
+  city: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  height_cm: number | null;
+  education: string | null;
+  instagram: string | null;
+  phone: string | null;
+  email: string | null;
+  verified: boolean | null;
+  is_premium: boolean | null;
+  last_active: string | null;
+  owned_themes: ThemeId[] | null;
+  profile_theme: ThemeId | null;
+  completed: boolean | null;
+};
+
+interface SerializedUser extends Omit<User, 'birthday' | 'lastActive'> {
+  birthday: string | null;
+  lastActive: string | null;
+}
+
+interface AuthContextValue {
   user: AuthUser | null;
   isLoading: boolean;
   isAuthenticated: boolean;
-  login: (phone: string) => Promise<void>;
-  signup: (phone: string, name: string) => Promise<void>;
+  login: (email: string, password: string) => Promise<void>;
+  signup: (email: string, password: string, name: string) => Promise<void>;
   logout: () => Promise<void>;
   reloadProfile: () => Promise<void>;
 }
 
-export const [AuthProvider, useAuth] = createContextHook<AuthContextType>(() => {
+const USER_STORAGE_KEY = 'user_profile';
+
+const mapProfile = (row: SupabaseProfileRow): User => {
+  const ownedThemes: ThemeId[] = Array.isArray(row.owned_themes) ? row.owned_themes : [];
+  const profileTheme: ThemeId | null = (row.profile_theme ?? null) as ThemeId | null;
+  return {
+    id: row.id,
+    name: row.name ?? 'User',
+    age: Number(row.age ?? 0),
+    birthday: row.birthday ? new Date(row.birthday) : undefined,
+    gender: (row.gender ?? 'boy') as 'boy' | 'girl',
+    interestedIn: row.interested_in ?? undefined,
+    bio: row.bio ?? '',
+    photos: Array.isArray(row.photos) ? row.photos : [],
+    interests: Array.isArray(row.interests) ? row.interests : [],
+    location: {
+      city: row.city ?? '',
+      latitude: row.latitude ?? undefined,
+      longitude: row.longitude ?? undefined,
+    },
+    heightCm: row.height_cm ?? undefined,
+    education: row.education ?? undefined,
+    instagram: row.instagram ?? undefined,
+    phone: row.phone ?? null,
+    email: row.email ?? null,
+    verified: Boolean(row.verified),
+    isPremium: Boolean(row.is_premium),
+    lastActive: row.last_active ? new Date(row.last_active) : undefined,
+    privacy: undefined,
+    credits: undefined,
+    membershipTier: undefined,
+    ownedThemes,
+    profileTheme,
+    completed: Boolean(row.completed),
+  };
+};
+
+const serializeProfile = (profile: User): SerializedUser => ({
+  ...profile,
+  birthday: profile.birthday ? profile.birthday.toISOString() : null,
+  lastActive: profile.lastActive ? profile.lastActive.toISOString() : null,
+});
+
+const deserializeProfile = (raw: string | null): User | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as SerializedUser;
+    return {
+      ...parsed,
+      birthday: parsed.birthday ? new Date(parsed.birthday) : undefined,
+      lastActive: parsed.lastActive ? new Date(parsed.lastActive) : undefined,
+    } as User;
+  } catch (error) {
+    console.log('[Auth] Failed to deserialize cached profile', error);
+    return null;
+  }
+};
+
+const persistProfile = async (profile: User | null) => {
+  if (!profile) {
+    await AsyncStorage.removeItem(USER_STORAGE_KEY);
+    return;
+  }
+  await AsyncStorage.setItem(USER_STORAGE_KEY, JSON.stringify(serializeProfile(profile)));
+};
+
+const fetchProfile = async (userId: string): Promise<User | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle<SupabaseProfileRow>();
+
+    if (error) {
+      console.log('[Auth] fetchProfile error', error.message);
+      return null;
+    }
+
+    if (!data) {
+      console.log('[Auth] No profile row for user', userId);
+      return null;
+    }
+
+    return mapProfile(data);
+  } catch (error) {
+    console.log('[Auth] fetchProfile exception', error);
+    return null;
+  }
+};
+
+const createProfile = async (userId: string, email: string | null, name: string) => {
+  const payload = {
+    id: userId,
+    email,
+    phone: null,
+    name,
+    bio: '',
+    photos: [],
+    interests: [],
+    city: '',
+    verified: false,
+    owned_themes: [] as ThemeId[],
+    profile_theme: null as ThemeId | null,
+    completed: false,
+  };
+
+  const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+  if (error) {
+    console.log('[Auth] createProfile error', error.message);
+  }
+};
+
+export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
 
+  const synchronizeUser = useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const cachedProfile = deserializeProfile(await AsyncStorage.getItem(USER_STORAGE_KEY));
+      const { data } = await supabase.auth.getUser();
+      const currentUser = data?.user ?? null;
+
+      if (!currentUser) {
+        setUser(null);
+        await persistProfile(null);
+        return;
+      }
+
+      const profile = cachedProfile && cachedProfile.id === currentUser.id
+        ? cachedProfile
+        : await fetchProfile(currentUser.id);
+
+      if (!profile) {
+        await createProfile(currentUser.id, currentUser.email ?? null, currentUser.email?.split('@')[0] ?? 'User');
+      }
+
+      const finalProfile = profile ?? await fetchProfile(currentUser.id);
+      if (finalProfile) {
+        await persistProfile(finalProfile);
+      }
+
+      await AsyncStorage.setItem('user_id', currentUser.id);
+      if (finalProfile?.phone) {
+        await AsyncStorage.setItem('user_phone', finalProfile.phone);
+      } else {
+        await AsyncStorage.removeItem('user_phone');
+      }
+
+      const next: AuthUser = {
+        id: currentUser.id,
+        email: currentUser.email ?? '',
+        name: finalProfile?.name ?? currentUser.email?.split('@')[0] ?? 'User',
+        profile: finalProfile ?? undefined,
+      };
+      setUser(next);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
-    let mounted = true;
+    let isMounted = true;
 
     const init = async () => {
-      try {
-        console.log('[Auth] Initializing session…');
-        const [storedUserId, storedPhoneRaw] = await Promise.all([
-          AsyncStorage.getItem('user_id'),
-          AsyncStorage.getItem('user_phone'),
-        ]);
-        const storedPhone = storedPhoneRaw ? normalizePhone(storedPhoneRaw) : null;
-        if (!mounted) return;
-
-        const id = storedUserId ?? '';
-        if (id) {
-          const profile = await fetchProfileById(id);
-          if (profile) {
-            const next: AuthUser = { id: profile.id, email: '', name: profile.name, profile };
-            setUser(next);
-            return;
-          } else {
-            await AsyncStorage.removeItem('user_id');
-          }
-        }
-
-        if (storedPhone) {
-          const profile = await fetchProfileByPhone(storedPhone);
-          if (profile) {
-            const next: AuthUser = { id: profile.id, email: '', name: profile.name, profile };
-            setUser(next);
-            await AsyncStorage.setItem('user_id', profile.id);
-          } else {
-            await AsyncStorage.multiRemove(['user_phone', 'user_id']);
-            setUser(null);
-          }
-        } else {
-          setUser(null);
-        }
-      } catch (e) {
-        console.error('[Auth] init error', e);
-      } finally {
-        if (mounted) setIsLoading(false);
-      }
+      if (!isMounted) return;
+      await synchronizeUser();
     };
+
     init();
 
+    const { data: subscription } = supabase.auth.onAuthStateChange(async () => {
+      if (!isMounted) return;
+      await synchronizeUser();
+    });
+
     return () => {
-      mounted = false;
+      isMounted = false;
+      subscription.subscription.unsubscribe();
     };
-  }, []);
+  }, [synchronizeUser]);
 
-  const mapProfile = (data: any): User => ({
-    id: data.id as string,
-    name: (data.name as string) ?? 'User',
-    age: (data.age as number | null) ?? 0,
-    birthday: data.birthday ? new Date(data.birthday as string) : undefined,
-    gender: (data.gender as 'boy' | 'girl') ?? 'boy',
-    interestedIn: (data.interested_in as 'boy' | 'girl' | null) ?? undefined,
-    bio: (data.bio as string) ?? '',
-    photos: (data.photos as string[] | null) ?? [],
-    interests: (data.interests as string[] | null) ?? [],
-    location: {
-      city: (data.city as string) ?? '',
-      latitude: data.latitude ? Number(data.latitude) : undefined,
-      longitude: data.longitude ? Number(data.longitude) : undefined,
-    },
-    heightCm: data.height_cm ? Number(data.height_cm) : undefined,
-    education: data.education ? String(data.education) : undefined,
-    verified: Boolean(data.verified),
-    lastActive: data.last_active ? new Date(data.last_active as string) : undefined,
-    ownedThemes: ((data.owned_themes as string[] | null) ?? []) as ThemeId[],
-    profileTheme: ((data.profile_theme as string | null) ?? null) as ThemeId | null,
-    completed: Boolean(data.completed),
-  });
-
-  const fetchProfileById = async (id: string): Promise<User | null> => {
-    try {
-      console.log('[Auth] fetchProfileById', id);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', id)
-        .maybeSingle();
-      
-      if (error) {
-        console.error('[Auth] fetchProfileById error:', JSON.stringify(error, null, 2));
-        console.error('[Auth] Error message:', error.message);
-        return null;
-      }
-      
-      if (!data) {
-        console.log('[Auth] No profile found for id', id);
-        return null;
-      }
-      
-      console.log('[Auth] Profile found by ID successfully');
-      return mapProfile(data);
-    } catch (err) {
-      console.error('[Auth] fetchProfileById unexpected error:', err);
-      if (err instanceof Error) {
-        console.error('[Auth] Error message:', err.message);
-      }
-      return null;
+  const login = useCallback(async (email: string, password: string) => {
+    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    if (error) {
+      throw new Error(error.message || 'Invalid credentials');
     }
-  };
+    await synchronizeUser();
+  }, [synchronizeUser]);
 
-  const fetchProfileByPhone = async (phone: string, retryCount = 0): Promise<User | null> => {
-    const maxRetries = 2;
-    try {
-      const masked = phone.length > 4 ? phone.slice(0, -4).replace(/\d/g, '*') + phone.slice(-4) : '***';
-      console.log('[Auth] fetchProfileByPhone', masked, retryCount > 0 ? `(retry ${retryCount})` : '');
-      
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('phone', phone)
-        .maybeSingle();
-      
-      if (error) {
-        if (error.message?.includes('Failed to fetch') && retryCount < maxRetries) {
-          console.log('[Auth] Network error, retrying in 1s...');
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          return fetchProfileByPhone(phone, retryCount + 1);
-        }
-        console.error('[Auth] fetchProfileByPhone error:', JSON.stringify(error, null, 2));
-        console.error('[Auth] Error message:', error.message);
-        console.error('[Auth] Error details:', error.details);
-        console.error('[Auth] Error hint:', error.hint);
-        return null;
-      }
-      
-      if (!data) {
-        console.log('[Auth] No profile found for phone', masked);
-        return null;
-      }
-      
-      console.log('[Auth] Profile found successfully');
-      return mapProfile(data);
-    } catch (err) {
-      if (err instanceof Error && err.message?.includes('Failed to fetch') && retryCount < maxRetries) {
-        console.log('[Auth] Network error (catch), retrying in 1s...');
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        return fetchProfileByPhone(phone, retryCount + 1);
-      }
-      console.error('[Auth] fetchProfileByPhone unexpected error:', err);
-      console.error('[Auth] Error type:', typeof err);
-      if (err instanceof Error) {
-        console.error('[Auth] Error message:', err.message);
-        console.error('[Auth] Error stack:', err.stack);
-      }
-      return null;
+  const signup = useCallback(async (email: string, password: string, name: string) => {
+    const trimmedEmail = email.trim().toLowerCase();
+    const trimmedName = name.trim();
+
+    if (!trimmedEmail || !trimmedName) {
+      throw new Error('Email and name are required');
     }
-  };
 
-  const clearStorage = async () => {
-    console.log('[Auth] clearing auth-related storage');
-    try {
-      const allKeys = await AsyncStorage.getAllKeys();
-      if (allKeys.length > 0) {
-        await AsyncStorage.multiRemove(allKeys);
-      }
-    } catch (e) {
-      console.log('[Auth] clear storage failed', e);
+    const { data, error } = await supabase.auth.signUp({ email: trimmedEmail, password });
+    if (error) {
+      throw new Error(error.message || 'Unable to create account');
     }
-  };
 
-  const normalizePhone = (value: string) => value.replace(/\D/g, '');
-
-  const login = useCallback(async (phone: string) => {
-    const cleanPhone = normalizePhone(phone.trim());
-    await clearStorage();
-    setUser(null);
-    await new Promise(resolve => setTimeout(resolve, 50));
-
-    console.log('[Auth] Fetching profile for phone:', cleanPhone.slice(0, -4).replace(/\d/g, '*') + cleanPhone.slice(-4));
-    const profile = await fetchProfileByPhone(cleanPhone);
-    if (!profile) throw new Error('Phone number not found. Please sign up first.');
-
-    console.log('[Auth] Profile fetched successfully:', profile.id);
-    console.log('[Auth] Profile data:', JSON.stringify({
-      id: profile.id,
-      name: profile.name,
-      completed: profile.completed,
-      hasPhotos: profile.photos?.length > 0,
-      hasBio: !!profile.bio
-    }));
-    
-    await AsyncStorage.multiSet([
-      ['user_phone', cleanPhone],
-      ['user_id', profile.id],
-    ]);
-    
-    await AsyncStorage.setItem('user_profile', JSON.stringify(profile));
-
-    const next: AuthUser = { id: profile.id, email: '', name: profile.name, profile };
-    setUser(next);
-    console.log('[Auth] Login complete, user state updated');
-  }, []);
-
-  const signup = useCallback(async (phone: string, name: string) => {
-    const cleanPhone = normalizePhone(phone.trim());
-    const cleanName = name.trim();
-
-    try {
-      await clearStorage();
-      setUser(null);
-      const existing = await fetchProfileByPhone(cleanPhone);
-      if (existing) throw new Error('Phone number already registered. Please login instead.');
-
-      const { data, error } = await supabase
-        .from('profiles')
-        .insert({ phone: cleanPhone, name: cleanName })
-        .select()
-        .single();
-      if (error) throw new Error('Failed to create account: ' + error.message);
-      if (!data) throw new Error('Failed to create account: No data returned');
-
-      const userId = data.id as string;
-
-      const { error: membershipError } = await supabase
-        .from('memberships')
-        .insert({ user_id: userId, phone_number: cleanPhone });
-      if (membershipError) console.log('[Auth] membership creation error (non-fatal)', membershipError);
-
-      try {
-        const code = await AsyncStorage.getItem('referrer_code');
-        if (code) {
-          const { data: refUser, error: refErr } = await supabase
-            .from('profiles')
-            .select('id')
-            .or(`referral_code.eq.${code},id.eq.${code}`)
-            .maybeSingle();
-          if (!refErr && refUser && refUser.id !== userId) {
-            await supabase.from('profiles').update({ referred_by: refUser.id }).eq('id', userId);
-            await supabase.from('referrals').insert({ referrer_id: refUser.id, referred_user_id: userId });
-            await AsyncStorage.removeItem('referrer_code');
-          }
-        }
-      } catch (refErr) {
-        console.log('[Auth] Referral processing failed (non-fatal)');
-      }
-
-      await AsyncStorage.multiSet([
-        ['user_phone', cleanPhone],
-        ['user_id', userId],
-      ]);
-
-      const profile = await fetchProfileById(userId);
-      const next: AuthUser = { id: userId, email: '', name: cleanName, profile: profile ?? undefined };
-      setUser(next);
-    } catch (error) {
-      console.log('[Auth] signup failed with error:', error);
-      throw error;
+    const userId = data.user?.id;
+    if (userId) {
+      await createProfile(userId, data.user?.email ?? trimmedEmail, trimmedName);
     }
-  }, []);
+
+    await synchronizeUser();
+  }, [synchronizeUser]);
 
   const logout = useCallback(async () => {
-    console.log('[Auth] logout called');
-    await clearStorage();
+    await supabase.auth.signOut();
+    await persistProfile(null);
+    await AsyncStorage.removeItem('user_id');
+    await AsyncStorage.removeItem('user_phone');
     setUser(null);
-    console.log('[Auth] logout complete');
   }, []);
 
   const reloadProfile = useCallback(async () => {
-    const [storedId, storedPhone] = await Promise.all([
-      AsyncStorage.getItem('user_id'),
-      AsyncStorage.getItem('user_phone'),
-    ]);
-    const profile = storedId ? await fetchProfileById(storedId) : (storedPhone ? await fetchProfileByPhone(storedPhone) : null);
-    if (!profile) return;
-    setUser(prev => {
-      if (!prev) return prev;
-      const next: AuthUser = { ...prev, id: profile.id, profile: profile ?? undefined, name: profile?.name ?? prev.name };
-      return next;
-    });
-  }, []);
+    if (!user) return;
+    const profile = await fetchProfile(user.id);
+    if (profile) {
+      await persistProfile(profile);
+      if (profile.phone) {
+        await AsyncStorage.setItem('user_phone', profile.phone);
+      }
+      setUser((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          name: profile.name ?? prev.name,
+          profile,
+        } as AuthUser;
+      });
+    }
+  }, [user]);
 
   return useMemo(() => ({
     user,

@@ -27,6 +27,8 @@ export interface User {
   heightCm?: number;
   education?: string;
   instagram?: string;
+  phone?: string | null;
+  email?: string | null;
   verified?: boolean;
   isPremium?: boolean;
   lastActive?: Date;

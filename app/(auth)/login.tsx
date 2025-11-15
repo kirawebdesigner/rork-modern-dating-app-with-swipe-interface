@@ -11,7 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft } from 'lucide-react-native';
+import { ArrowLeft, Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/hooks/auth-context';
@@ -19,29 +19,25 @@ import { useAuth } from '@/hooks/auth-context';
 export default function LoginScreen() {
   const router = useRouter();
   const { login } = useAuth();
-  const [phone, setPhone] = useState<string>('');
+  const [email, setEmail] = useState<string>('');
+  const [password, setPassword] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
+  const [showPassword, setShowPassword] = useState<boolean>(false);
 
   const handleLogin = async () => {
-    console.log('[Login] handleLogin called', { phone });
-    const cleanPhone = phone.trim();
-    
-    if (!cleanPhone) {
-      console.log('[Login] Validation failed: empty phone');
-      alert('Please enter your phone number');
+    const trimmedEmail = email.trim().toLowerCase();
+    if (!trimmedEmail || !password) {
+      alert('Please enter your email and password.');
       return;
     }
 
-    console.log('[Login] Starting login process');
     setLoading(true);
     try {
-      await login(cleanPhone);
-      console.log('[Login] Login successful, navigating to tabs');
+      await login(trimmedEmail, password);
       router.push('/(tabs)');
-    } catch (e: any) {
-      const msg = (e?.message as string | undefined) ?? 'Login failed. Please try again.';
-      console.log('[Login] Login failed:', msg, e);
-      alert(msg);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to sign in. Please try again.';
+      alert(message);
     } finally {
       setLoading(false);
     }
@@ -77,25 +73,55 @@ export default function LoginScreen() {
             testID="login-logo"
           />
           <Text style={styles.title}>Welcome Back</Text>
-          <Text style={styles.subtitle}>Sign in to continue</Text>
+          <Text style={styles.subtitle}>Sign in with your email to continue</Text>
         </View>
 
         <View style={styles.form}>
-          <View style={styles.inputContainer}>
-            <Text style={styles.label}>Phone Number</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="Enter your phone number (e.g., 0944120739)"
-              value={phone}
-              onChangeText={setPhone}
-              keyboardType="phone-pad"
-              autoCapitalize="none"
-              testID="login-phone"
-            />
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Email</Text>
+            <View style={styles.inputWrapper}>
+              <Mail size={18} color={Colors.text.secondary} />
+              <TextInput
+                style={styles.input}
+                placeholder="you@example.com"
+                value={email}
+                onChangeText={setEmail}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                textContentType="emailAddress"
+                testID="login-email"
+              />
+            </View>
+          </View>
+
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Password</Text>
+            <View style={styles.inputWrapper}>
+              <Lock size={18} color={Colors.text.secondary} />
+              <TextInput
+                style={styles.input}
+                placeholder="Enter your password"
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry={!showPassword}
+                autoCapitalize="none"
+                autoComplete="password"
+                textContentType="password"
+                testID="login-password"
+              />
+              <TouchableOpacity
+                onPress={() => setShowPassword((prev) => !prev)}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                testID="login-toggle-password"
+              >
+                {showPassword ? <EyeOff size={18} color={Colors.text.secondary} /> : <Eye size={18} color={Colors.text.secondary} />}
+              </TouchableOpacity>
+            </View>
           </View>
 
           <GradientButton
-            title="Sign In"
+            title={loading ? 'Signing In...' : 'Sign In'}
             onPress={handleLogin}
             loading={loading}
             style={styles.button}
@@ -105,9 +131,8 @@ export default function LoginScreen() {
 
         <View style={styles.footer}>
           <Text style={styles.footerText}>Don&apos;t have an account?</Text>
-          <Text style={styles.footerText}> </Text>
           <TouchableOpacity onPress={() => router.push('/(auth)/signup' as any)} testID="login-signup-link">
-            <Text style={styles.footerLink}>Sign Up</Text>
+            <Text style={styles.footerLink}>Create one</Text>
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
@@ -151,44 +176,41 @@ const styles = StyleSheet.create({
   },
   form: {
     flex: 1,
+    gap: 20,
   },
-  inputContainer: {
-    marginBottom: 16,
+  inputGroup: {
+    gap: 10,
   },
   label: {
     fontSize: 14,
     color: Colors.text.secondary,
-    marginBottom: 8,
     fontWeight: '500',
   },
-  input: {
+  inputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 12,
+    borderRadius: 14,
     paddingHorizontal: 16,
     paddingVertical: 14,
-    fontSize: 16,
-    color: Colors.text.primary,
     backgroundColor: Colors.background,
   },
-  forgotPassword: {
-    alignSelf: 'flex-end',
-    marginBottom: 30,
-  },
-  forgotPasswordText: {
-    color: Colors.primary,
-    fontSize: 14,
-    fontWeight: '600',
+  input: {
+    flex: 1,
+    fontSize: 16,
+    color: Colors.text.primary,
   },
   button: {
-    marginTop: 24,
-    marginBottom: 20,
+    marginTop: 12,
   },
   footer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    paddingVertical: 20,
-    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    paddingVertical: 24,
   },
   footerText: {
     fontSize: 14,
