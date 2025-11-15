@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -17,9 +17,9 @@ import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
+import { useAuth } from '@/hooks/auth-context';
 import { MembershipTier } from '@/types';
 import { trpc } from '@/lib/trpc';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as WebBrowser from 'expo-web-browser';
 
 interface TierFeature {
@@ -105,39 +105,25 @@ const tierData: Record<MembershipTier, TierInfo> = {
 export default function PremiumScreen() {
   const router = useRouter();
   const { tier } = useMembership();
+  const { user } = useAuth();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
-  const [userPhone, setUserPhone] = useState<string>('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('CBE');
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
 
   const paymentMethods = [
-    { id: 'CBE', name: 'CBE Bank', icon: CreditCard, description: 'Direct payment with popup' },
-    { id: 'TELEBIRR', name: 'TeleBirr', icon: Phone, description: 'Mobile wallet payment' },
-    { id: 'AMOLE', name: 'Amole', icon: Phone, description: 'Mobile wallet payment' },
+    { id: 'CBE', name: 'CBE Bank', icon: CreditCard, description: 'Direct payment' },
+    { id: 'TELEBIRR', name: 'TeleBirr', icon: Phone, description: 'Mobile wallet' },
+    { id: 'AMOLE', name: 'Amole', icon: Phone, description: 'Mobile wallet' },
   ] as const;
-
-  useEffect(() => {
-    const loadPhone = async () => {
-      try {
-        const storedPhone = await AsyncStorage.getItem('user_phone');
-        if (storedPhone) {
-          setUserPhone(storedPhone);
-        }
-      } catch (e) {
-        console.log('[Premium] Failed to load phone', e);
-      }
-    };
-    loadPhone();
-  }, []);
 
   const handleUpgrade = async () => {
     try {
-      if (!userPhone) {
-        Alert.alert('Phone Required', 'Please log in first to upgrade your membership.');
+      if (!user?.id) {
+        Alert.alert('Authentication Required', 'Please log in to upgrade your membership.');
         return;
       }
 
@@ -152,70 +138,45 @@ export default function PremiumScreen() {
       }
 
       setIsProcessing(true);
-      console.log('[Premium] Creating payment for tier:', selectedTier);
-      console.log('[Premium] Phone:', userPhone);
-      console.log('[Premium] Payment method:', paymentMethod);
 
       const result = await upgradeMutation.mutateAsync({
+        userId: user.id,
         tier: selectedTier,
-        phone: userPhone,
         paymentMethod: paymentMethod,
       });
 
-      console.log('[Premium] Mutation result:', JSON.stringify(result, null, 2));
-
       if (result.requiresPayment && result.paymentUrl) {
-        console.log('[Premium] Opening payment URL:', result.paymentUrl);
-        
         if (Platform.OS === 'web') {
-          try {
-            const newWindow = window.open(result.paymentUrl, '_blank', 'noopener,noreferrer');
-            if (newWindow) {
-              console.log('[Premium] Payment window opened successfully');
-              Alert.alert(
-                'Payment Started',
-                'Complete your payment in the new window. Your membership will be automatically updated after successful payment.',
-                [
-                  { text: 'OK', onPress: () => router.back() }
-                ]
-              );
-            } else {
-              Alert.alert('Error', 'Please allow popups to complete payment.');
-            }
-          } catch (webErr) {
-            console.error('[Premium] Web browser error:', webErr);
-            Alert.alert('Error', 'Failed to open payment window. Please try again.');
+          const newWindow = window.open(result.paymentUrl, '_blank', 'noopener,noreferrer');
+          if (newWindow) {
+            Alert.alert(
+              'Payment Started',
+              'Complete your payment in the new window. Your membership will be automatically updated after successful payment.',
+              [{ text: 'OK', onPress: () => router.back() }]
+            );
+          } else {
+            Alert.alert('Error', 'Please allow popups to complete payment.');
           }
         } else {
-          try {
-            const supported = await Linking.canOpenURL(result.paymentUrl);
-            if (supported) {
-              const webResult = await WebBrowser.openBrowserAsync(result.paymentUrl, {
-                readerMode: false,
-                enableBarCollapsing: true,
-                showTitle: true,
-              });
-              
-              console.log('[Premium] Browser result:', webResult);
-              
-              if (webResult.type === 'cancel') {
-                Alert.alert('Payment Cancelled', 'You cancelled the payment process.');
-              } else if (webResult.type === 'dismiss') {
-                Alert.alert(
-                  'Payment Window Closed',
-                  'Your membership will be automatically updated if payment was successful.',
-                  [
-                    { text: 'OK', onPress: () => router.back() }
-                  ]
-                );
-              }
-            } else {
-              console.error('[Premium] Cannot open URL:', result.paymentUrl);
-              Alert.alert('Error', 'Cannot open payment link. Please try again later.');
+          const supported = await Linking.canOpenURL(result.paymentUrl);
+          if (supported) {
+            const webResult = await WebBrowser.openBrowserAsync(result.paymentUrl, {
+              readerMode: false,
+              enableBarCollapsing: true,
+              showTitle: true,
+            });
+            
+            if (webResult.type === 'cancel') {
+              Alert.alert('Payment Cancelled', 'You cancelled the payment process.');
+            } else if (webResult.type === 'dismiss') {
+              Alert.alert(
+                'Payment Window Closed',
+                'Your membership will be automatically updated if payment was successful.',
+                [{ text: 'OK', onPress: () => router.back() }]
+              );
             }
-          } catch (linkErr) {
-            console.error('[Premium] Linking error:', linkErr);
-            Alert.alert('Error', 'Failed to open payment page. Please try again.');
+          } else {
+            Alert.alert('Error', 'Cannot open payment link. Please try again later.');
           }
         }
       } else if (result.requiresPayment === false) {
@@ -225,68 +186,8 @@ export default function PremiumScreen() {
         throw new Error('Invalid response from server');
       }
     } catch (e) {
-      console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('[Premium] ❌ Payment Error');
-      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('[Premium] Error:', e);
-      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-      
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
-      
-      if (errorMessage.includes('Backend server not responding') || 
-          errorMessage.includes('<!DOCTYPE') || 
-          errorMessage.includes('<html') ||
-          errorMessage.includes('Unexpected token')) {
-        Alert.alert(
-          '🔌 Server Offline',
-          'The backend server is not running.\n\n' +
-          'This typically means:\n' +
-          '• The server needs to be started\n' +
-          '• The server is restarting\n' +
-          '• Network configuration issue\n\n' +
-          'If you are a developer, run:\n' +
-          'bun backend/hono.ts\n\n' +
-          'Otherwise, please contact support.',
-          [
-            { text: 'OK', style: 'cancel' },
-            { text: 'Retry', onPress: () => handleUpgrade() }
-          ]
-        );
-      } else if (errorMessage.includes('Cannot connect to backend server') || 
-                 errorMessage.includes('Failed to fetch') || 
-                 errorMessage.includes('Network request failed')) {
-        Alert.alert(
-          '📡 Connection Error',
-          'Unable to connect to the payment server.\n\n' +
-          'Please check:\n' +
-          '• Your internet connection\n' +
-          '• WiFi or mobile data is enabled\n' +
-          '• Server is accessible\n\n' +
-          'Then try again.',
-          [
-            { text: 'OK', style: 'cancel' },
-            { text: 'Retry', onPress: () => handleUpgrade() }
-          ]
-        );
-      } else if (errorMessage.includes('ArifPay') || errorMessage.includes('Payment service')) {
-        Alert.alert(
-          '💳 Payment Service Error',
-          errorMessage,
-          [
-            { text: 'OK', style: 'cancel' },
-            { text: 'Retry', onPress: () => handleUpgrade() }
-          ]
-        );
-      } else {
-        Alert.alert(
-          '❌ Payment Failed', 
-          `${errorMessage}\n\nPlease try again or contact support if the issue persists.`,
-          [
-            { text: 'OK', style: 'cancel' },
-            { text: 'Retry', onPress: () => handleUpgrade() }
-          ]
-        );
-      }
+      Alert.alert('Payment Failed', errorMessage, [{ text: 'OK' }]);
     } finally {
       setIsProcessing(false);
     }
@@ -314,13 +215,6 @@ export default function PremiumScreen() {
           </View>
           <Text style={styles.heroTitle}>Upgrade Your Experience</Text>
           <Text style={styles.heroSubtitle} testID="current-plan">Currently on {tierData[tier].name} plan</Text>
-          
-          {userPhone ? (
-            <View style={styles.phoneRow}>
-              <Phone size={12} color={Colors.text.white} />
-              <Text style={styles.phoneText}>{userPhone}</Text>
-            </View>
-          ) : null}
 
           <View style={styles.featuresBadges}>
             <View style={styles.featureBadge}>
@@ -537,21 +431,6 @@ const styles = StyleSheet.create({
     color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
     marginBottom: 4,
-  },
-  phoneRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 6, 
-    marginTop: 12, 
-    backgroundColor: 'rgba(255,255,255,0.15)', 
-    paddingHorizontal: 12, 
-    paddingVertical: 6, 
-    borderRadius: 999 
-  },
-  phoneText: { 
-    color: Colors.text.white, 
-    fontWeight: '600', 
-    fontSize: 13 
   },
   featuresBadges: { 
     flexDirection: 'row', 

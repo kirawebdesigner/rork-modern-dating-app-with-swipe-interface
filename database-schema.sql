@@ -1,4 +1,4 @@
--- Dating App Database Schema (Phone-Based Authentication)
+-- Dating App Database Schema (Email-Based Authentication with Supabase Auth)
 -- Run this SQL in your Supabase SQL Editor
 
 -- Enable UUID extension
@@ -18,10 +18,11 @@ DROP TABLE IF EXISTS public.referrals CASCADE;
 DROP TABLE IF EXISTS public.memberships CASCADE;
 DROP TABLE IF EXISTS public.profiles CASCADE;
 
--- Profiles table (phone number as primary key)
+-- Profiles table (linked to auth.users via id)
 CREATE TABLE public.profiles (
-  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
-  phone TEXT UNIQUE NOT NULL,
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  email TEXT,
+  phone TEXT,
   name TEXT NOT NULL,
   age INTEGER,
   birthday DATE,
@@ -35,8 +36,10 @@ CREATE TABLE public.profiles (
   longitude DECIMAL,
   height_cm INTEGER,
   education TEXT,
+  instagram TEXT,
   distance_preference INTEGER DEFAULT 50,
   verified BOOLEAN DEFAULT FALSE,
+  is_premium BOOLEAN DEFAULT FALSE,
   last_active TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   profile_theme TEXT,
   owned_themes TEXT[] DEFAULT '{}',
@@ -54,6 +57,7 @@ CREATE TABLE public.profiles (
 CREATE TABLE public.memberships (
   id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE UNIQUE NOT NULL,
+  email TEXT,
   phone_number TEXT,
   tier TEXT DEFAULT 'free' CHECK (tier IN ('free', 'silver', 'gold', 'vip')),
   message_credits INTEGER DEFAULT 0,
@@ -161,7 +165,23 @@ CREATE TABLE public.credit_transactions (
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
+-- Payment transactions table (for ArifPay integration)
+CREATE TABLE public.payment_transactions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE NOT NULL,
+  session_id TEXT UNIQUE NOT NULL,
+  amount DECIMAL NOT NULL,
+  currency TEXT DEFAULT 'ETB',
+  tier TEXT CHECK (tier IN ('silver', 'gold', 'vip')),
+  payment_method TEXT,
+  status TEXT DEFAULT 'pending' CHECK (status IN ('pending', 'completed', 'failed', 'cancelled')),
+  arifpay_transaction_id TEXT,
+  completed_at TIMESTAMP WITH TIME ZONE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
 -- Create indexes for better performance
+CREATE INDEX idx_profiles_email ON public.profiles(email);
 CREATE INDEX idx_profiles_phone ON public.profiles(phone);
 CREATE INDEX idx_profiles_gender ON public.profiles(gender);
 CREATE INDEX idx_profiles_age ON public.profiles(age);
@@ -180,6 +200,8 @@ CREATE INDEX idx_profile_views_viewer_id ON public.profile_views(viewer_id);
 CREATE INDEX idx_profile_views_viewed_id ON public.profile_views(viewed_id);
 CREATE INDEX idx_referrals_referrer_id ON public.referrals(referrer_id);
 CREATE INDEX idx_memberships_user_id ON public.memberships(user_id);
+CREATE INDEX idx_payment_transactions_user_id ON public.payment_transactions(user_id);
+CREATE INDEX idx_payment_transactions_session_id ON public.payment_transactions(session_id);
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
@@ -194,6 +216,7 @@ ALTER TABLE public.credit_transactions ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.referrals ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversations ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.conversation_participants ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.payment_transactions ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (Allow all for now - you can restrict later)
 CREATE POLICY "Allow all on profiles" ON public.profiles FOR ALL USING (true) WITH CHECK (true);
@@ -208,8 +231,9 @@ CREATE POLICY "Allow all on profile_views" ON public.profile_views FOR ALL USING
 CREATE POLICY "Allow all on user_interests" ON public.user_interests FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on credit_transactions" ON public.credit_transactions FOR ALL USING (true) WITH CHECK (true);
 CREATE POLICY "Allow all on interests" ON public.interests FOR ALL USING (true) WITH CHECK (true);
+CREATE POLICY "Allow all on payment_transactions" ON public.payment_transactions FOR ALL USING (true) WITH CHECK (true);
 
--- Function to update updated_at timestamp (with fixed search_path)
+-- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION public.update_updated_at_column()
 RETURNS TRIGGER
 SECURITY DEFINER
@@ -231,7 +255,7 @@ CREATE TRIGGER update_memberships_updated_at
   BEFORE UPDATE ON public.memberships
   FOR EACH ROW EXECUTE FUNCTION public.update_updated_at_column();
 
--- Function to create matches when both users like each other (with fixed search_path)
+-- Function to create matches when both users like each other
 CREATE OR REPLACE FUNCTION public.check_for_match()
 RETURNS TRIGGER
 SECURITY DEFINER
@@ -252,8 +276,6 @@ BEGIN
         GREATEST(NEW.swiper_id, NEW.swiped_id)
       )
       ON CONFLICT (user1_id, user2_id) DO NOTHING;
-      
-      RAISE NOTICE 'Match created between % and %', NEW.swiper_id, NEW.swiped_id;
     END IF;
   END IF;
   
@@ -266,26 +288,33 @@ CREATE TRIGGER on_swipe_check_match
   AFTER INSERT ON public.swipes
   FOR EACH ROW EXECUTE FUNCTION public.check_for_match();
 
--- Function to auto-create membership when profile is created
-CREATE OR REPLACE FUNCTION public.handle_new_profile()
+-- Function to auto-create profile and membership when user signs up
+CREATE OR REPLACE FUNCTION public.handle_new_user()
 RETURNS TRIGGER
 SECURITY DEFINER
 SET search_path = public
 LANGUAGE plpgsql
 AS $$
 BEGIN
-  INSERT INTO public.memberships (user_id, phone_number, tier)
-  VALUES (NEW.id, NEW.phone, 'free')
+  -- Create profile
+  INSERT INTO public.profiles (id, email, name)
+  VALUES (NEW.id, NEW.email, COALESCE(NEW.raw_user_meta_data->>'name', split_part(NEW.email, '@', 1)))
+  ON CONFLICT (id) DO NOTHING;
+  
+  -- Create membership
+  INSERT INTO public.memberships (user_id, email, tier)
+  VALUES (NEW.id, NEW.email, 'free')
   ON CONFLICT (user_id) DO NOTHING;
   
   RETURN NEW;
 END;
 $$;
 
--- Trigger to auto-create membership
-CREATE TRIGGER on_profile_create_membership
-  AFTER INSERT ON public.profiles
-  FOR EACH ROW EXECUTE FUNCTION public.handle_new_profile();
+-- Trigger to auto-create profile and membership on signup
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
 
 -- Function to downgrade expired memberships
 CREATE OR REPLACE FUNCTION public.downgrade_expired_memberships()

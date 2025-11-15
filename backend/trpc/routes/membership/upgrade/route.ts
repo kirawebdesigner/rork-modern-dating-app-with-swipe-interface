@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { publicProcedure } from "../../../create-context";
 import { arifpay } from "../../../../lib/arifpay";
+import { createClient } from "@supabase/supabase-js";
+
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 const TIER_PRICES: Record<string, number> = {
   free: 0,
@@ -12,21 +17,13 @@ const TIER_PRICES: Record<string, number> = {
 export const upgradeProcedure = publicProcedure
   .input(
     z.object({
+      userId: z.string(),
       tier: z.enum(["free", "silver", "gold", "vip"]),
-      phone: z.string(),
       paymentMethod: z.string().optional(),
-      successUrl: z.string().optional(),
-      cancelUrl: z.string().optional(),
-      errorUrl: z.string().optional(),
     })
   )
   .mutation(async ({ input, ctx }) => {
-    const pseudoUserId = `phone-${input.phone}`;
-
-    console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("[tRPC Upgrade] 🔄 Processing upgrade request");
-    console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-    console.log("[tRPC Upgrade] User:", pseudoUserId);
+    console.log("[tRPC Upgrade] Processing upgrade for user:", input.userId);
     console.log("[tRPC Upgrade] Tier:", input.tier);
     console.log("[tRPC Upgrade] Payment method:", input.paymentMethod || 'CBE');
 
@@ -34,7 +31,7 @@ export const upgradeProcedure = publicProcedure
     console.log("[tRPC Upgrade] Amount:", amount, "ETB");
 
     if (amount === 0) {
-      console.log("[tRPC Upgrade] ✅ Free tier, no payment required");
+      console.log("[tRPC Upgrade] Free tier, no payment required");
       return {
         success: true as const,
         newTier: input.tier,
@@ -43,11 +40,24 @@ export const upgradeProcedure = publicProcedure
     }
 
     try {
-      const envBase = process.env.EXPO_PUBLIC_API_URL;
-      const isPlaceholder = (url?: string) => !!url && url.includes("your-app.com");
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('email, phone')
+        .eq('id', input.userId)
+        .single();
 
+      if (!profile) {
+        throw new Error('User profile not found');
+      }
+
+      const phone = profile.phone || profile.email;
+      if (!phone) {
+        throw new Error('User phone or email required for payment');
+      }
+
+      const envBase = process.env.EXPO_PUBLIC_API_URL;
       let baseUrl: string | undefined = undefined;
-      if (envBase && !isPlaceholder(envBase)) baseUrl = envBase;
+      if (envBase) baseUrl = envBase;
 
       if (!baseUrl) {
         const origin = ctx.req.headers.get("origin") || ctx.req.headers.get("referer");
@@ -73,13 +83,13 @@ export const upgradeProcedure = publicProcedure
       const cancelUrl = `${baseUrl}/payment-cancel`;
       const errorUrl = `${baseUrl}/payment-error`;
 
-      console.log("[tRPC Upgrade] 💳 Creating ArifPay payment...");
+      console.log("[tRPC Upgrade] Creating ArifPay payment...");
 
       const payment = await arifpay.createPayment({
         amount,
-        phone: input.phone,
+        phone,
         tier: input.tier,
-        userId: pseudoUserId,
+        userId: input.userId,
         paymentMethod: input.paymentMethod || 'CBE',
         successUrl,
         cancelUrl,
@@ -87,10 +97,24 @@ export const upgradeProcedure = publicProcedure
         notifyUrl: `${baseUrl}/webhooks/arifpay`,
       });
 
-      console.log("[tRPC Upgrade] ✅ Payment created successfully");
+      const { error: txError } = await supabase
+        .from('payment_transactions')
+        .insert({
+          user_id: input.userId,
+          session_id: payment.sessionId,
+          amount,
+          tier: input.tier,
+          payment_method: input.paymentMethod || 'CBE',
+          status: 'pending',
+        });
+
+      if (txError) {
+        console.error("[tRPC Upgrade] Failed to create payment transaction:", txError);
+      }
+
+      console.log("[tRPC Upgrade] Payment created successfully");
       console.log("[tRPC Upgrade] Session ID:", payment.sessionId);
       console.log("[tRPC Upgrade] Payment URL:", payment.paymentUrl);
-      console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
 
       return {
         success: true as const,
@@ -100,29 +124,19 @@ export const upgradeProcedure = publicProcedure
         amount,
       };
     } catch (error) {
-      console.error("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      console.error("[tRPC Upgrade] ❌ Payment creation failed");
-      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-      console.error("[tRPC Upgrade] Error:", error);
+      console.error("[tRPC Upgrade] Payment creation failed:", error);
       
       let errorMsg = "Failed to create payment";
       
       if (error instanceof Error) {
-        console.error("[tRPC Upgrade] Error message:", error.message);
-        console.error("[tRPC Upgrade] Error stack:", error.stack);
         errorMsg = error.message;
         
         if (errorMsg.includes('<!DOCTYPE') || errorMsg.includes('<html')) {
-          errorMsg = "Payment service returned invalid response. Please try again later.";
-        } else if (errorMsg.includes('fetch failed') || errorMsg.includes('ECONNREFUSED') || errorMsg.includes('ENOTFOUND')) {
-          errorMsg = "Cannot connect to ArifPay payment service. Please check your internet connection and try again.";
-        } else if (errorMsg.includes('API key')) {
-          errorMsg = "Payment configuration error. Please contact support.";
+          errorMsg = "Payment service error. Please try again.";
+        } else if (errorMsg.includes('fetch failed') || errorMsg.includes('ECONNREFUSED')) {
+          errorMsg = "Cannot connect to payment service. Please check your connection.";
         }
       }
-      
-      console.error("[tRPC Upgrade] Final error message:", errorMsg);
-      console.error("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
       
       throw new Error(errorMsg);
     }
