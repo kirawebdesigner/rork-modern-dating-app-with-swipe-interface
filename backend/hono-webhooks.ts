@@ -14,91 +14,104 @@ webhooks.post("/arifpay", async (c) => {
     const body = await c.req.json();
     console.log("[Webhook] Arifpay notification received:", JSON.stringify(body, null, 2));
 
-    const { uuid, sessionId, status, transactionId, nonce } = body;
+    const { uuid, sessionId, status, transactionId } = body;
     const actualSessionId = uuid || sessionId;
 
     console.log("[Webhook] Processing sessionId:", actualSessionId, "status:", status);
 
+    // Look up the transaction in our database first
+    if (!actualSessionId) {
+      console.error("[Webhook] No sessionId found in webhook payload");
+      return c.json({ error: "Missing sessionId" }, 400);
+    }
+
+    const { data: transaction, error: txError } = await supabase
+      .from('payment_transactions')
+      .select('*')
+      .eq('session_id', actualSessionId)
+      .single();
+
+    if (txError || !transaction) {
+      console.error("[Webhook] Transaction not found:", actualSessionId, txError);
+      // We might want to return 200 to acknowledge receipt even if we can't find it,
+      // to avoid ArifPay retrying indefinitely if it's a valid webhook but invalid internal state.
+      // But for now let's return 404.
+      return c.json({ error: "Transaction not found" }, 404);
+    }
+
     if (status === "SUCCESS" || status === "PAID" || status === "success") {
-      console.log("[Webhook] Payment successful, verifying...");
-      
-      if (!actualSessionId) {
-        console.error("[Webhook] No sessionId found in webhook payload");
-        return c.json({ error: "Missing sessionId" }, 400);
-      }
+      console.log("[Webhook] Payment successful, verifying with ArifPay...");
 
       const verification = await arifpay.verifyPayment(actualSessionId);
-
       console.log("[Webhook] Verification result:", JSON.stringify(verification, null, 2));
 
       if (verification.status === "SUCCESS" || verification.status === "PAID" || verification.status === "success") {
-        console.log("[Webhook] Payment confirmed:", transactionId);
+        console.log("[Webhook] Payment verified. Updating user:", transaction.user_id);
 
-        let userId = '';
-        if (nonce) {
-          const parts = nonce.split('-');
-          userId = parts.length >= 2 ? parts.slice(0, 2).join('-') : '';
+        const userId = transaction.user_id;
+        const amount = verification.amount || transaction.amount;
+        let tier = transaction.tier || 'free';
+
+        // Fallback tier logic if not in transaction
+        if (tier === 'free') {
+           if (amount >= 4800) tier = 'vip';
+           else if (amount >= 3200) tier = 'gold';
+           else if (amount >= 1600) tier = 'silver';
         }
 
-        if (!userId && actualSessionId) {
-          const parts = actualSessionId.split('-');
-          userId = parts.length > 1 ? parts.slice(0, 2).join('-') : '';
+        const now = new Date();
+        const expiresAt = new Date();
+        expiresAt.setMonth(expiresAt.getMonth() + 1); // Add 1 month
+
+        console.log(`[Webhook] Setting tier to ${tier} for user ${userId}`);
+
+        // 1. Update Membership
+        const { error: updateError } = await supabase
+          .from('memberships')
+          .upsert({
+            user_id: userId,
+            tier,
+            expires_at: expiresAt.toISOString(),
+            updated_at: now.toISOString(),
+            // Maintain other fields if they exist
+            // email: transaction.email // Removed to avoid potential null overwrite
+          }, { onConflict: 'user_id' }); // Upsert by user_id
+
+        if (updateError) {
+          console.error("[Webhook] Failed to update membership:", updateError);
+          return c.json({ error: "Failed to update membership" }, 500);
         }
 
-        console.log('[Webhook] Extracted userId:', userId);
+        // 2. Update Payment Transaction Status
+        await supabase
+          .from('payment_transactions')
+          .update({
+            status: 'completed',
+            completed_at: now.toISOString(),
+            arifpay_transaction_id: transactionId || verification.transactionId
+          })
+          .eq('id', transaction.id);
 
-        if (userId && userId.startsWith('phone-')) {
-          const phone = userId.replace('phone-', '');
+        // 3. Update Profile is_premium flag
+        await supabase
+          .from('profiles')
+          .update({ is_premium: true })
+          .eq('id', userId);
 
-          console.log("[Webhook] Updating membership for phone:", phone);
-
-          const { data: profile, error: profileError } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('phone', phone)
-            .maybeSingle();
-
-          if (profileError || !profile) {
-            console.error("[Webhook] Profile not found for phone:", phone, profileError);
-            return c.json({ error: "Profile not found" }, 404);
-          }
-
-          const amount = verification.amount || 0;
-          let tier = 'free';
-          if (amount >= 4800) tier = 'vip';
-          else if (amount >= 3200) tier = 'gold';
-          else if (amount >= 1600) tier = 'silver';
-
-          const now = new Date();
-          const expiresAt = new Date();
-          expiresAt.setMonth(expiresAt.getMonth() + 1);
-
-          console.log(`[Webhook] Setting tier to ${tier} with expiration at ${expiresAt.toISOString()}`);
-
-          const { error: updateError } = await supabase
-            .from('memberships')
-            .upsert({
-              user_id: profile.id,
-              phone_number: phone,
-              tier,
-              expires_at: expiresAt.toISOString(),
-              updated_at: now.toISOString(),
-            }, { onConflict: 'user_id' });
-
-          if (updateError) {
-            console.error("[Webhook] Failed to update membership:", updateError);
-            return c.json({ error: "Failed to update membership" }, 500);
-          }
-
-          console.log("[Webhook] Membership updated successfully. Tier:", tier, "User:", profile.id, "Expires:", expiresAt.toISOString());
-        } else {
-          console.error("[Webhook] Invalid userId extracted:", userId);
-        }
+        console.log("[Webhook] Upgrade successful for user:", userId);
       } else {
         console.log("[Webhook] Payment not verified. Status:", verification.status);
+        await supabase
+          .from('payment_transactions')
+          .update({ status: 'failed' })
+          .eq('id', transaction.id);
       }
     } else {
       console.log("[Webhook] Payment status not successful:", status);
+      await supabase
+          .from('payment_transactions')
+          .update({ status: 'failed' })
+          .eq('id', transaction.id);
     }
 
     return c.json({ success: true });

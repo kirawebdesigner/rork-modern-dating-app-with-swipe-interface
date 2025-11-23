@@ -40,7 +40,7 @@ interface AuthContextValue {
   isLoading: boolean;
   isAuthenticated: boolean;
   login: (email: string, password: string) => Promise<void>;
-  signup: (email: string, password: string, name: string) => Promise<void>;
+  signup: (email: string, password: string, name: string) => Promise<any>;
   logout: () => Promise<void>;
   reloadProfile: () => Promise<void>;
 }
@@ -244,7 +244,15 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
       throw new Error('Email and name are required');
     }
 
-    const { data, error } = await supabase.auth.signUp({ email: trimmedEmail, password });
+    const { data, error } = await supabase.auth.signUp({ 
+      email: trimmedEmail, 
+      password,
+      options: {
+        data: {
+          name: trimmedName,
+        }
+      }
+    });
     if (error) {
       throw new Error(error.message || 'Unable to create account');
     }
@@ -255,6 +263,8 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     }
 
     await synchronizeUser();
+    
+    return data;
   }, [synchronizeUser]);
 
   const logout = useCallback(async () => {

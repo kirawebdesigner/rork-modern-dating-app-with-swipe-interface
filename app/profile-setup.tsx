@@ -7,8 +7,9 @@ import { ArrowLeft, Camera, Calendar, Check, ChevronLeft, ChevronRight, Minus, P
 import * as ImagePicker from 'expo-image-picker';
 import colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
-import { categorizedInterests } from '@/mocks/interests';
+import { categorizedInterests, InterestCategory, Interest } from '@/mocks/interests';
 import { useApp } from '@/hooks/app-context';
+import { useAuth } from '@/hooks/auth-context';
 import { useI18n } from '@/hooks/i18n-context';
 import { User } from '@/types';
 import { supabase } from '@/lib/supabase';
@@ -51,17 +52,19 @@ export default function ProfileSetup() {
   });
 
   const { setCurrentProfile, setFilters, filters } = useApp();
+  const { user, isAuthenticated } = useAuth();
   const { t } = useI18n();
 
   React.useEffect(() => {
     (async () => {
       try {
-        const storedIdRaw = await AsyncStorage.getItem('user_id');
-        const storedPhoneRaw = await AsyncStorage.getItem('user_phone');
-        
-        if (storedIdRaw || storedPhoneRaw) {
-          const id = storedIdRaw ?? '';
-          if (id) {
+        if (!isAuthenticated || !user?.id) {
+            // Wait a bit, maybe auth is initializing
+            return;
+        }
+
+        const id = user.id;
+        if (id) {
             const { data: profile, error } = await supabase
               .from('profiles')
               .select('completed')
@@ -73,7 +76,6 @@ export default function ProfileSetup() {
               router.replace('/(tabs)' as any);
               return;
             }
-          }
         }
         
         const saved = await AsyncStorage.getItem('profile_setup_state');
@@ -87,7 +89,7 @@ export default function ProfileSetup() {
         console.log('[ProfileSetup] Failed to restore saved progress', e);
       }
     })();
-  }, [router]);
+  }, [router, isAuthenticated, user]);
 
   React.useEffect(() => {
     (async () => {
@@ -159,26 +161,41 @@ export default function ProfileSetup() {
       }
       setCurrentStep('extras');
     } else if (currentStep === 'extras') {
+      if (profileData.phone && profileData.phone.length > 0 && profileData.phone.length < 10) {
+        Alert.alert(t('Error'), t('Please enter a valid phone number (min 10 digits)'));
+        return;
+      }
       try {
-        const storedPhone = await AsyncStorage.getItem('user_phone');
-        if (!storedPhone) {
-          Alert.alert(t('Error'), t('Phone number not found. Please login again.'));
-          return;
+        if (!user || !user.id) {
+             Alert.alert(t('Error'), t('User session not found. Please login again.'));
+             return;
         }
+        const storedId = user.id;
+
         const { data: dbProfile, error: fetchErr } = await supabase
           .from('profiles')
           .select('id')
-          .eq('phone', storedPhone)
+          .eq('id', storedId)
           .maybeSingle();
         if (fetchErr || !dbProfile) {
-          Alert.alert(t('Error'), t('Profile not found. Please login again.'));
-          return;
+          // If profile doesn't exist, try to create it again (fallback)
+          const { error: createErr } = await supabase.from('profiles').upsert({
+              id: storedId,
+              email: user.email,
+              name: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim()
+          }, { onConflict: 'id' });
+          
+          if (createErr) {
+             Alert.alert(t('Error'), t('Profile could not be created. Please contact support.'));
+             return;
+          }
         }
-        const authId = dbProfile.id as string;
+        
+        const authId = storedId;
         const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
         const birthday = profileData.birthday ?? new Date(1995, 0, 1);
         const age = calculateAge(birthday);
-        const user: User = {
+        const newProfile: User = {
           id: authId,
           name: name || 'New User',
           age,
@@ -199,27 +216,31 @@ export default function ProfileSetup() {
           const { error: upErr } = await supabase
             .from('profiles')
             .update({
-              name: user.name,
-              age: user.age,
+              name: newProfile.name,
+              age: newProfile.age,
               birthday: birthday.toISOString().slice(0,10),
-              gender: user.gender,
-              interested_in: user.interestedIn ?? null,
-              bio: user.bio,
-              photos: user.photos,
-              interests: user.interests,
-              city: user.location?.city ?? null,
-              height_cm: user.heightCm ?? null,
-              education: user.education ?? null,
+              gender: newProfile.gender,
+              interested_in: newProfile.interestedIn ?? null,
+              bio: newProfile.bio,
+              photos: newProfile.photos,
+              interests: newProfile.interests,
+              city: newProfile.location?.city ?? null,
+              height_cm: newProfile.heightCm ?? null,
+              education: newProfile.education ?? null,
+              phone: profileData.phone || null,
               completed: false,
             })
             .eq('id', authId);
           if (upErr) {
             console.log('[ProfileSetup] profiles update (extras) error', upErr.message);
           }
+          if (profileData.phone) {
+            await AsyncStorage.setItem('user_phone', profileData.phone);
+          }
         } catch (dbErr) {
           console.log('[ProfileSetup] Supabase update (extras) exception', dbErr);
         }
-        await setCurrentProfile(user);
+        await setCurrentProfile(newProfile);
         console.log('[ProfileSetup] Saved partial profile (extras)');
       } catch (e) {
         console.log('[ProfileSetup] Save profile error', e);
@@ -227,25 +248,26 @@ export default function ProfileSetup() {
       setCurrentStep('interests');
     } else if (currentStep === 'interests') {
       try {
-        const storedPhone = await AsyncStorage.getItem('user_phone');
-        if (!storedPhone) {
-          Alert.alert(t('Error'), t('Phone number not found. Please login again.'));
-          return;
+        if (!user || !user.id) {
+             Alert.alert(t('Error'), t('User session not found. Please login again.'));
+             return;
         }
+        const storedId = user.id;
+        
         const { data: dbProfile, error: fetchErr } = await supabase
           .from('profiles')
           .select('id')
-          .eq('phone', storedPhone)
+          .eq('id', storedId)
           .maybeSingle();
         if (fetchErr || !dbProfile) {
-          Alert.alert(t('Error'), t('Profile not found. Please login again.'));
-          return;
+           Alert.alert(t('Error'), t('Profile not found. Please login again.'));
+           return;
         }
-        const authId = dbProfile.id as string;
+        const authId = storedId;
         const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
         const birthday = profileData.birthday ?? new Date(1995, 0, 1);
         const age = calculateAge(birthday);
-        const user: User = {
+        const newProfile: User = {
           id: authId,
           name: name || 'New User',
           age,
@@ -266,17 +288,17 @@ export default function ProfileSetup() {
           const { error: upErr } = await supabase
             .from('profiles')
             .update({
-              name: user.name,
-              age: user.age,
+              name: newProfile.name,
+              age: newProfile.age,
               birthday: birthday.toISOString().slice(0,10),
-              gender: user.gender,
-              interested_in: user.interestedIn ?? null,
-              bio: user.bio,
-              photos: user.photos,
-              interests: user.interests,
-              city: user.location?.city ?? null,
-              height_cm: user.heightCm ?? null,
-              education: user.education ?? null,
+              gender: newProfile.gender,
+              interested_in: newProfile.interestedIn ?? null,
+              bio: newProfile.bio,
+              photos: newProfile.photos,
+              interests: newProfile.interests,
+              city: newProfile.location?.city ?? null,
+              height_cm: newProfile.heightCm ?? null,
+              education: newProfile.education ?? null,
               completed: true,
             })
             .eq('id', authId);
@@ -288,7 +310,7 @@ export default function ProfileSetup() {
         } catch (dbErr) {
           console.log('[ProfileSetup] Supabase update (final) exception', dbErr);
         }
-        await setCurrentProfile(user);
+        await setCurrentProfile(newProfile);
         console.log('[ProfileSetup] Saved profile on interests');
       } catch (e) {
         console.log('[ProfileSetup] Final save error', e);
@@ -452,6 +474,18 @@ export default function ProfileSetup() {
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>{t('More about you')}</Text>
         <View style={styles.inputContainer}>
+          <Text style={styles.inputLabel}>{t('Phone Number')}</Text>
+          <TextInput
+            style={styles.textInput}
+            value={profileData.phone ?? ''}
+            onChangeText={(text) => setProfileData(prev => ({ ...prev, phone: text.replace(/[^0-9+]/g, '') }))}
+            placeholder={t('e.g. 0911223344')}
+            placeholderTextColor={colors.text.light}
+            keyboardType="phone-pad"
+            testID="phone-input"
+          />
+        </View>
+        <View style={styles.inputContainer}>
           <Text style={styles.inputLabel}>{t('Location')}</Text>
           <TextInput
             style={styles.textInput}
@@ -515,11 +549,11 @@ export default function ProfileSetup() {
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
         <Text style={styles.title}>{t('Your interests')}</Text>
         <Text style={styles.subtitle}>{t("Select a few of your interests and let everyone know what you're passionate about.")}</Text>
-        {categorizedInterests.map((category) => (
+        {categorizedInterests.map((category: InterestCategory) => (
           <View key={category.name} style={styles.categoryContainer}>
             <Text style={styles.categoryTitle}>{category.name}</Text>
             <View style={styles.interestsGrid}>
-              {category.interests.map((interest) => renderInterestTag(interest.name, interest.icon))}
+              {category.interests.map((interest: Interest) => renderInterestTag(interest.name, interest.icon))}
             </View>
           </View>
         ))}

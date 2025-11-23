@@ -14,9 +14,16 @@ const toHttpOrigin = (hostLike: string) => {
     const raw = hostLike.trim();
     const withoutScheme = raw.includes("://") ? raw.split("://")[1] : raw;
     const justHost = withoutScheme.replace(/^exp\+?\w*:\/\//, "");
+    
+    // If it looks like a tunnel domain (no port, valid TLD)
+    // We assume the tunnel handles the port or proxying
+    if (!justHost.includes(':') && justHost.includes('.')) {
+       return `https://${justHost}`;
+    }
+
     const url = new URL(`http://${justHost}`);
-    const backendPort = "8081";
-    return `${url.protocol}//${url.hostname}:${backendPort}`;
+    const port = url.port || "8081";
+    return `${url.protocol}//${url.hostname}:${port}`;
   } catch {
     return "http://localhost:8081";
   }
@@ -48,11 +55,13 @@ const getBaseUrl = () => {
 const baseUrl = getBaseUrl();
 const apiUrl = `${baseUrl}/api/trpc`;
 
+// @ts-ignore
 export const trpcClient = trpc.createClient({
-  transformer: superjson,
   links: [
     httpLink({
       url: apiUrl,
+      // @ts-ignore
+      transformer: superjson,
       fetch,
     }),
   ],

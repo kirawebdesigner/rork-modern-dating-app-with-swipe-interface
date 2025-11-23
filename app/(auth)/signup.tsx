@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Image,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ArrowLeft, CheckSquare, Square, Mail, Lock, User as UserIcon, Eye, EyeOff } from 'lucide-react-native';
@@ -63,11 +64,16 @@ export default function SignupScreen() {
 
     setLoading(true);
     try {
-      await signup(trimmedEmail, password, trimmedName);
+      const data = await signup(trimmedEmail, password, trimmedName);
+      if (data?.user && !data?.session) {
+        Alert.alert(t('Account created!'), t('Please check your email to confirm your account before logging in.'));
+        router.replace('/(auth)/login' as any);
+        return;
+      }
       router.push('/profile-setup');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : t('Signup failed. Please try again.');
-      alert(t('Error') + ': ' + message);
+      Alert.alert(t('Error'), message);
     } finally {
       setLoading(false);
     }

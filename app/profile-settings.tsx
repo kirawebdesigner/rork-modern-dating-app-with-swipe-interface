@@ -8,7 +8,7 @@ import { useMembership } from '@/hooks/membership-context';
 import { ThemeId } from '@/types';
 import { Plus, Lock, Globe, EyeOff, ArrowLeft, X, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { categorizedInterests } from '@/mocks/interests';
+import { categorizedInterests, InterestCategory, Interest } from '../mocks/interests';
 import GradientButton from '@/components/GradientButton';
 
 export default function ProfileSettings() {
@@ -325,11 +325,11 @@ export default function ProfileSettings() {
         <View onLayout={(e) => { sectionsY['interests'] = e.nativeEvent.layout.y; }} style={styles.cardSection} testID="section-interests">
           <Text style={styles.sectionTitle}>{t('InterestsTitle')}</Text>
           <Text style={styles.sectionSubtitle}>{t('Select your interests to find better matches')}</Text>
-          {categorizedInterests.map((category) => (
+          {categorizedInterests.map((category: InterestCategory) => (
             <View key={category.name} style={styles.categoryContainer}>
               <Text style={styles.categoryTitle}>{category.name}</Text>
               <View style={styles.interestsGrid}>
-                {category.interests.map((interest) => (
+                {category.interests.map((interest: Interest) => (
                   <TouchableOpacity
                     key={`${category.name}-${interest.name}`}
                     style={[
