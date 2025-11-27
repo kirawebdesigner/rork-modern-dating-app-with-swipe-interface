@@ -55,14 +55,12 @@ const getBaseUrl = () => {
 const baseUrl = getBaseUrl();
 const apiUrl = `${baseUrl}/api/trpc`;
 
-// @ts-ignore
 export const trpcClient = trpc.createClient({
   links: [
-    httpLink({
+    httpLink<AppRouter>({
       url: apiUrl,
-      // @ts-ignore
       transformer: superjson,
-      fetch,
+      fetch: (input, init) => fetch(input, init),
     }),
   ],
 });
