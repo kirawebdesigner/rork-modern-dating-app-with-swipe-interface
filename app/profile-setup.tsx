@@ -89,7 +89,7 @@ export default function ProfileSetup() {
         console.log('[ProfileSetup] Failed to restore saved progress', e);
       }
     })();
-  }, [router, isAuthenticated, user]);
+  }, [isAuthenticated, user]);
 
   React.useEffect(() => {
     (async () => {

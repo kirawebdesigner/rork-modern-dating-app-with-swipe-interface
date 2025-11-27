@@ -30,6 +30,12 @@ const toHttpOrigin = (hostLike: string) => {
 };
 
 const getBaseUrl = () => {
+  const envUrl =
+    (process.env.EXPO_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+  if (envUrl.length > 0) {
+    return normalize(envUrl);
+  }
+
   if (Platform.OS === "web" && typeof location !== "undefined") {
     try {
       const webUrl = new URL(location.origin);

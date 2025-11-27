@@ -8,7 +8,7 @@ import { useMembership } from '@/hooks/membership-context';
 import { ThemeId } from '@/types';
 import { Plus, Lock, Globe, EyeOff, ArrowLeft, X, Camera } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
-import { categorizedInterests, InterestCategory, Interest } from '../mocks/interests';
+import { categorizedInterests, InterestCategory, Interest } from '@/mocks/interests';
 import GradientButton from '@/components/GradientButton';
 
 export default function ProfileSettings() {

@@ -3,10 +3,20 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
-const envUrl = (process.env as Record<string, string | undefined>)?.NEXT_PUBLIC_SUPABASE_URL
-  ?? (Constants.expoConfig?.extra as Record<string, any> | undefined)?.NEXT_PUBLIC_SUPABASE_URL;
-const envAnon = (process.env as Record<string, string | undefined>)?.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ?? (Constants.expoConfig?.extra as Record<string, any> | undefined)?.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+const env = process.env as Record<string, string | undefined>;
+const extra = (Constants.expoConfig?.extra as Record<string, any> | undefined) ?? {};
+
+const envUrl =
+  env.EXPO_PUBLIC_SUPABASE_URL ??
+  env.NEXT_PUBLIC_SUPABASE_URL ??
+  extra.EXPO_PUBLIC_SUPABASE_URL ??
+  extra.NEXT_PUBLIC_SUPABASE_URL;
+
+const envAnon =
+  env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  env.NEXT_PUBLIC_SUPABASE_ANON_KEY ??
+  extra.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
+  extra.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const DEFAULT_URL = 'https://nizdrhdfhddtrukeemhp.supabase.co';
 const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg';
@@ -14,7 +24,7 @@ const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const supabaseUrl = envUrl ?? DEFAULT_URL;
 const supabaseAnonKey = envAnon ?? DEFAULT_ANON;
 
-export const isSupabaseConfigured = !!envUrl && !!envAnon;
+export const isSupabaseConfigured = Boolean(envUrl && envAnon);
 
 const storage = Platform.OS === 'web' ? undefined : AsyncStorage;
 
