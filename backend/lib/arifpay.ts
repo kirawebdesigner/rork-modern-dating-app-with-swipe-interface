@@ -59,6 +59,22 @@ export class ArifpayClient {
     }
   }
 
+  private parseJsonResponse<T>(responseText: string, context: string): T {
+    const trimmed = responseText.trim();
+
+    if (trimmed.startsWith("<")) {
+      console.error(`[Arifpay] ${context} returned HTML response snippet:`, trimmed.slice(0, 200));
+      throw new Error("Payment gateway returned an unexpected response. Please verify ArifPay credentials and network access.");
+    }
+
+    try {
+      return JSON.parse(trimmed) as T;
+    } catch (error) {
+      console.error(`[Arifpay] Failed to parse ${context} response:`, error);
+      throw new Error("Payment service sent an unreadable response. Please try again later.");
+    }
+  }
+
   async createPayment(
     options: ArifpayPaymentOptions
   ): Promise<ArifpayPaymentResponse> {
@@ -162,16 +178,7 @@ export class ArifpayClient {
         const responseText = await response.text();
         console.log("[Arifpay] CBE Response status:", response.status);
 
-        let result;
-        try {
-          result = JSON.parse(responseText);
-        } catch (e) {
-          console.error("[Arifpay] Failed to parse CBE response:", e);
-          if (responseText.includes('<!DOCTYPE') || responseText.includes('<html')) {
-             throw new Error("ArifPay API returned HTML. Check API Key and Base URL.");
-          }
-          throw new Error(`Invalid JSON response from ArifPay: ${responseText.substring(0, 200)}`);
-        }
+        const result = this.parseJsonResponse<Record<string, any>>(responseText, "CBE checkout");
 
         console.log("[Arifpay] CBE Parsed response:", JSON.stringify(result, null, 2));
 
@@ -261,12 +268,7 @@ export class ArifpayClient {
       const responseText = await response.text();
       console.log("[Arifpay] Raw response:", responseText);
 
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        throw new Error(`Invalid response from ArifPay: ${responseText.substring(0, 200)}`);
-      }
+      const result = this.parseJsonResponse<Record<string, any>>(responseText, "Checkout session");
 
       if (!response.ok) {
         throw new Error(result.msg || result.message || `Payment creation failed: ${response.status}`);
@@ -340,7 +342,7 @@ export class ArifpayClient {
       });
       
       const responseText = await response.text();
-      const result = JSON.parse(responseText);
+      const result = this.parseJsonResponse<Record<string, any>>(responseText, "Generic checkout session");
       
       if (!response.ok || result.error) {
           throw new Error(result.msg || "Checkout creation failed");
@@ -372,13 +374,7 @@ export class ArifpayClient {
 
       const responseText = await response.text();
       
-      let result;
-      try {
-        result = JSON.parse(responseText);
-      } catch (e) {
-        console.error("[Arifpay] Failed to parse verification response:", e);
-         throw new Error(`Invalid verification response: ${responseText.substring(0, 200)}`);
-      }
+      const result = this.parseJsonResponse<Record<string, any>>(responseText, "Verification");
 
       console.log("[Arifpay] Verification parsed response:", JSON.stringify(result, null, 2));
 
