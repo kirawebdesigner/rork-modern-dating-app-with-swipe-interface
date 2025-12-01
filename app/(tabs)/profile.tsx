@@ -20,7 +20,7 @@ import {
   Star,
   Heart,
   Eye,
-  Shield,
+
   CheckCircle2,
   MapPin,
   Briefcase,
@@ -127,12 +127,7 @@ export default function ProfileScreen() {
     return `Active ${days}d ago`;
   }, [currentProfile?.lastActive]);
 
-  const totalCredits = useMemo(() => {
-    const m = (currentProfile?.credits?.messages ?? credits.messages) ?? 0;
-    const b = (currentProfile?.credits?.boosts ?? credits.boosts) ?? 0;
-    const u = (currentProfile?.credits?.unlocks ?? credits.unlocks) ?? 0;
-    return m + b + u;
-  }, [currentProfile?.credits, credits.messages, credits.boosts, credits.unlocks]);
+
 
   if (!currentProfile) {
     return (

@@ -456,17 +456,22 @@ export default function ProfileSetup() {
     }));
   };
 
-  const renderInterestTag = (interest: string, icon: string) => (
-    <TouchableOpacity
-      key={interest}
-      style={[styles.interestTag, profileData.interests.includes(interest) && styles.interestTagSelected]}
-      onPress={() => toggleInterest(interest)}
-      testID={`interest-${interest}`}
-    >
-      <Text style={styles.interestIcon}>{icon}</Text>
-      <Text style={[styles.interestText, profileData.interests.includes(interest) && styles.interestTextSelected]}>{interest}</Text>
-    </TouchableOpacity>
-  );
+  const renderInterestTag = (interest: string, icon: string) => {
+    const isSelected = profileData.interests.includes(interest);
+    return (
+      <TouchableOpacity
+        key={interest}
+        style={[styles.interestTag, isSelected && styles.interestTagSelected]}
+        onPress={() => toggleInterest(interest)}
+        testID={`interest-${interest}`}
+        activeOpacity={0.7}
+      >
+        <Text style={styles.interestIcon}>{icon}</Text>
+        <Text style={[styles.interestText, isSelected && styles.interestTextSelected]}>{interest}</Text>
+        {isSelected && <View style={styles.checkMark}><Text style={styles.checkMarkText}>✓</Text></View>}
+      </TouchableOpacity>
+    );
+  };
 
   const renderExtras = () => (
     <View style={styles.container}>
@@ -770,13 +775,67 @@ const styles = StyleSheet.create({
   genderOptionText: { fontSize: 18, fontWeight: '600', color: colors.text.primary },
   genderOptionTextSelected: { color: colors.text.white },
   categoryContainer: { marginBottom: 32 },
-  categoryTitle: { fontSize: 24, fontWeight: 'bold', color: colors.text.primary, marginBottom: 16 },
-  interestsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  interestTag: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 12, borderRadius: 24, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.background, marginBottom: 8 },
-  interestTagSelected: { backgroundColor: colors.primary, borderColor: colors.primary },
-  interestIcon: { fontSize: 16, marginRight: 8 },
-  interestText: { fontSize: 14, fontWeight: '500', color: colors.text.primary },
-  interestTextSelected: { color: colors.text.white },
+  categoryTitle: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: colors.text.primary, 
+    marginBottom: 16,
+    letterSpacing: 0.3,
+  },
+  interestsGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 10,
+  },
+  interestTag: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    paddingHorizontal: 18, 
+    paddingVertical: 12, 
+    borderRadius: 30, 
+    borderWidth: 2, 
+    borderColor: colors.border, 
+    backgroundColor: colors.backgroundSecondary,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  interestTagSelected: { 
+    backgroundColor: colors.primary, 
+    borderColor: colors.primary,
+    shadowOpacity: 0.15,
+    elevation: 4,
+  },
+  interestIcon: { 
+    fontSize: 18, 
+    marginRight: 8,
+  },
+  interestText: { 
+    fontSize: 15, 
+    fontWeight: '600', 
+    color: colors.text.primary,
+    letterSpacing: 0.2,
+  },
+  interestTextSelected: { 
+    color: colors.text.white,
+    fontWeight: '700',
+  },
+  checkMark: {
+    width: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255, 255, 255, 0.3)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 8,
+  },
+  checkMarkText: {
+    color: colors.text.white,
+    fontSize: 12,
+    fontWeight: '900',
+  },
   bottomContainer: { paddingBottom: 16 },
   bottomContainerFixed: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
   confirmButton: { marginTop: 16 },

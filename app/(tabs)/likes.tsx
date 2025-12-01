@@ -1,10 +1,10 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
-import { useMembership } from '@/hooks/membership-context';
+
 import { Match, User } from '@/types';
-import { Diamond, Lock } from 'lucide-react-native';
+import { Diamond } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/hooks/app-context';
 
@@ -17,7 +17,7 @@ type LikesTab = 'likes' | 'matches';
 
 export default function LikesAndMatchesScreen() {
   const router = useRouter();
-  const { features } = useMembership();
+
   const { matches: contextMatches } = useApp();
   const [active, setActive] = useState<LikesTab>('likes');
   const [likesData, setLikesData] = useState<User[]>([]);

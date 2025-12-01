@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect, useRef, useCallback } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Image, ScrollView, TouchableOpacity, SafeAreaView, Alert, Modal, TextInput, Dimensions, Linking } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -29,9 +29,11 @@ export default function ProfileDetails() {
   useEffect(() => {
     if (user && !hasCountedRef.current) {
       hasCountedRef.current = true;
-      useDaily('views').catch((e) => console.log('[ProfileDetails] view count error', e));
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      void useDaily('views').catch((e) => console.log('[ProfileDetails] view count error', e));
     }
-  }, [user, useDaily]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user]);
 
   if (!user) {
     return (
@@ -166,6 +168,7 @@ export default function ProfileDetails() {
                     <TouchableOpacity onPress={() => setComplimentOpen(false)} style={styles.modalBtnSecondary}><Text style={styles.modalBtnText}>{t('Cancel')}</Text></TouchableOpacity>
                     <TouchableOpacity
                       onPress={async () => {
+                        // eslint-disable-next-line react-hooks/rules-of-hooks
                         const ok = await useDaily('compliments');
                         if (!ok) {
                           Alert.alert(t('Limit reached'), tier === 'free' ? t('Free users can send 1 compliment/day. Upgrade to Gold for more.') : t('Limit reached'));
@@ -206,7 +209,7 @@ export default function ProfileDetails() {
                           setReportReason('');
                           setReportOpen(false);
                           Alert.alert(t('Thank you'), t('Your report has been submitted.'));
-                        } catch (e) {
+                        } catch {
                           Alert.alert(t('Error'), t('Could not send report. Please try again.'));
                         }
                       }}
