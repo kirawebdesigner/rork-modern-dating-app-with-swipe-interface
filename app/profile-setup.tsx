@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert, Platform, Image } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert, Platform, Image, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
 import { ArrowLeft, Camera, Calendar, Check, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
@@ -656,87 +656,105 @@ export default function ProfileSetup() {
 
   const renderDatePickerModal = () => (
     <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
-      <View style={styles.modalOverlay}>
+      <KeyboardAvoidingView 
+        style={styles.modalOverlay} 
+        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        keyboardVerticalOffset={0}
+      >
+        <TouchableOpacity 
+          activeOpacity={1} 
+          style={styles.modalOverlayPressable} 
+          onPress={() => setShowDatePicker(false)}
+        />
         <View style={[styles.datePickerContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-          <View style={styles.datePickerHeader}>
-            <TouchableOpacity onPress={() => setShowDatePicker(false)} testID="close-date-picker">
-              <Text style={styles.skipText}>{t('Close')}</Text>
-            </TouchableOpacity>
+          <View style={styles.datePickerHandle}>
+            <View style={styles.datePickerHandleBar} />
           </View>
-          <Text style={styles.datePickerTitle}>{t('Birthday')}</Text>
-          <View style={styles.monthYearContainer}>
-            <TouchableOpacity onPress={handlePreviousMonth} style={styles.monthNavButton} testID="prev-month">
-              <ChevronLeft size={24} color={colors.text.primary} />
-            </TouchableOpacity>
-            <View style={styles.monthYearDisplay}>
-              <View style={styles.yearRow}>
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  testID="year-minus-10"
-                  onPress={() => {
-                    const next = selectedYear - 10;
-                    setSelectedYear(next);
-                    setTypedYear(String(next));
-                  }}
-                  style={styles.yearMiniBtn}
-                >
-                  <Minus size={16} color={colors.primary} />
-                  <Text style={styles.yearMiniBtnText}>10</Text>
-                </TouchableOpacity>
-                <TextInput
-                  testID="year-input"
-                  style={styles.yearInput}
-                  value={typedYear}
-                  onChangeText={(text) => {
-                    const normalized = text.replace(/[^0-9]/g, '');
-                    const limited = normalized.slice(0, 4);
-                    setTypedYear(limited);
-                    const parsed = parseInt(limited, 10);
-                    if (!Number.isNaN(parsed)) setSelectedYear(parsed);
-                  }}
-                  keyboardType={Platform.OS === 'web' ? 'default' : 'number-pad'}
-                  maxLength={4}
-                  placeholder="YYYY"
-                  placeholderTextColor={colors.text.light}
-                />
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  testID="year-plus-10"
-                  onPress={() => {
-                    const next = selectedYear + 10;
-                    const yearToday = new Date().getFullYear();
-                    const clamped = Math.min(next, yearToday);
-                    setSelectedYear(clamped);
-                    setTypedYear(String(clamped));
-                  }}
-                  style={styles.yearMiniBtn}
-                >
-                  <Plus size={16} color={colors.primary} />
-                  <Text style={styles.yearMiniBtnText}>10</Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.monthText}>{t(MONTHS[selectedMonth]) ?? MONTHS[selectedMonth]}</Text>
-            </View>
-            <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavButton} testID="next-month">
-              <ChevronRight size={24} color={colors.text.primary} />
-            </TouchableOpacity>
-          </View>
-          <View style={styles.monthsGrid}>
-            {MONTHS.map((m: string, idx: number) => (
-              <TouchableOpacity key={m} testID={`month-${idx}`} onPress={() => setSelectedMonth(idx)} style={[styles.monthChip, selectedMonth === idx && styles.monthChipActive]}>
-                <Text style={[styles.monthChipText, selectedMonth === idx && styles.monthChipTextActive]}>{m.slice(0,3)}</Text>
+          <ScrollView 
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={styles.datePickerScrollContent}
+          >
+            <View style={styles.datePickerHeader}>
+              <Text style={styles.datePickerTitle}>{t('Birthday')}</Text>
+              <TouchableOpacity onPress={() => setShowDatePicker(false)} testID="close-date-picker" style={styles.closeButton}>
+                <Text style={styles.closeButtonText}>{t('Done')}</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-          <View style={styles.weekDaysContainer}>
-            {['S','M','T','W','T','F','S'].map((d, i) => (
-              <Text key={i} style={styles.weekDayText}>{d}</Text>
-            ))}
-          </View>
-          <CalendarGrid />
-          <GradientButton title={t('Save')} onPress={handleSaveDate} style={[styles.saveButton, !selectedDay && styles.saveButtonDisabled]} disabled={!selectedDay} testID="save-date" />
+            </View>
+            <View style={styles.monthYearContainer}>
+              <TouchableOpacity onPress={handlePreviousMonth} style={styles.monthNavButton} testID="prev-month">
+                <ChevronLeft size={20} color={colors.primary} strokeWidth={2.5} />
+              </TouchableOpacity>
+              <View style={styles.monthYearDisplay}>
+                <View style={styles.yearRow}>
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    testID="year-minus-10"
+                    onPress={() => {
+                      const next = selectedYear - 10;
+                      setSelectedYear(next);
+                      setTypedYear(String(next));
+                    }}
+                    style={styles.yearMiniBtn}
+                  >
+                    <Minus size={14} color={colors.primary} strokeWidth={2.5} />
+                    <Text style={styles.yearMiniBtnText}>10</Text>
+                  </TouchableOpacity>
+                  <TextInput
+                    testID="year-input"
+                    style={styles.yearInput}
+                    value={typedYear}
+                    onChangeText={(text) => {
+                      const normalized = text.replace(/[^0-9]/g, '');
+                      const limited = normalized.slice(0, 4);
+                      setTypedYear(limited);
+                      const parsed = parseInt(limited, 10);
+                      if (!Number.isNaN(parsed)) setSelectedYear(parsed);
+                    }}
+                    keyboardType={Platform.OS === 'web' ? 'default' : 'number-pad'}
+                    maxLength={4}
+                    placeholder="YYYY"
+                    placeholderTextColor={colors.text.light}
+                  />
+                  <TouchableOpacity
+                    accessibilityRole="button"
+                    testID="year-plus-10"
+                    onPress={() => {
+                      const next = selectedYear + 10;
+                      const yearToday = new Date().getFullYear();
+                      const clamped = Math.min(next, yearToday);
+                      setSelectedYear(clamped);
+                      setTypedYear(String(clamped));
+                    }}
+                    style={styles.yearMiniBtn}
+                  >
+                    <Plus size={14} color={colors.primary} strokeWidth={2.5} />
+                    <Text style={styles.yearMiniBtnText}>10</Text>
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.monthText}>{t(MONTHS[selectedMonth]) ?? MONTHS[selectedMonth]}</Text>
+              </View>
+              <TouchableOpacity onPress={handleNextMonth} style={styles.monthNavButton} testID="next-month">
+                <ChevronRight size={20} color={colors.primary} strokeWidth={2.5} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.monthsGrid}>
+              {MONTHS.map((m: string, idx: number) => (
+                <TouchableOpacity key={m} testID={`month-${idx}`} onPress={() => setSelectedMonth(idx)} style={[styles.monthChip, selectedMonth === idx && styles.monthChipActive]}>
+                  <Text style={[styles.monthChipText, selectedMonth === idx && styles.monthChipTextActive]}>{m.slice(0,3)}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={styles.weekDaysContainer}>
+              {['S','M','T','W','T','F','S'].map((d, i) => (
+                <Text key={i} style={styles.weekDayText}>{d}</Text>
+              ))}
+            </View>
+            <CalendarGrid />
+            <GradientButton title={t('Save')} onPress={handleSaveDate} style={[styles.saveButton, !selectedDay && styles.saveButtonDisabled]} disabled={!selectedDay} testID="save-date" />
+          </ScrollView>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 
@@ -845,34 +863,181 @@ const styles = StyleSheet.create({
   chipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
   chipText: { color: colors.text.primary, fontWeight: '600' },
   chipTextActive: { color: colors.text.white },
-  modalOverlay: { flex: 1, backgroundColor: colors.overlay, justifyContent: 'flex-end' },
-  datePickerContainer: { backgroundColor: colors.background, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 16, minHeight: 500 },
-  datePickerHeader: { flexDirection: 'row', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 20 },
-  datePickerTitle: { fontSize: 24, fontWeight: 'bold', color: colors.text.primary, textAlign: 'center', marginBottom: 32 },
-  monthYearContainer: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 32, paddingHorizontal: 20 },
-  monthNavButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'center' },
-  monthYearDisplay: { alignItems: 'center' },
-  yearRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
-  yearMiniBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingHorizontal: 8, paddingVertical: 6, borderRadius: 12, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.backgroundSecondary },
-  yearMiniBtnText: { color: colors.primary, fontWeight: '700' },
-  yearInput: { fontSize: 28, fontWeight: '700', color: colors.primary, textAlign: 'center', borderWidth: 1, borderColor: colors.border, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6, minWidth: 110, backgroundColor: colors.background },
-  monthText: { fontSize: 18, fontWeight: '600', color: colors.primary },
-  monthsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, justifyContent: 'center', marginBottom: 12 },
-  monthChip: { paddingHorizontal: 10, paddingVertical: 8, borderRadius: 16, backgroundColor: colors.backgroundSecondary, borderWidth: 1, borderColor: colors.border, marginBottom: 6, minWidth: 48, alignItems: 'center' },
-  monthChipActive: { backgroundColor: colors.primary, borderColor: colors.primary },
-  monthChipText: { color: colors.text.primary, fontWeight: '600' },
-  monthChipTextActive: { color: colors.text.white, fontWeight: '700' },
-  weekDaysContainer: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16, paddingHorizontal: 8 },
-  weekDayText: { fontSize: 14, fontWeight: '600', color: colors.text.secondary, width: '14.2857%', textAlign: 'center' },
-  calendarGrid: { flexDirection: 'row', flexWrap: 'wrap', justifyContent: 'flex-start', marginBottom: 32, paddingHorizontal: 8 },
+  modalOverlay: { flex: 1, justifyContent: 'flex-end' },
+  modalOverlayPressable: { flex: 1, backgroundColor: colors.overlay },
+  datePickerContainer: { 
+    backgroundColor: colors.background, 
+    borderTopLeftRadius: 32, 
+    borderTopRightRadius: 32, 
+    paddingHorizontal: 24, 
+    paddingTop: 8,
+    paddingBottom: 16, 
+    maxHeight: '85%',
+    shadowColor: '#000',
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 20,
+  },
+  datePickerHandle: {
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  datePickerHandleBar: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+  },
+  datePickerScrollContent: {
+    paddingBottom: 20,
+  },
+  datePickerHeader: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 24,
+  },
+  closeButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: colors.backgroundSecondary,
+  },
+  closeButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: colors.primary,
+  },
+  datePickerTitle: { 
+    fontSize: 26, 
+    fontWeight: '800', 
+    color: colors.text.primary,
+    letterSpacing: 0.3,
+  },
+  monthYearContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    alignItems: 'center', 
+    marginBottom: 20, 
+    paddingHorizontal: 12,
+    backgroundColor: colors.backgroundSecondary,
+    borderRadius: 20,
+    paddingVertical: 16,
+  },
+  monthNavButton: { 
+    width: 36, 
+    height: 36, 
+    justifyContent: 'center', 
+    alignItems: 'center',
+    borderRadius: 18,
+    backgroundColor: colors.background,
+  },
+  monthYearDisplay: { alignItems: 'center', flex: 1 },
+  yearRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
+  yearMiniBtn: { 
+    flexDirection: 'row', 
+    alignItems: 'center', 
+    gap: 3, 
+    paddingHorizontal: 8, 
+    paddingVertical: 5, 
+    borderRadius: 10, 
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  yearMiniBtnText: { color: colors.primary, fontWeight: '700', fontSize: 11 },
+  yearInput: { 
+    fontSize: 24, 
+    fontWeight: '800', 
+    color: colors.primary, 
+    textAlign: 'center', 
+    borderRadius: 12, 
+    paddingHorizontal: 12, 
+    paddingVertical: 8, 
+    minWidth: 100, 
+    backgroundColor: colors.background,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  monthText: { fontSize: 16, fontWeight: '700', color: colors.text.primary, letterSpacing: 0.5 },
+  monthsGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    gap: 6, 
+    justifyContent: 'center', 
+    marginBottom: 16,
+    paddingHorizontal: 4,
+  },
+  monthChip: { 
+    paddingHorizontal: 12, 
+    paddingVertical: 10, 
+    borderRadius: 14, 
+    backgroundColor: colors.backgroundSecondary,
+    minWidth: 52, 
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  monthChipActive: { 
+    backgroundColor: colors.primary,
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  monthChipText: { color: colors.text.primary, fontWeight: '600', fontSize: 13 },
+  monthChipTextActive: { color: colors.text.white, fontWeight: '800' },
+  weekDaysContainer: { 
+    flexDirection: 'row', 
+    justifyContent: 'space-between', 
+    marginBottom: 12, 
+    paddingHorizontal: 8,
+  },
+  weekDayText: { 
+    fontSize: 12, 
+    fontWeight: '700', 
+    color: colors.text.secondary, 
+    width: '14.2857%', 
+    textAlign: 'center',
+    letterSpacing: 0.5,
+  },
+  calendarGrid: { 
+    flexDirection: 'row', 
+    flexWrap: 'wrap', 
+    justifyContent: 'flex-start', 
+    marginBottom: 24, 
+    paddingHorizontal: 8,
+  },
   calendarDayCell: { width: '14.2857%' },
-  calendarDay: { height: 44, marginBottom: 8 },
-  calendarDayButton: { justifyContent: 'center', alignItems: 'center', borderRadius: 22 },
-  calendarDaySelected: { backgroundColor: colors.primary },
-  calendarDayDisabled: { opacity: 0.35 },
-  calendarDayText: { fontSize: 16, fontWeight: '500', color: colors.text.primary },
-  calendarDayTextSelected: { color: colors.text.white, fontWeight: 'bold' },
+  calendarDay: { height: 40, marginBottom: 6 },
+  calendarDayButton: { 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    borderRadius: 20,
+    backgroundColor: colors.backgroundSecondary,
+    marginHorizontal: 2,
+  },
+  calendarDaySelected: { 
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
+  },
+  calendarDayDisabled: { opacity: 0.25, backgroundColor: 'transparent' },
+  calendarDayText: { fontSize: 15, fontWeight: '600', color: colors.text.primary },
+  calendarDayTextSelected: { color: colors.text.white, fontWeight: '800' },
   calendarDayTextDisabled: { color: colors.text.secondary },
-  saveButton: { marginTop: 16 },
+  saveButton: { marginTop: 12 },
   saveButtonDisabled: { opacity: 0.5 },
 });
