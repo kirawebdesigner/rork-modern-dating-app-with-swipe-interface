@@ -70,7 +70,7 @@ export default function TermsScreen() {
 
         <Text style={styles.sectionTitle}>9. {t('Disclaimers')}</Text>
         <Text style={styles.paragraph}>
-          The service is provided "as is" without warranties of any kind. We do not guarantee matches, dates, or relationships. We are not responsible for interactions between users.
+          The service is provided &quot;as is&quot; without warranties of any kind. We do not guarantee matches, dates, or relationships. We are not responsible for interactions between users.
         </Text>
 
         <Text style={styles.sectionTitle}>10. {t('Limitation of Liability')}</Text>

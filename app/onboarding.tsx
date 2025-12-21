@@ -1,24 +1,24 @@
-import React, { useRef, useState, useMemo, useEffect } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   FlatList,
   ListRenderItemInfo,
-  Dimensions,
   useWindowDimensions,
   TouchableOpacity,
   SafeAreaView,
   Image,
   Animated,
   StatusBar,
+  Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
-import { Platform } from 'react-native';
+import { useAuth } from '@/hooks/auth-context';
 
-const { width: screenWidth } = Dimensions.get('window');
+
 
 const slides = [
   {
@@ -55,22 +55,17 @@ const slides = [
 
 type Slide = { id: string; title: string; description: string; image: string };
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useApp } from '@/hooks/app-context';
-import { useAuth } from '@/hooks/auth-context';
-
 export default function OnboardingScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
-  const itemLayout = useMemo(() => ({ length: width, offset: 0, index: 0 }), [width]);
   const listRef = useRef<FlatList<Slide>>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const { currentProfile } = useApp();
-  const { user, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
-  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: Array<{ index: number | null }> }) => {
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
     const idx = viewableItems?.[0]?.index ?? 0;
     console.log('[Onboarding] viewable index', idx);
     setCurrentIndex(idx ?? 0);
@@ -172,7 +167,7 @@ export default function OnboardingScreen() {
         useNativeDriver: true,
       }),
     ]).start();
-  }, []);
+  }, [fadeAnim, scaleAnim]);
 
   return (
     <SafeAreaView style={styles.container}>

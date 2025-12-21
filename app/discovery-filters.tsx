@@ -21,7 +21,7 @@ type InterestedIn = 'girl' | 'boy';
 export default function DiscoveryFilters() {
   const router = useRouter();
   const { filters, setFilters } = useApp();
-  const { features, tier } = useMembership();
+  const { features } = useMembership();
   const [localFilters, setLocalFilters] = useState(filters);
 
   const handleSave = async () => {

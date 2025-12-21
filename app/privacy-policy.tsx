@@ -53,7 +53,7 @@ export default function PrivacyPolicyScreen() {
           <Text style={styles.bold}>Service Providers:</Text> We share data with third-party service providers who help us operate the app (hosting, analytics, payment processing).
         </Text>
         <Text style={styles.paragraph}>
-          <Text style={styles.bold}>Legal Requirements:</Text> We may disclose information when required by law or to protect our rights and users' safety.
+          <Text style={styles.bold}>Legal Requirements:</Text> We may disclose information when required by law or to protect our rights and users&apos; safety.
         </Text>
         <Text style={styles.paragraph}>
           We do not sell your personal information to third parties.

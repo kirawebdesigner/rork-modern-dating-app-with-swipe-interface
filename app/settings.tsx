@@ -71,7 +71,7 @@ export default function SettingsScreen() {
               await logout();
               Alert.alert(t('Signed out'), t('You have been signed out.'));
               router.replace('/(auth)/login' as any);
-            } catch (e) {
+            } catch {
               Alert.alert(t('Error'), t('Failed to sign out'));
             }
           }} testID="settings-logout" last />

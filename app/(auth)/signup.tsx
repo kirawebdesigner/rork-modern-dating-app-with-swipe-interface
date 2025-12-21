@@ -70,7 +70,7 @@ export default function SignupScreen() {
         router.replace('/(auth)/login' as any);
         return;
       }
-      router.push('/profile-setup');
+      router.push('/profile-setup' as any);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : t('Signup failed. Please try again.');
       Alert.alert(t('Error'), message);

@@ -93,7 +93,7 @@ export default function LikesAndMatchesScreen() {
   };
 
   const onOpenMatchChat = useCallback((chatId: string) => {
-    router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId } });
+    router.push({ pathname: '/(tabs)/messages/[chatId]' as any, params: { chatId } });
   }, [router]);
 
   const renderLike = ({ item }: { item: User }) => {

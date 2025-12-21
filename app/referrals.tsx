@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useCallback, useEffect } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native';
+import React, { useState, useCallback, useEffect } from 'react';
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import Colors from '@/constants/colors';
 import { ArrowLeft, Gift, Link as LinkIcon, CheckCircle2, Mail } from 'lucide-react-native';
 import { useRouter } from 'expo-router';

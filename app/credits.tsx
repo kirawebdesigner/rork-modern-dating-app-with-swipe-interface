@@ -9,7 +9,7 @@ import { Plus, ArrowLeft, MessageCircle, Zap, Unlock, Crown, Info } from 'lucide
 
 export default function Credits() {
   const router = useRouter();
-  const { credits, addCredits, tier, features } = useMembership();
+  const { credits, tier, features } = useMembership();
   const { currentProfile } = useApp();
   const [currency, setCurrency] = useState<string>('USD');
 

@@ -1,5 +1,5 @@
-import React, { useMemo, useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, Switch, TouchableOpacity, Image, Platform } from 'react-native';
+import React, { useState } from 'react';
+import { SafeAreaView, View, Text, StyleSheet, Switch, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
 import { ArrowLeft } from 'lucide-react-native';

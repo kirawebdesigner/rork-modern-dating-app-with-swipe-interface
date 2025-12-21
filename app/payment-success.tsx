@@ -72,7 +72,7 @@ export default function PaymentSuccessScreen() {
             </View>
             <Text style={styles.title}>Verification Failed</Text>
             <Text style={styles.subtitle}>
-              We couldn't verify your payment immediately. If you paid, your account will be upgraded shortly via our background system.
+              We couldn&apos;t verify your payment immediately. If you paid, your account will be upgraded shortly via our background system.
             </Text>
             <GradientButton
               title="Go to Profile"
