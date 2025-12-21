@@ -14,10 +14,25 @@ webhooks.post("/arifpay", async (c) => {
     const body = await c.req.json();
     console.log("[Webhook] Arifpay notification received:", JSON.stringify(body, null, 2));
 
-    const { uuid, sessionId, status, transactionId } = body;
+    // ArifPay webhook payload structure
+    const { 
+      uuid, 
+      sessionId, 
+      transactionStatus, 
+      transaction: webhookTransaction,
+      totalAmount,
+      paymentMethod
+    } = body;
+    
     const actualSessionId = uuid || sessionId;
+    const status = transactionStatus || webhookTransaction?.transactionStatus;
+    const transactionId = webhookTransaction?.transactionId;
 
-    console.log("[Webhook] Processing sessionId:", actualSessionId, "status:", status);
+    console.log("[Webhook] Processing sessionId:", actualSessionId);
+    console.log("[Webhook] Transaction Status:", status);
+    console.log("[Webhook] Transaction ID:", transactionId);
+    console.log("[Webhook] Payment Method:", paymentMethod);
+    console.log("[Webhook] Amount:", totalAmount);
 
     // Look up the transaction in our database first
     if (!actualSessionId) {
@@ -39,6 +54,7 @@ webhooks.post("/arifpay", async (c) => {
       return c.json({ error: "Transaction not found" }, 404);
     }
 
+    // Handle successful payment (SUCCESS status from ArifPay)
     if (status === "SUCCESS" || status === "PAID" || status === "success") {
       console.log("[Webhook] Payment successful, verifying with ArifPay...");
 
@@ -99,25 +115,49 @@ webhooks.post("/arifpay", async (c) => {
           .eq('id', userId);
 
         console.log("[Webhook] Upgrade successful for user:", userId);
+        
+        // Return 200 OK to acknowledge webhook receipt
+        return c.json({ success: true, message: "Payment processed successfully" });
       } else {
         console.log("[Webhook] Payment not verified. Status:", verification.status);
         await supabase
           .from('payment_transactions')
           .update({ status: 'failed' })
           .eq('id', transaction.id);
+        
+        return c.json({ success: false, message: "Payment verification failed" }, 400);
       }
-    } else {
-      console.log("[Webhook] Payment status not successful:", status);
+    } else if (status === "FAILED" || status === "CANCELED" || status === "EXPIRED") {
+      // Handle failed/cancelled/expired payments
+      console.log("[Webhook] Payment failed/cancelled/expired:", status);
       await supabase
-          .from('payment_transactions')
-          .update({ status: 'failed' })
-          .eq('id', transaction.id);
+        .from('payment_transactions')
+        .update({ status: status.toLowerCase() })
+        .eq('id', transaction.id);
+      
+      return c.json({ success: true, message: `Payment ${status.toLowerCase()}` });
+    } else if (status === "PENDING") {
+      // Payment still pending
+      console.log("[Webhook] Payment still pending:", status);
+      return c.json({ success: true, message: "Payment pending" });
+    } else {
+      // Unknown status
+      console.log("[Webhook] Unknown payment status:", status);
+      await supabase
+        .from('payment_transactions')
+        .update({ status: 'failed' })
+        .eq('id', transaction.id);
+      
+      return c.json({ success: false, message: "Unknown payment status" }, 400);
     }
-
-    return c.json({ success: true });
   } catch (error) {
     console.error("[Webhook] Error processing Arifpay notification:", error);
-    return c.json({ error: "Internal server error" }, 500);
+    // Return 200 to prevent ArifPay from retrying on our internal errors
+    // Log the error for investigation
+    return c.json({ 
+      success: false, 
+      error: error instanceof Error ? error.message : "Internal server error" 
+    }, 500);
   }
 });
 

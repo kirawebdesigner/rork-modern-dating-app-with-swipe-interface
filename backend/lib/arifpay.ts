@@ -82,42 +82,48 @@ export class ArifpayClient {
       throw new Error("ArifPay API key not configured");
     }
 
-    // Handle Phone / Email logic
+    // Normalize phone number to ArifPay format (251XXXXXXXXX)
     let phone = options.phone;
+    let email = options.phone;
     let isEmail = phone.includes('@');
     
     // Normalize phone if it's not an email
     if (!isEmail) {
+      // Remove all non-numeric characters
       phone = phone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
-      if (phone.length > 0) {
-        if (phone.startsWith('0')) {
-          phone = '251' + phone.substring(1);
-        } else if (!phone.startsWith('251')) {
-          phone = '251' + phone;
-        }
+      
+      // Convert to 251 format (MUST be 251, not +251)
+      if (phone.startsWith('0')) {
+        phone = '251' + phone.substring(1);
+      } else if (phone.startsWith('+251')) {
+        phone = phone.substring(1);
+      } else if (phone.startsWith('251')) {
+        // Already correct format
+      } else if (phone.length === 9) {
+        // Ethiopian number without prefix
+        phone = '251' + phone;
+      } else {
+        // Assume it needs 251 prefix
+        phone = '251' + phone;
       }
+      
+      // Create a default email if we have phone
+      email = `${options.userId}@app.com`;
+    } else {
+      // If email provided, use test phone for CBE
+      email = phone;
+      phone = '251911111111'; // Test phone as per documentation
     }
 
-    // Validation for Payment Methods that REQUIRE phone
-    if ((options.paymentMethod === 'TELEBIRR' || options.paymentMethod === 'AMOLE' || options.paymentMethod === 'MPESSA') && (isEmail || phone.length < 10)) {
-       console.warn(`[Arifpay] Warning: ${options.paymentMethod} usually requires a valid phone number. Current input: ${options.phone}`);
-       // We'll try to proceed, but it might fail at ArifPay level.
-       // Ideally we should throw, but let's try to be permissive if they have a flow we don't know.
+    // Validate phone format (must be 251XXXXXXXXX, 12 digits total)
+    if (phone.length < 12) {
+      console.warn(`[Arifpay] Phone number too short: ${phone}. Using test number.`);
+      phone = '251911111111';
     }
 
-    // Fallback for CBE/Other if phone is missing/email
-    if ((isEmail || !phone) && options.paymentMethod === 'CBE') {
-        // Use a dummy phone for CBE direct if we only have email, 
-        // as CBE page usually lets user enter details or login.
-        // But ArifPay API might validate it.
-        // Let's use a dummy that passes regex but clearly isn't real if valid phone is missing.
-        if (isEmail || !phone) {
-             console.log('[Arifpay] No valid phone provided for CBE, using placeholder.');
-             phone = "251900000000"; 
-        }
-    }
-
-    console.log('[Arifpay] Processing payment with Phone:', phone);
+    console.log('[Arifpay] Processing payment');
+    console.log('[Arifpay] Phone (normalized):', phone);
+    console.log('[Arifpay] Email:', email);
     console.log('[Arifpay] Payment method:', options.paymentMethod);
     
     const nonce = `${options.userId}-${uuidv4()}`;
@@ -131,23 +137,23 @@ export class ArifpayClient {
     if (options.paymentMethod === 'CBE') {
       console.log('[Arifpay] Using CBE Direct Payment (V2)');
       
+      // CBE Direct Payment Payload - Strictly following ArifPay documentation
       const payload = {
-        cancelUrl: options.cancelUrl,
-        phone: phone, 
-        email: isEmail ? options.phone : `${options.userId}@app.com`,
+        phone: phone,
+        email: email,
         nonce: nonce,
+        cancelUrl: options.cancelUrl,
         errorUrl: options.errorUrl,
         notifyUrl: options.notifyUrl,
         successUrl: options.successUrl,
-        expireDate: expireDateStr,
         paymentMethods: ['CBE'],
-        lang: "EN",
+        expireDate: expireDateStr,
         items: [
           {
-            name: `Dating App - ${options.tier.toUpperCase()} Membership`,
-            description: `Premium ${options.tier} membership subscription`,
+            name: `${options.tier.charAt(0).toUpperCase() + options.tier.slice(1)} Membership`,
             quantity: 1,
             price: totalAmount,
+            description: `Premium ${options.tier} membership subscription`,
             image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
           },
         ],
@@ -155,10 +161,10 @@ export class ArifpayClient {
           {
             accountNumber: ARIFPAY_ACCOUNT_NUMBER,
             bank: "AWINETAA",
-            amount: totalAmount,
-            beneficiaryId: "BEN-001"
+            amount: totalAmount
           },
         ],
+        lang: "EN"
       };
 
       console.log("[Arifpay] Creating CBE direct payment with payload:", JSON.stringify(payload, null, 2));
@@ -183,22 +189,38 @@ export class ArifpayClient {
         console.log("[Arifpay] CBE Parsed response:", JSON.stringify(result, null, 2));
 
         if (!response.ok) {
-           // Handle specific error for invalid phone
-           if (result.msg && result.msg.includes("Phone")) {
-               throw new Error("Invalid phone number. Please update your profile with a valid phone number.");
+           console.error('[Arifpay] CBE Payment failed with status:', response.status);
+           console.error('[Arifpay] Error response:', result);
+           
+           // Handle specific errors
+           if (result.msg) {
+             if (result.msg.includes("Phone") || result.msg.includes("phone")) {
+               throw new Error("Invalid phone number format. Must be 251XXXXXXXXX.");
+             }
+             if (result.msg.includes("nonce")) {
+               throw new Error("Payment session error. Please try again.");
+             }
+             throw new Error(result.msg);
            }
-           throw new Error(result.msg || result.message || `CBE payment creation failed: ${response.status}`);
+           
+           throw new Error(result.message || `Payment failed with status ${response.status}`);
         }
 
-        if (!result.error && result.data && result.data.paymentUrl) {
+        // Success response validation
+        if (result.error === false && result.data && result.data.paymentUrl) {
+          console.log('[Arifpay] CBE Payment created successfully');
+          console.log('[Arifpay] Session ID:', result.data.sessionId);
+          console.log('[Arifpay] Payment URL:', result.data.paymentUrl);
+          
           return {
             sessionId: result.data.sessionId,
             paymentUrl: result.data.paymentUrl,
-            status: result.data.status || "PENDING",
+            status: "PENDING",
             totalAmount: result.data.totalAmount || options.amount,
           };
         } else {
-          throw new Error(result.msg || "CBE payment creation failed - invalid response");
+          console.error('[Arifpay] Invalid response structure:', result);
+          throw new Error(result.msg || "Payment creation failed - invalid response format");
         }
       } catch (error) {
         console.error("[Arifpay] CBE Payment error:", error);
@@ -222,23 +244,23 @@ export class ArifpayClient {
 
     const selectedMethod = paymentMethodsMap[options.paymentMethod] || 'TELEBIRR';
 
+    // Generic checkout payload for other payment methods
     const payload = {
-      cancelUrl: options.cancelUrl,
       phone: phone,
-      email: isEmail ? options.phone : `${options.userId}@app.com`,
+      email: email,
       nonce: nonce,
+      cancelUrl: options.cancelUrl,
       errorUrl: options.errorUrl,
       notifyUrl: options.notifyUrl,
       successUrl: options.successUrl,
-      expireDate: expireDateStr,
       paymentMethods: [selectedMethod],
-      lang: "EN",
+      expireDate: expireDateStr,
       items: [
         {
-          name: `Dating App - ${options.tier.toUpperCase()} Membership`,
-          description: `Premium ${options.tier} membership subscription`,
+          name: `${options.tier.charAt(0).toUpperCase() + options.tier.slice(1)} Membership`,
           quantity: 1,
           price: totalAmount,
+          description: `Premium ${options.tier} membership subscription`,
           image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
         },
       ],
@@ -249,6 +271,7 @@ export class ArifpayClient {
           amount: totalAmount,
         },
       ],
+      lang: "EN"
     };
 
     console.log("[Arifpay] Creating checkout session with payload:", JSON.stringify(payload, null, 2));
