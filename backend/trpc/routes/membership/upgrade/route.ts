@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { publicProcedure } from "../../../create-context";
-import { arifpay } from "../../../../lib/arifpay";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
@@ -29,7 +28,34 @@ export const upgradeProcedure = publicProcedure
 
     const amount = TIER_PRICES[input.tier];
     console.log("[tRPC Upgrade] Amount:", amount, "ETB");
+    console.log("[tRPC Upgrade] TEST MODE: Payment bypassed for testing");
 
+    try {
+      const { error: updateError } = await supabase
+        .from('profiles')
+        .update({ membership_tier: input.tier })
+        .eq('id', input.userId);
+
+      if (updateError) {
+        console.error("[tRPC Upgrade] Failed to update tier:", updateError);
+        throw new Error('Failed to update membership tier');
+      }
+
+      console.log("[tRPC Upgrade] TEST MODE: Tier upgraded successfully to", input.tier);
+      
+      return {
+        success: true as const,
+        newTier: input.tier,
+        requiresPayment: false,
+        testMode: true,
+      };
+    } catch (error) {
+      console.error("[tRPC Upgrade] Upgrade failed:", error);
+      throw new Error(error instanceof Error ? error.message : 'Failed to upgrade membership');
+    }
+
+    // OLD PAYMENT CODE - Disabled for testing
+    /*
     if (amount === 0) {
       console.log("[tRPC Upgrade] Free tier, no payment required");
       return {
@@ -140,6 +166,7 @@ export const upgradeProcedure = publicProcedure
       
       throw new Error(errorMsg);
     }
+    */
   });
 
 export default upgradeProcedure;

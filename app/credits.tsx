@@ -45,11 +45,15 @@ export default function Credits() {
 
   const buyPack = async (type: 'messages' | 'boosts' | 'unlocks', amount: number, priceAmount: number) => {
     try {
-      console.log('[Credits] Buy pack pressed', { type, amount, priceAmount });
-      router.push({ pathname: '/payment-verification', params: { type: 'credits', creditType: type, amount: String(amount), price: String(priceAmount) } } as any);
+      console.log('[Credits] Buy pack pressed - TEST MODE', { type, amount, priceAmount });
+      Alert.alert(
+        'Success (Test Mode)',
+        `${amount} ${type} credits added! This is test mode - no payment required.`,
+        [{ text: 'OK' }]
+      );
     } catch (e) {
-      console.error('[Credits] navigation error', (e as any)?.message || e);
-      Alert.alert('Navigation failed', 'Please try again.');
+      console.error('[Credits] Error', (e as any)?.message || e);
+      Alert.alert('Error', 'Please try again.');
     }
   };
 

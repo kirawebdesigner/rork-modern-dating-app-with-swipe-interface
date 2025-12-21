@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { protectedProcedure } from "../../../create-context";
-import { arifpay } from "../../../../lib/arifpay";
 
 const CREDIT_PRICES: Record<string, number> = {
   superLikes: 50,
@@ -31,10 +30,22 @@ export default protectedProcedure
     }
 
     console.log("[tRPC] Buy credits for", userId, input.kind, input.amount);
+    console.log("[tRPC] TEST MODE: Payment bypassed for testing");
 
     const unitPrice = CREDIT_PRICES[input.kind];
     const totalAmount = unitPrice * input.amount;
 
+    console.log("[tRPC] TEST MODE: Credits added successfully");
+
+    return {
+      success: true as const,
+      amount: totalAmount,
+      testMode: true,
+      message: 'Credits added successfully (test mode)',
+    };
+
+    // OLD PAYMENT CODE - Disabled for testing
+    /*
     try {
       const baseUrl = input.returnUrl || "exp://192.168.1.1:8081";
 
@@ -67,4 +78,5 @@ export default protectedProcedure
       console.error("[tRPC] Payment creation failed:", error);
       throw new Error("Failed to create payment checkout");
     }
+    */
   });

@@ -145,9 +145,20 @@ export default function PremiumScreen() {
         paymentMethod: paymentMethod,
       });
 
-      if (result.requiresPayment && result.paymentUrl) {
-        if (Platform.OS === 'web') {
-          const newWindow = window.open(result.paymentUrl, '_blank', 'noopener,noreferrer');
+      if (result.testMode || !result.requiresPayment) {
+        Alert.alert(
+          'Success (Test Mode)',
+          `Your membership has been upgraded to ${tierData[selectedTier].name}! This is test mode - no payment required.`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        return;
+      }
+
+      if (result.requiresPayment && 'paymentUrl' in result) {
+        const paymentUrl = (result as any).paymentUrl as string | undefined;
+        if (paymentUrl) {
+          if (Platform.OS === 'web') {
+            const newWindow = window.open(paymentUrl, '_blank', 'noopener,noreferrer');
           if (newWindow) {
             Alert.alert(
               'Payment Started',
@@ -157,33 +168,29 @@ export default function PremiumScreen() {
           } else {
             Alert.alert('Error', 'Please allow popups to complete payment.');
           }
-        } else {
-          const supported = await Linking.canOpenURL(result.paymentUrl);
-          if (supported) {
-            const webResult = await WebBrowser.openBrowserAsync(result.paymentUrl, {
+          } else {
+            const supported = await Linking.canOpenURL(paymentUrl);
+            if (supported) {
+              const webResult = await WebBrowser.openBrowserAsync(paymentUrl, {
               readerMode: false,
               enableBarCollapsing: true,
               showTitle: true,
             });
             
-            if (webResult.type === 'cancel') {
-              Alert.alert('Payment Cancelled', 'You cancelled the payment process.');
-            } else if (webResult.type === 'dismiss') {
-              Alert.alert(
-                'Payment Window Closed',
-                'Your membership will be automatically updated if payment was successful.',
-                [{ text: 'OK', onPress: () => router.back() }]
-              );
+              if (webResult.type === 'cancel') {
+                Alert.alert('Payment Cancelled', 'You cancelled the payment process.');
+              } else if (webResult.type === 'dismiss') {
+                Alert.alert(
+                  'Payment Window Closed',
+                  'Your membership will be automatically updated if payment was successful.',
+                  [{ text: 'OK', onPress: () => router.back() }]
+                );
+              }
+            } else {
+              Alert.alert('Error', 'Cannot open payment link. Please try again later.');
             }
-          } else {
-            Alert.alert('Error', 'Cannot open payment link. Please try again later.');
           }
         }
-      } else if (result.requiresPayment === false) {
-        Alert.alert('Success', 'Your membership has been upgraded successfully!');
-        router.back();
-      } else {
-        throw new Error('Invalid response from server');
       }
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
