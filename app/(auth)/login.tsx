@@ -34,7 +34,6 @@ export default function LoginScreen() {
     setLoading(true);
     try {
       await login(trimmedEmail, password);
-      router.push('/(tabs)');
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to sign in. Please try again.';
       alert(message);

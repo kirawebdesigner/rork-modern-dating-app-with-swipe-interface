@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
-import { ArrowLeft, Send, ShieldAlert, Crown } from 'lucide-react-native';
+import { ArrowLeft, Send, ShieldAlert, Crown, MoreVertical } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types';
@@ -8,6 +8,7 @@ import { useMembership } from '@/hooks/membership-context';
 import { useAuth } from '@/hooks/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeMessages } from '@/hooks/use-chat';
+import { LinearGradient } from 'expo-linear-gradient';
 
 class Boundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
@@ -176,14 +177,27 @@ export default function ChatScreen() {
   const renderItem = useCallback(({ item }: { item: Message }) => {
     const isMine = uid != null && item.senderId === uid;
     return (
-      <View
-        style={[styles.bubble, isMine ? styles.bubbleMine : styles.bubbleTheirs]}
-        testID={isMine ? 'message-bubble-mine' : 'message-bubble-theirs'}
-      >
-        <Text style={[styles.bubbleText, isMine ? styles.bubbleTextMine : styles.bubbleTextTheirs]}>{item.text}</Text>
-        <Text style={[styles.time, isMine ? styles.timeMine : styles.timeTheirs]}>
-          {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </Text>
+      <View style={[styles.messageWrapper, isMine ? styles.messageWrapperMine : styles.messageWrapperTheirs]}>
+        {isMine ? (
+          <LinearGradient
+            colors={['#667eea', '#764ba2']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.bubbleMine}
+          >
+            <Text style={styles.bubbleTextMine}>{item.text}</Text>
+            <Text style={styles.timeMine}>
+              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </LinearGradient>
+        ) : (
+          <View style={styles.bubbleTheirs} testID="message-bubble-theirs">
+            <Text style={styles.bubbleTextTheirs}>{item.text}</Text>
+            <Text style={styles.timeTheirs}>
+              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+            </Text>
+          </View>
+        )}
       </View>
     );
   }, [uid]);
@@ -202,20 +216,30 @@ export default function ChatScreen() {
   return (
     <Boundary>
       <SafeAreaView style={styles.container}>
-        <View style={styles.header}>
+        <LinearGradient
+          colors={[Colors.background, Colors.background]}
+          style={styles.header}
+        >
           <TouchableOpacity onPress={handleBack} style={styles.backBtn} testID="chat-back">
-            <ArrowLeft size={22} color={Colors.text.primary} />
+            <ArrowLeft size={24} color={Colors.text.primary} strokeWidth={2.5} />
           </TouchableOpacity>
-          <Text style={styles.title} numberOfLines={1} testID="chat-title">{otherName}</Text>
+          <View style={styles.headerCenter}>
+            <Text style={styles.title} numberOfLines={1} testID="chat-title">{otherName}</Text>
+            <Text style={styles.subtitle}>Active now</Text>
+          </View>
           {tier === 'free' ? (
             <View style={styles.headerRight}>
-              <Crown size={18} color={Colors.primary} />
-              <Text style={styles.headerBadgeText}>{remainingDailyMessages}</Text>
+              <View style={styles.badge}>
+                <Crown size={14} color={Colors.primary} />
+                <Text style={styles.badgeText}>{remainingDailyMessages}</Text>
+              </View>
             </View>
           ) : (
-            <View style={styles.headerRight} />
+            <TouchableOpacity style={styles.headerRight}>
+              <MoreVertical size={20} color={Colors.text.secondary} />
+            </TouchableOpacity>
           )}
-        </View>
+        </LinearGradient>
 
         <KeyboardAvoidingView
           behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -237,24 +261,39 @@ export default function ChatScreen() {
             />
           )}
 
-          <View style={styles.composer}>
-            <TextInput
-              style={styles.input}
-              value={input}
-              onChangeText={setInput}
-              placeholder="Type a message"
-              placeholderTextColor={Colors.text.light}
-              editable={!sending}
-              testID="chat-input"
-            />
-            <TouchableOpacity
-              onPress={onSend}
-              style={[styles.sendBtn, (!input.trim() || sending) && styles.sendBtnDisabled]}
-              disabled={!input.trim() || sending}
-              testID="chat-send"
-            >
-              <Send size={18} color={(!input.trim() || sending) ? Colors.text.light : Colors.text.white} />
-            </TouchableOpacity>
+          <View style={styles.composerWrapper}>
+            <View style={styles.composer}>
+              <TextInput
+                style={styles.input}
+                value={input}
+                onChangeText={setInput}
+                placeholder="Type a message..."
+                placeholderTextColor={Colors.text.light}
+                editable={!sending}
+                testID="chat-input"
+                multiline
+                maxLength={500}
+              />
+              <TouchableOpacity
+                onPress={onSend}
+                style={[styles.sendBtn, (!input.trim() || sending) && styles.sendBtnDisabled]}
+                disabled={!input.trim() || sending}
+                testID="chat-send"
+              >
+                {(!input.trim() || sending) ? (
+                  <Send size={20} color={Colors.text.light} />
+                ) : (
+                  <LinearGradient
+                    colors={['#667eea', '#764ba2']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sendBtnGradient}
+                  >
+                    <Send size={20} color={Colors.text.white} fill={Colors.text.white} />
+                  </LinearGradient>
+                )}
+              </TouchableOpacity>
+            </View>
           </View>
         </KeyboardAvoidingView>
       </SafeAreaView>
@@ -263,66 +302,200 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { 
+    flex: 1, 
+    backgroundColor: Colors.background,
+  },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingHorizontal: 20,
+    paddingVertical: 16,
     backgroundColor: Colors.background,
+    shadowColor: '#000',
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  backBtn: { padding: 8 },
-  title: { flex: 1, marginHorizontal: 12, fontSize: 18, fontWeight: '700', color: Colors.text.primary },
-  headerRight: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  headerBadgeText: { color: Colors.primary, fontWeight: '700' },
-  listContent: { padding: 12, gap: 8 },
-  bubble: {
-    maxWidth: '80%',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 14,
+  backBtn: { 
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundSecondary,
   },
-  bubbleMine: { alignSelf: 'flex-end', backgroundColor: Colors.primary },
-  bubbleTheirs: { alignSelf: 'flex-start', backgroundColor: Colors.backgroundSecondary },
-  bubbleText: { fontSize: 15 },
-  bubbleTextMine: { color: Colors.text.white },
-  bubbleTextTheirs: { color: Colors.text.primary },
-  time: { fontSize: 10, marginTop: 4 },
-  timeMine: { color: '#F0F0F0' },
-  timeTheirs: { color: Colors.text.light },
-  composer: {
+  headerCenter: {
+    flex: 1,
+    marginHorizontal: 16,
+    alignItems: 'center',
+  },
+  title: { 
+    fontSize: 18, 
+    fontWeight: '800', 
+    color: Colors.text.primary,
+    letterSpacing: 0.3,
+  },
+  subtitle: {
+    fontSize: 12,
+    color: '#4CD964',
+    fontWeight: '600',
+    marginTop: 2,
+  },
+  headerRight: { 
+    flexDirection: 'row', 
+    alignItems: 'center',
+  },
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: 12,
-    gap: 8,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 16,
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  badgeText: { 
+    color: Colors.primary, 
+    fontWeight: '800',
+    fontSize: 13,
+  },
+  listContent: { 
+    padding: 16, 
+    gap: 12,
+  },
+  messageWrapper: {
+    marginBottom: 4,
+  },
+  messageWrapperMine: {
+    alignItems: 'flex-end',
+  },
+  messageWrapperTheirs: {
+    alignItems: 'flex-start',
+  },
+  bubbleMine: { 
+    maxWidth: '75%',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderBottomRightRadius: 4,
+    shadowColor: '#667eea',
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  bubbleTheirs: { 
+    maxWidth: '75%',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderBottomLeftRadius: 4,
+    backgroundColor: Colors.backgroundSecondary,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 1 },
+    elevation: 1,
+  },
+  bubbleTextMine: { 
+    fontSize: 16, 
+    color: Colors.text.white,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  bubbleTextTheirs: { 
+    fontSize: 16, 
+    color: Colors.text.primary,
+    lineHeight: 22,
+    fontWeight: '500',
+  },
+  timeMine: { 
+    fontSize: 11, 
+    marginTop: 6,
+    color: 'rgba(255, 255, 255, 0.75)',
+    fontWeight: '600',
+  },
+  timeTheirs: { 
+    fontSize: 11, 
+    marginTop: 6,
+    color: Colors.text.light,
+    fontWeight: '600',
+  },
+  composerWrapper: {
     backgroundColor: Colors.background,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 8,
+  },
+  composer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 10,
   },
   input: {
     flex: 1,
-    height: 44,
-    borderRadius: 12,
-    paddingHorizontal: 12,
+    minHeight: 44,
+    maxHeight: 100,
+    borderRadius: 24,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
     backgroundColor: Colors.backgroundSecondary,
     color: Colors.text.primary,
+    fontSize: 16,
+    fontWeight: '500',
   },
   sendBtn: {
     width: 44,
     height: 44,
-    borderRadius: 12,
+    borderRadius: 22,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.primary,
+    overflow: 'hidden',
   },
-  sendBtnDisabled: { backgroundColor: '#D0D4DA' },
-  loadingWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 8 },
-  loadingText: { color: Colors.text.secondary },
-  errorWrap: { flex: 1, justifyContent: 'center', alignItems: 'center', gap: 6, paddingHorizontal: 24 },
-  errorTitle: { fontWeight: '700', color: Colors.error, fontSize: 16 },
-  errorText: { color: Colors.text.secondary, textAlign: 'center' },
+  sendBtnGradient: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  sendBtnDisabled: { 
+    backgroundColor: Colors.backgroundSecondary,
+  },
+  loadingWrap: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    gap: 12,
+  },
+  loadingText: { 
+    color: Colors.text.secondary,
+    fontSize: 15,
+    fontWeight: '600',
+  },
+  errorWrap: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    gap: 8, 
+    paddingHorizontal: 32,
+  },
+  errorTitle: { 
+    fontWeight: '800', 
+    color: Colors.error, 
+    fontSize: 18,
+  },
+  errorText: { 
+    color: Colors.text.secondary, 
+    textAlign: 'center',
+    fontSize: 15,
+  },
 });

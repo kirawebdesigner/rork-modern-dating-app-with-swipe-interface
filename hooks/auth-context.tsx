@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { supabase } from '@/lib/supabase';
 import { AuthUser, User, ThemeId } from '@/types';
+import { router } from 'expo-router';
 
 type SupabaseProfileRow = {
   id: string;
@@ -229,11 +230,25 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   }, [synchronizeUser]);
 
   const login = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+    const { error, data } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (error) {
       throw new Error(error.message || 'Invalid credentials');
     }
     await synchronizeUser();
+    
+    if (data.user) {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('completed')
+        .eq('id', data.user.id)
+        .maybeSingle();
+      
+      if (profile?.completed) {
+        router.replace('/(tabs)' as any);
+      } else {
+        router.replace('/profile-setup' as any);
+      }
+    }
   }, [synchronizeUser]);
 
   const signup = useCallback(async (email: string, password: string, name: string) => {
@@ -263,6 +278,8 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     }
 
     await synchronizeUser();
+    
+    router.replace('/profile-setup' as any);
     
     return data;
   }, [synchronizeUser]);
