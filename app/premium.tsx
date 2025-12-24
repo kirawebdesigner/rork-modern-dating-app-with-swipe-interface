@@ -138,6 +138,7 @@ export default function PremiumScreen() {
       }
 
       setIsProcessing(true);
+      console.log('[Premium] Upgrading to:', selectedTier);
 
       const result = await upgradeMutation.mutateAsync({
         userId: user.id,
@@ -145,10 +146,12 @@ export default function PremiumScreen() {
         paymentMethod: paymentMethod,
       });
 
+      console.log('[Premium] Upgrade result:', result);
+
       if (result.testMode || !result.requiresPayment) {
         Alert.alert(
           'Success (Test Mode)',
-          `Your membership has been upgraded to ${tierData[selectedTier].name}! This is test mode - no payment required.`,
+          `Your membership has been upgraded to ${tierData[selectedTier].name}! This is test mode - no payment required. Please restart the app to see the changes.`,
           [{ text: 'OK', onPress: () => router.back() }]
         );
         return;

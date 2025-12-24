@@ -59,22 +59,32 @@ export default function ProfileSetup() {
     (async () => {
       try {
         if (!isAuthenticated || !user?.id) {
-            // Wait a bit, maybe auth is initializing
+            console.log('[ProfileSetup] Waiting for auth...', { isAuthenticated, hasUser: !!user?.id });
             return;
         }
 
         const id = user.id;
+        console.log('[ProfileSetup] Checking profile completion for user:', id);
+        
         if (id) {
-            const { data: profile, error } = await supabase
-              .from('profiles')
-              .select('completed')
-              .eq('id', id)
-              .maybeSingle();
-            
-            if (!error && profile?.completed) {
-              console.log('[ProfileSetup] Profile already completed, redirecting to tabs');
-              router.replace('/(tabs)' as any);
-              return;
+            try {
+              const { data: profile, error } = await supabase
+                .from('profiles')
+                .select('completed')
+                .eq('id', id)
+                .maybeSingle();
+              
+              if (error) {
+                console.log('[ProfileSetup] Error checking profile:', error.message);
+              } else if (profile?.completed) {
+                console.log('[ProfileSetup] Profile already completed, redirecting to tabs');
+                router.replace('/(tabs)' as any);
+                return;
+              } else {
+                console.log('[ProfileSetup] Profile not completed or not found, continuing setup');
+              }
+            } catch (dbErr) {
+              console.log('[ProfileSetup] Database check failed, allowing setup:', dbErr);
             }
         }
         
