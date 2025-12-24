@@ -64,29 +64,7 @@ export default function ProfileSetup() {
         }
 
         const id = user.id;
-        console.log('[ProfileSetup] Checking profile completion for user:', id);
-        
-        if (id) {
-            try {
-              const { data: profile, error } = await supabase
-                .from('profiles')
-                .select('completed')
-                .eq('id', id)
-                .maybeSingle();
-              
-              if (error) {
-                console.log('[ProfileSetup] Error checking profile:', error.message);
-              } else if (profile?.completed) {
-                console.log('[ProfileSetup] Profile already completed, redirecting to tabs');
-                router.replace('/(tabs)' as any);
-                return;
-              } else {
-                console.log('[ProfileSetup] Profile not completed or not found, continuing setup');
-              }
-            } catch (dbErr) {
-              console.log('[ProfileSetup] Database check failed, allowing setup:', dbErr);
-            }
-        }
+        console.log('[ProfileSetup] Checking profile for user:', id);
         
         const saved = await AsyncStorage.getItem('profile_setup_state');
         if (saved) {
