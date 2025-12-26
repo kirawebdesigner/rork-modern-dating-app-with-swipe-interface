@@ -12,6 +12,7 @@ import {
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Phone, Shield, CreditCard, Calendar } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
@@ -149,9 +150,12 @@ export default function PremiumScreen() {
       console.log('[Premium] Upgrade result:', result);
 
       if (result.testMode || !result.requiresPayment) {
+        console.log('[Premium] Test mode upgrade successful, reloading membership...');
+        await AsyncStorage.setItem('membership_tier', JSON.stringify(selectedTier));
+        
         Alert.alert(
-          'Success (Test Mode)',
-          `Your membership has been upgraded to ${tierData[selectedTier].name}! This is test mode - no payment required. Please restart the app to see the changes.`,
+          'Success!',
+          `Your membership has been upgraded to ${tierData[selectedTier].name}! Enjoy all premium features. Please restart the app to see all changes.`,
           [{ text: 'OK', onPress: () => router.back() }]
         );
         return;

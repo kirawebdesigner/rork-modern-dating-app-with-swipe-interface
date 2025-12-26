@@ -92,12 +92,25 @@ export default function ProfileSetup() {
 
   const handleBack = () => {
     if (currentStep === 'details') {
-      const canGoBack = (router as any)?.canGoBack?.() ?? false;
-      if (canGoBack) {
-        router.back();
-      } else {
-        router.replace('/(tabs)' as any);
-      }
+      Alert.alert(
+        t('Cancel Setup?'),
+        t('Are you sure you want to cancel profile setup?'),
+        [
+          { text: t('No'), style: 'cancel' },
+          { 
+            text: t('Yes'), 
+            style: 'destructive',
+            onPress: () => {
+              const canGoBack = (router as any)?.canGoBack?.() ?? false;
+              if (canGoBack) {
+                router.back();
+              } else {
+                router.replace('/(tabs)' as any);
+              }
+            }
+          },
+        ]
+      );
     } else if (currentStep === 'gender') {
       setCurrentStep('details');
     } else if (currentStep === 'extras') {
@@ -305,8 +318,20 @@ export default function ProfileSetup() {
       }
       try {
         await AsyncStorage.removeItem('profile_setup_state');
-      } catch {}
-      router.replace('/(tabs)' as any);
+        console.log('[ProfileSetup] Setup completed successfully');
+        
+        Alert.alert(
+          t('Welcome!'),
+          t('Your profile has been created successfully. Start discovering matches now!'),
+          [{ 
+            text: t('Start Exploring'), 
+            onPress: () => router.replace('/(tabs)' as any)
+          }]
+        );
+      } catch (e) {
+        console.log('[ProfileSetup] Cleanup error', e);
+        router.replace('/(tabs)' as any);
+      }
     }
   };
 
