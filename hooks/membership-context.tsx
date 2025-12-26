@@ -5,20 +5,22 @@ import { MembershipTier, MembershipFeatures, UserCredits, MonthlyAllowances } fr
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from './auth-context';
 
+const TEST_MODE = true;
+
 const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
   free: {
-    dailyMessages: 5,
-    dailyCompliments: 1,
-    dailyRightSwipes: 50,
-    profileViews: 10,
-    advancedFilters: false,
-    priorityMatching: false,
+    dailyMessages: TEST_MODE ? 99999 : 5,
+    dailyCompliments: TEST_MODE ? 99999 : 1,
+    dailyRightSwipes: TEST_MODE ? 'unlimited' : 50,
+    profileViews: TEST_MODE ? 'unlimited' : 10,
+    advancedFilters: TEST_MODE ? true : false,
+    priorityMatching: TEST_MODE ? true : false,
     seeWhoLikedYou: true,
-    incognitoMode: false,
-    profileBoost: false,
-    rewind: false,
-    travelMode: false,
-    hideLocation: false,
+    incognitoMode: TEST_MODE ? true : false,
+    profileBoost: TEST_MODE ? true : false,
+    rewind: TEST_MODE ? true : false,
+    travelMode: TEST_MODE ? true : false,
+    hideLocation: TEST_MODE ? true : false,
   },
   silver: {
     dailyMessages: 30,
@@ -64,7 +66,7 @@ const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
   },
 };
 
-const TIER_RANK: Record<MembershipTier, number> = { free: 0, silver: 1, gold: 2, vip: 3 } as const;
+
 
 interface MembershipContextType {
   tier: MembershipTier;
@@ -132,7 +134,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     } catch (error: any) {
       console.error('Error loading from local storage:', error.message || error);
     }
-  }, []);
+  }, [normalizeISODate]);
 
   const syncToStorage = useCallback(async () => {
     try {
@@ -208,7 +210,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     } catch (e: any) {
       console.log('[Membership] syncToServer failed:', e?.message || e);
     }
-  }, [authUser?.id, tier, credits, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, allowances, lastAllowanceGrantISO]);
+  }, [authUser?.id, tier, credits, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, allowances, lastAllowanceGrantISO, normalizeISODate]);
 
   const checkExpiration = useCallback(async (userId: string) => {
     try {
@@ -317,7 +319,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       console.log('[Membership] loadFromServer failed (using local fallback):', e?.message || e);
       await loadFromLocalStorage();
     }
-  }, [authUser?.id, loadFromLocalStorage, syncToServer, checkExpiration]);
+  }, [authUser?.id, loadFromLocalStorage, syncToServer, checkExpiration, normalizeISODate]);
 
   const resetDailyLimits = useCallback(async () => {
     const f = TIER_FEATURES[tier];
@@ -326,7 +328,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     setRemainingRightSwipes(f.dailyRightSwipes);
     setRemainingCompliments(f.dailyCompliments);
     setLastReset(isoToday());
-  }, [tier]);
+  }, [tier, isoToday]);
 
   const upgradeTier = useCallback(async (newTier: MembershipTier) => {
     setTier(newTier);
@@ -408,14 +410,14 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       loadFromServer().catch(e => console.error('[Membership] loadFromServer failed:', e));
     }, 200);
     return () => clearTimeout(timer);
-  }, []);
+  }, [loadFromServer]);
 
   useEffect(() => {
     const today = isoToday();
     if (normalizeISODate(lastReset) !== today) {
       resetDailyLimits();
     }
-  }, [lastReset, resetDailyLimits]);
+  }, [lastReset, resetDailyLimits, isoToday, normalizeISODate]);
 
   useEffect(() => {
     grantMonthlyAllowancesIfNeeded();
@@ -427,7 +429,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       syncToServer().catch(e => console.error('[Membership] syncToServer failed:', e));
     }, 500);
     return () => clearTimeout(timer);
-  }, [tier, credits, allowances, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, lastAllowanceGrantISO]);
+  }, [tier, credits, allowances, remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, lastReset, lastAllowanceGrantISO, syncToStorage, syncToServer]);
 
   const useBoost = useCallback(async (): Promise<boolean> => {
     if (tier === 'vip') {

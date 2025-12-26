@@ -148,19 +148,17 @@ export default function ChatScreen() {
 
   const onSend = useCallback(async () => {
     if (!input.trim()) return;
-    if (tier === 'free') {
-      const allowed = await consumeDailyLimit('messages');
-      if (!allowed) {
-        Alert.alert(
-          'Daily Limit Reached',
-          "You've reached your daily message limit.",
-          [
-            { text: 'Cancel', style: 'cancel' },
-            { text: 'Upgrade', onPress: () => router.push('/premium' as any) },
-          ]
-        );
-        return;
-      }
+    const allowed = await consumeDailyLimit('messages');
+    if (!allowed) {
+      Alert.alert(
+        'Daily Limit Reached',
+        "You've reached your daily message limit.",
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => router.push('/premium' as any) },
+        ]
+      );
+      return;
     }
     try {
       setSending(true);
@@ -172,7 +170,7 @@ export default function ChatScreen() {
     } finally {
       setSending(false);
     }
-  }, [input, router, tier, consumeDailyLimit, sendMessage]);
+  }, [input, router, consumeDailyLimit, sendMessage]);
 
   const renderItem = useCallback(({ item }: { item: Message }) => {
     const isMine = uid != null && item.senderId === uid;
