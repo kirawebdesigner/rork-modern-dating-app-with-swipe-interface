@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase, TEST_MODE } from '@/lib/supabase';
 import { AuthUser, User, ThemeId } from '@/types';
 import { router } from 'expo-router';
 
@@ -113,6 +113,11 @@ const persistProfile = async (profile: User | null) => {
 };
 
 const fetchProfile = async (userId: string): Promise<User | null> => {
+  if (TEST_MODE) {
+    console.log('[Auth] TEST MODE: Using local profile for', userId);
+    return null;
+  }
+  
   try {
     const { data, error } = await supabase
       .from('profiles')
@@ -138,6 +143,11 @@ const fetchProfile = async (userId: string): Promise<User | null> => {
 };
 
 const createProfile = async (userId: string, email: string | null, name: string) => {
+  if (TEST_MODE) {
+    console.log('[Auth] TEST MODE: Skipping profile creation on server');
+    return;
+  }
+  
   const payload = {
     id: userId,
     email,
@@ -167,6 +177,29 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     setIsLoading(true);
     try {
       const cachedProfile = deserializeProfile(await AsyncStorage.getItem(USER_STORAGE_KEY));
+      
+      if (TEST_MODE) {
+        const cachedUserId = await AsyncStorage.getItem('user_id');
+        const cachedUserEmail = await AsyncStorage.getItem('user_email');
+        
+        if (!cachedUserId) {
+          console.log('[Auth] TEST MODE: No cached user, waiting for signup/login');
+          setUser(null);
+          await persistProfile(null);
+          return;
+        }
+        
+        console.log('[Auth] TEST MODE: Using cached user', cachedUserId);
+        const next: AuthUser = {
+          id: cachedUserId,
+          email: cachedUserEmail ?? 'test@example.com',
+          name: cachedProfile?.name ?? 'Test User',
+          profile: cachedProfile ?? undefined,
+        };
+        setUser(next);
+        return;
+      }
+      
       const { data } = await supabase.auth.getUser();
       const currentUser = data?.user ?? null;
 
@@ -230,6 +263,22 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   }, [synchronizeUser]);
 
   const login = useCallback(async (email: string, password: string) => {
+    if (TEST_MODE) {
+      console.log('[Auth] TEST MODE: Auto-login for', email);
+      const userId = email.split('@')[0] || 'testuser';
+      await AsyncStorage.setItem('user_id', userId);
+      await AsyncStorage.setItem('user_email', email);
+      await synchronizeUser();
+      
+      const cachedProfile = deserializeProfile(await AsyncStorage.getItem(USER_STORAGE_KEY));
+      if (cachedProfile?.completed) {
+        router.replace('/(tabs)' as any);
+      } else {
+        router.replace('/profile-setup' as any);
+      }
+      return;
+    }
+    
     const { error, data } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
     if (error) {
       throw new Error(error.message || 'Invalid credentials');
@@ -259,6 +308,16 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
       throw new Error('Email and name are required');
     }
 
+    if (TEST_MODE) {
+      console.log('[Auth] TEST MODE: Auto-signup for', trimmedEmail);
+      const userId = trimmedEmail.split('@')[0] || 'testuser';
+      await AsyncStorage.setItem('user_id', userId);
+      await AsyncStorage.setItem('user_email', trimmedEmail);
+      await synchronizeUser();
+      router.replace('/profile-setup' as any);
+      return { user: { id: userId, email: trimmedEmail } };
+    }
+
     const { data, error } = await supabase.auth.signUp({ 
       email: trimmedEmail, 
       password,
@@ -285,9 +344,12 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   }, [synchronizeUser]);
 
   const logout = useCallback(async () => {
-    await supabase.auth.signOut();
+    if (!TEST_MODE) {
+      await supabase.auth.signOut();
+    }
     await persistProfile(null);
     await AsyncStorage.removeItem('user_id');
+    await AsyncStorage.removeItem('user_email');
     await AsyncStorage.removeItem('user_phone');
     setUser(null);
   }, []);

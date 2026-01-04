@@ -3,6 +3,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
+export const TEST_MODE = true;
+
 const env = process.env as Record<string, string | undefined>;
 const extra = (Constants.expoConfig?.extra as Record<string, any> | undefined) ?? {};
 
@@ -54,11 +56,27 @@ if (!isSupabaseConfigured) {
   console.warn('[Supabase] Using default placeholder credentials. Set NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to enable live data.');
 }
 
-console.log('[Supabase] Client initialized for', Platform.OS, 'with URL:', supabaseUrl);
-console.log('[Supabase] Config status:', isSupabaseConfigured ? 'Configured' : 'Using defaults');
+if (TEST_MODE) {
+  console.log('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('🧪 TEST MODE ENABLED');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.log('✅ All features unlocked for testing');
+  console.log('✅ No backend connection required');
+  console.log('✅ All data stored locally');
+  console.log('✅ Premium features enabled by default');
+  console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
+} else {
+  console.log('[Supabase] Client initialized for', Platform.OS, 'with URL:', supabaseUrl);
+  console.log('[Supabase] Config status:', isSupabaseConfigured ? 'Configured' : 'Using defaults');
+}
 
 let connectionTested = false;
 export const testConnection = async () => {
+  if (TEST_MODE) {
+    console.log('[Supabase] TEST MODE: Skipping connection test');
+    return;
+  }
+  
   if (connectionTested) return;
   connectionTested = true;
   
@@ -71,44 +89,14 @@ export const testConnection = async () => {
     if (error) {
       console.error('[Supabase] ❌ Connection test failed!');
       console.error('[Supabase] Error message:', error.message);
-      
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('fetch')) {
-        console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error('🚨 SUPABASE CONNECTION ERROR');
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-        console.error('Your Supabase project is likely PAUSED or UNAVAILABLE.');
-        console.error('');
-        console.error('📋 TO FIX:');
-        console.error('1. Go to: https://supabase.com/dashboard');
-        console.error('2. Find your project: nizdrhdfhddtrukeemhp');
-        console.error('3. Click "Resume Project" if paused');
-        console.error('4. Wait 1-2 minutes for it to wake up');
-        console.error('5. Restart your development server');
-        console.error('');
-        console.error('📖 See SUPABASE_CONNECTION_FIX.md for detailed instructions');
-        console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-      } else {
-        console.error('[Supabase] Error details:', error.details);
-        console.error('[Supabase] Error hint:', error.hint);
-      }
     } else {
-      console.log('[Supabase] ✅ Connection test successful, profiles table exists');
+      console.log('[Supabase] ✅ Connection test successful');
     }
   } catch (err) {
     console.error('[Supabase] ❌ Connection test exception:', err);
-    if (err instanceof Error && (err.message?.includes('Failed to fetch') || err.message?.includes('fetch'))) {
-      console.error('\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('🚨 SUPABASE CONNECTION ERROR');
-      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-      console.error('Cannot connect to Supabase. Possible causes:');
-      console.error('1. Supabase project is PAUSED (most likely)');
-      console.error('2. Network/firewall blocking connection');
-      console.error('3. Supabase project does not exist');
-      console.error('');
-      console.error('📖 See SUPABASE_CONNECTION_FIX.md for solution');
-      console.error('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n');
-    }
   }
 };
 
-testConnection();
+if (!TEST_MODE) {
+  testConnection();
+}

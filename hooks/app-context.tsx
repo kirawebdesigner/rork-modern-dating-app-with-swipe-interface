@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { User, Match, SwipeAction, MembershipTier, ThemeId } from '@/types';
 import { sendPushToUser } from '@/lib/notifications';
-import { supabase } from '@/lib/supabase';
+import { supabase, TEST_MODE } from '@/lib/supabase';
 
 type InterestedIn = 'girl' | 'boy';
 
@@ -61,45 +61,83 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     showVerifiedOnly: false,
   });
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadAppData().catch(e => console.error('[App] loadAppData failed:', e));
-    }, 100);
-    return () => clearTimeout(timer);
-  }, []);
-
-  useEffect(() => {
-    const checkAndReload = async () => {
-      const storedPhone = await AsyncStorage.getItem('user_phone');
-      const storedProfile = await AsyncStorage.getItem('user_profile');
-      
-      if (storedPhone && !storedProfile) {
-        console.log('[App] User logged in but no profile in cache, reloading...');
-        await loadAppData();
-      } else if (storedPhone && (!currentProfile || currentProfile.id === '')) {
-        console.log('[App] User logged in but profile state not set, reloading...');
-        await loadAppData();
-      }
-    };
-    
-    const interval = setInterval(checkAndReload, 2000);
-    checkAndReload();
-    
-    return () => clearInterval(interval);
-  }, [currentProfile]);
-
-  useEffect(() => {
-    refilterPotential();
-  }, [filters, swipeHistory, blockedIds, allProfiles]);
-
-  const normalizeProfile = (p: User | null): User | null => {
+  const normalizeProfile = useCallback((p: User | null): User | null => {
     if (!p) return null;
     const ownedThemes: ThemeId[] = Array.isArray(p.ownedThemes) ? (p.ownedThemes as ThemeId[]) : [];
     const profileTheme: ThemeId | null = (p.profileTheme ?? null) as ThemeId | null;
     return { ...p, ownedThemes, profileTheme } as User;
-  };
+  }, []);
 
-  const loadAppData = async () => {
+  const computeCompleted = useCallback((u: User): boolean => {
+    try {
+      const hasName = typeof u.name === 'string' && u.name.trim().length > 0;
+      const hasAge = typeof u.age === 'number' && u.age >= 18;
+      const hasGender = u.gender === 'boy' || u.gender === 'girl';
+      const hasPhoto = Array.isArray(u.photos) && u.photos.length > 0;
+      const hasBio = typeof u.bio === 'string' && u.bio.trim().length > 0;
+      return Boolean(hasName && hasAge && hasGender && hasPhoto && hasBio);
+    } catch {
+      return false;
+    }
+  }, []);
+
+  const applyFilters = useCallback((users: User[], f: FiltersState, swiped: SwipeAction[], blocked: string[]) => {
+    console.log('[App] applyFilters called with', users.length, 'users');
+    const swipedIds = new Set(swiped.map(s => s.userId));
+    const blockedSet = new Set(blocked);
+    const filtered = users.filter(u => {
+      if (swipedIds.has(u.id)) {
+        console.log('[App] Filtering out swiped user:', u.id);
+        return false;
+      }
+      if (blockedSet.has(u.id)) {
+        console.log('[App] Filtering out blocked user:', u.id);
+        return false;
+      }
+      if (currentProfile?.id && u.id === currentProfile.id) {
+        console.log('[App] Filtering out current user:', u.id);
+        return false;
+      }
+      if (f.interestedIn === 'girl' && u.gender !== 'girl') {
+        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
+        return false;
+      }
+      if (f.interestedIn === 'boy' && u.gender !== 'boy') {
+        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
+        return false;
+      }
+      if (currentProfile?.gender && u.interestedIn && u.interestedIn !== currentProfile.gender) {
+        console.log('[App] Filtering out user (interested_in mismatch):', u.id, u.interestedIn, 'vs', currentProfile.gender);
+        return false;
+      }
+      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) {
+        console.log('[App] Filtering out user (age):', u.id, u.age);
+        return false;
+      }
+      if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
+      if (f.showVerifiedOnly && !u.verified) return false;
+      if (f.education && !(u.education ?? '').toLowerCase().includes(f.education.toLowerCase())) return false;
+      if (f.heightRange) {
+        const m = f.heightRange.match(/(\d+)\s*-\s*(\d+)/);
+        if (m) {
+          const min = parseInt(m[1], 10);
+          const max = parseInt(m[2], 10);
+          const h = u.heightCm ?? 0;
+          if (h && (h < min || h > max)) return false;
+        }
+      }
+      if (f.specificLocation && !(u.location.city ?? '').toLowerCase().includes(f.specificLocation.toLowerCase())) return false;
+      return true;
+    });
+    console.log('[App] Filtered to', filtered.length, 'users');
+    return filtered;
+  }, [currentProfile]);
+
+  const refilterPotential = useCallback(() => {
+    setPotentialMatches(applyFilters(allProfiles, filters, swipeHistory, blockedIds));
+  }, [allProfiles, filters, swipeHistory, blockedIds, applyFilters]);
+
+  const loadAppData = useCallback(async () => {
     try {
       console.log('[App] loadAppData starting...');
       const [profile, storedTier, storedCredits, history, storedFilters, storedBlocked, storedPhone, storedId] = await Promise.all([
@@ -209,6 +247,72 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       const userPhone = await AsyncStorage.getItem('user_phone');
       console.log('[App] Loading profiles, current user phone:', userPhone);
       
+      if (TEST_MODE) {
+        console.log('[App] TEST MODE: Using mock profiles');
+        const mockProfiles: User[] = [
+          {
+            id: 'mock1',
+            name: 'Sarah',
+            age: 24,
+            gender: 'girl',
+            interestedIn: 'boy',
+            bio: 'Love hiking and coffee ☕',
+            photos: ['https://images.unsplash.com/photo-1494790108377-be9c29b29330?w=640'],
+            interests: ['Coffee', 'Hiking', 'Photography'],
+            location: { city: 'Addis Ababa' },
+            verified: true,
+            ownedThemes: [],
+            profileTheme: null,
+            completed: true,
+          },
+          {
+            id: 'mock2',
+            name: 'Emma',
+            age: 26,
+            gender: 'girl',
+            interestedIn: 'boy',
+            bio: 'Artist and traveler 🎨✈️',
+            photos: ['https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=640'],
+            interests: ['Art', 'Travel', 'Music'],
+            location: { city: 'Addis Ababa' },
+            verified: false,
+            ownedThemes: [],
+            profileTheme: null,
+            completed: true,
+          },
+          {
+            id: 'mock3',
+            name: 'Michael',
+            age: 28,
+            gender: 'boy',
+            interestedIn: 'girl',
+            bio: 'Tech enthusiast & gym lover 💪',
+            photos: ['https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=640'],
+            interests: ['Technology', 'Fitness', 'Music'],
+            location: { city: 'Addis Ababa' },
+            verified: true,
+            ownedThemes: [],
+            profileTheme: null,
+            completed: true,
+          },
+        ];
+        
+        const filteredMock = mockProfiles.filter(p => {
+          if (currentProfile?.gender === 'girl' && p.gender === 'boy') return true;
+          if (currentProfile?.gender === 'boy' && p.gender === 'girl') return true;
+          if (!currentProfile) return true;
+          return false;
+        });
+        
+        setAllProfiles(filteredMock);
+        const filtered = applyFilters(filteredMock, {
+          ...filters,
+          interestedIn: (storedFilters ? JSON.parse(storedFilters).interestedIn : (currentProfile ? ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl')) : filters.interestedIn)) as InterestedIn,
+        }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'));
+        setPotentialMatches(filtered);
+        return;
+      }
+      
       const { data: profiles, error } = await supabase
         .from('profiles')
         .select('id,phone,name,age,birthday,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
@@ -216,6 +320,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         .limit(100);
       if (error) {
         console.log('[App] load profiles error', error.message);
+        console.log('[App] Falling back to empty profile list');
         setPotentialMatches([]);
         setAllProfiles([]);
       } else {
@@ -265,6 +370,11 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       }
 
       try {
+        if (TEST_MODE) {
+          console.log('[App] TEST MODE: Skipping matches load');
+          return;
+        }
+        
         if (userPhone) {
           const { data: myProfile } = await supabase
             .from('profiles')
@@ -321,76 +431,38 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     } catch (error) {
       console.error('Error loading app data:', error);
     }
-  };
+  }, [currentProfile, filters, normalizeProfile, applyFilters]);
 
-  const applyFilters = (users: User[], f: FiltersState, swiped: SwipeAction[], blocked: string[]) => {
-    console.log('[App] applyFilters called with', users.length, 'users');
-    const swipedIds = new Set(swiped.map(s => s.userId));
-    const blockedSet = new Set(blocked);
-    const filtered = users.filter(u => {
-      if (swipedIds.has(u.id)) {
-        console.log('[App] Filtering out swiped user:', u.id);
-        return false;
-      }
-      if (blockedSet.has(u.id)) {
-        console.log('[App] Filtering out blocked user:', u.id);
-        return false;
-      }
-      if (currentProfile?.id && u.id === currentProfile.id) {
-        console.log('[App] Filtering out current user:', u.id);
-        return false;
-      }
-      if (f.interestedIn === 'girl' && u.gender !== 'girl') {
-        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
-        return false;
-      }
-      if (f.interestedIn === 'boy' && u.gender !== 'boy') {
-        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
-        return false;
-      }
-      if (currentProfile?.gender && u.interestedIn && u.interestedIn !== currentProfile.gender) {
-        console.log('[App] Filtering out user (interested_in mismatch):', u.id, u.interestedIn, 'vs', currentProfile.gender);
-        return false;
-      }
-      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) {
-        console.log('[App] Filtering out user (age):', u.id, u.age);
-        return false;
-      }
-      if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
-      if (f.showVerifiedOnly && !u.verified) return false;
-      if (f.education && !(u.education ?? '').toLowerCase().includes(f.education.toLowerCase())) return false;
-      if (f.heightRange) {
-        const m = f.heightRange.match(/(\d+)\s*-\s*(\d+)/);
-        if (m) {
-          const min = parseInt(m[1], 10);
-          const max = parseInt(m[2], 10);
-          const h = u.heightCm ?? 0;
-          if (h && (h < min || h > max)) return false;
-        }
-      }
-      if (f.specificLocation && !(u.location.city ?? '').toLowerCase().includes(f.specificLocation.toLowerCase())) return false;
-      return true;
-    });
-    console.log('[App] Filtered to', filtered.length, 'users');
-    return filtered;
-  };
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      loadAppData().catch(e => console.error('[App] loadAppData failed:', e));
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [loadAppData]);
 
-  const refilterPotential = () => {
-    setPotentialMatches(applyFilters(allProfiles, filters, swipeHistory, blockedIds));
-  };
+  useEffect(() => {
+    const checkAndReload = async () => {
+      const storedPhone = await AsyncStorage.getItem('user_phone');
+      const storedProfile = await AsyncStorage.getItem('user_profile');
+      
+      if (storedPhone && !storedProfile) {
+        console.log('[App] User logged in but no profile in cache, reloading...');
+        await loadAppData();
+      } else if (storedPhone && (!currentProfile || currentProfile.id === '')) {
+        console.log('[App] User logged in but profile state not set, reloading...');
+        await loadAppData();
+      }
+    };
+    
+    const interval = setInterval(checkAndReload, 2000);
+    checkAndReload();
+    
+    return () => clearInterval(interval);
+  }, [currentProfile, loadAppData]);
 
-  const computeCompleted = (u: User): boolean => {
-    try {
-      const hasName = typeof u.name === 'string' && u.name.trim().length > 0;
-      const hasAge = typeof u.age === 'number' && u.age >= 18;
-      const hasGender = u.gender === 'boy' || u.gender === 'girl';
-      const hasPhoto = Array.isArray(u.photos) && u.photos.length > 0;
-      const hasBio = typeof u.bio === 'string' && u.bio.trim().length > 0;
-      return Boolean(hasName && hasAge && hasGender && hasPhoto && hasBio);
-    } catch {
-      return false;
-    }
-  };
+  useEffect(() => {
+    refilterPotential();
+  }, [refilterPotential]);
 
   const setCurrentProfile = useCallback(async (profile: User) => {
     const normalized: User = {
@@ -401,6 +473,12 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     } as User;
     await AsyncStorage.setItem('user_profile', JSON.stringify(normalized));
     setCurrentProfileState(normalized);
+    
+    if (TEST_MODE) {
+      console.log('[App] TEST MODE: Profile saved locally only');
+      return;
+    }
+    
     try {
       const payload = {
         id: normalized.id,
@@ -427,7 +505,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     } catch (e) {
       console.log('[App] profile sync error', e);
     }
-  }, []);
+  }, [computeCompleted]);
 
   const updateProfile = useCallback(async (patch: Partial<User>) => {
     setCurrentProfileState(prev => {
@@ -442,6 +520,12 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       } as User;
       (next as any).completed = computeCompleted(next);
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
+      
+      if (TEST_MODE) {
+        console.log('[App] TEST MODE: Profile update saved locally only');
+        return next;
+      }
+      
       (async () => {
         try {
           const payload = {
@@ -472,7 +556,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       })();
       return next;
     });
-  }, []);
+  }, [computeCompleted]);
 
   const setFilters = useCallback(async (next: FiltersState) => {
     await AsyncStorage.setItem('filters_state', JSON.stringify(next));
@@ -502,11 +586,19 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     setPotentialMatches(prev => prev.filter(u => u.id !== userId));
 
     if (action === 'like' || action === 'superlike') {
-      sendPushToUser(userId, {
-        title: 'New like',
-        body: 'Someone liked your profile. Open the app to check!',
-      }).catch(e => console.log('[Push] like notify failed', e));
+      if (!TEST_MODE) {
+        sendPushToUser(userId, {
+          title: 'New like',
+          body: 'Someone liked your profile. Open the app to check!',
+        }).catch(e => console.log('[Push] like notify failed', e));
+      }
+      
       (async () => {
+        if (TEST_MODE) {
+          console.log('[App] TEST MODE: Skipping swipe sync to server');
+          return;
+        }
+        
         try {
           const storedPhone = await AsyncStorage.getItem('user_phone');
           if (!storedPhone) {
@@ -620,6 +712,12 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         }
         const next: User = { ...base, ownedThemes: Array.from(owned) } as User;
         AsyncStorage.setItem('user_profile', JSON.stringify(next));
+        
+        if (TEST_MODE) {
+          console.log('[App] TEST MODE: Theme unlocked locally only');
+          return next;
+        }
+        
         (async () => {
           try {
             await supabase.from('profiles').upsert({
@@ -656,6 +754,12 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (!prev) return prev as any;
       const next: User = { ...(prev as User), profileTheme: theme } as User;
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
+      
+      if (TEST_MODE) {
+        console.log('[App] TEST MODE: Theme set locally only');
+        return next;
+      }
+      
       (async () => {
         try {
           await supabase.from('profiles').update({ profile_theme: theme }).eq('id', (prev as User).id);
