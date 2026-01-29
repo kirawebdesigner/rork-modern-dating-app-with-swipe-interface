@@ -331,17 +331,6 @@ export default function ProfileScreen() {
         </View>
 
         <View style={styles.section}>
-          <TouchableOpacity
-            style={styles.creditsBanner}
-            onPress={() => router.push('/credits' as any)}
-            testID="manage-credits-btn"
-          >
-            <Coins size={18} color={Colors.text.white} />
-            <Text style={styles.creditsText}>Manage Credits & Boosts</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={styles.section}>
           <View style={styles.actionsRow}>
             <TouchableOpacity
               style={[styles.actionBtn, styles.likeBtn]}

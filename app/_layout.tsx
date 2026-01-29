@@ -29,7 +29,7 @@ function RootLayoutNav() {
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="premium" options={{ presentation: "modal" }} />
       <Stack.Screen name="profile-settings" />
-      <Stack.Screen name="credits" options={{ presentation: "modal" }} />
+      
       <Stack.Screen name="discovery-filters" />
       <Stack.Screen name="referrals" />
       <Stack.Screen name="terms" />

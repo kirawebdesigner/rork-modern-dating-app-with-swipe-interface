@@ -20,7 +20,6 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
 import { useAuth } from '@/hooks/auth-context';
 import { MembershipTier } from '@/types';
-import { trpc } from '@/lib/trpc';
 import * as WebBrowser from 'expo-web-browser';
 
 interface TierFeature {
@@ -113,8 +112,6 @@ export default function PremiumScreen() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('CBE');
 
-  const upgradeMutation = trpc.membership.upgrade.useMutation();
-
   const paymentMethods = [
     { id: 'CBE', name: 'CBE Bank', icon: CreditCard, description: 'Direct payment' },
     { id: 'TELEBIRR', name: 'TeleBirr', icon: Phone, description: 'Mobile wallet' },
@@ -141,67 +138,18 @@ export default function PremiumScreen() {
       setIsProcessing(true);
       console.log('[Premium] Upgrading to:', selectedTier);
 
-      const result = await upgradeMutation.mutateAsync({
-        userId: user.id,
-        tier: selectedTier,
-        paymentMethod: paymentMethod,
-      });
-
-      console.log('[Premium] Upgrade result:', result);
-
-      if (result.testMode || !result.requiresPayment) {
-        console.log('[Premium] Test mode upgrade successful, reloading membership...');
-        await AsyncStorage.setItem('membership_tier', JSON.stringify(selectedTier));
-        
-        Alert.alert(
-          'Success!',
-          `Your membership has been upgraded to ${tierData[selectedTier].name}! Enjoy all premium features. Please restart the app to see all changes.`,
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-        return;
-      }
-
-      if (result.requiresPayment && 'paymentUrl' in result) {
-        const paymentUrl = (result as any).paymentUrl as string | undefined;
-        if (paymentUrl) {
-          if (Platform.OS === 'web') {
-            const newWindow = window.open(paymentUrl, '_blank', 'noopener,noreferrer');
-          if (newWindow) {
-            Alert.alert(
-              'Payment Started',
-              'Complete your payment in the new window. Your membership will be automatically updated after successful payment.',
-              [{ text: 'OK', onPress: () => router.back() }]
-            );
-          } else {
-            Alert.alert('Error', 'Please allow popups to complete payment.');
-          }
-          } else {
-            const supported = await Linking.canOpenURL(paymentUrl);
-            if (supported) {
-              const webResult = await WebBrowser.openBrowserAsync(paymentUrl, {
-              readerMode: false,
-              enableBarCollapsing: true,
-              showTitle: true,
-            });
-            
-              if (webResult.type === 'cancel') {
-                Alert.alert('Payment Cancelled', 'You cancelled the payment process.');
-              } else if (webResult.type === 'dismiss') {
-                Alert.alert(
-                  'Payment Window Closed',
-                  'Your membership will be automatically updated if payment was successful.',
-                  [{ text: 'OK', onPress: () => router.back() }]
-                );
-              }
-            } else {
-              Alert.alert('Error', 'Cannot open payment link. Please try again later.');
-            }
-          }
-        }
-      }
+      await AsyncStorage.setItem('membership_tier', JSON.stringify(selectedTier));
+      
+      console.log('[Premium] Upgrade successful');
+      
+      Alert.alert(
+        'Success!',
+        `Your membership has been upgraded to ${tierData[selectedTier].name}! Enjoy all premium features.`,
+        [{ text: 'OK', onPress: () => router.back() }]
+      );
     } catch (e) {
       const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
-      Alert.alert('Payment Failed', errorMessage, [{ text: 'OK' }]);
+      Alert.alert('Upgrade Failed', errorMessage, [{ text: 'OK' }]);
     } finally {
       setIsProcessing(false);
     }

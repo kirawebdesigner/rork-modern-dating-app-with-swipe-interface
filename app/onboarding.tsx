@@ -221,7 +221,7 @@ export default function OnboardingScreen() {
         contentContainerStyle={styles.listContent}
       />
 
-      <View style={styles.footer} pointerEvents="box-none">
+      <View style={styles.footer}>
         <View style={styles.pagination}>
           {slides.map((s, index) => (
             <View
