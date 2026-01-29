@@ -9,10 +9,9 @@ import {
   Alert,
   Modal,
   Linking,
-  Platform,
+  TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Phone, Shield, CreditCard, Calendar } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
@@ -21,6 +20,7 @@ import { useMembership } from '@/hooks/membership-context';
 import { useAuth } from '@/hooks/auth-context';
 import { MembershipTier } from '@/types';
 import * as WebBrowser from 'expo-web-browser';
+import { trpc } from '@/lib/trpc';
 
 interface TierFeature {
   icon: any;
@@ -104,13 +104,50 @@ const tierData: Record<MembershipTier, TierInfo> = {
 
 export default function PremiumScreen() {
   const router = useRouter();
-  const { tier } = useMembership();
+  const { tier, upgradeTier } = useMembership();
   const { user } = useAuth();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
   const [billingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState<string>('CBE');
+  const [phoneNumber, setPhoneNumber] = useState<string>('');
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+
+  const upgradeMutation = trpc.membership.upgrade.useMutation({
+    onSuccess: async (data) => {
+      console.log('[Premium] Upgrade mutation success:', data);
+      
+      if (data.requiresPayment && data.paymentUrl) {
+        console.log('[Premium] Opening payment URL:', data.paymentUrl);
+        setIsProcessing(false);
+        
+        try {
+          const result = await WebBrowser.openBrowserAsync(data.paymentUrl, {
+            dismissButtonStyle: 'close',
+            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+          });
+          console.log('[Premium] Browser result:', result);
+        } catch (err) {
+          console.error('[Premium] Failed to open browser:', err);
+          Linking.openURL(data.paymentUrl);
+        }
+      } else if (!data.requiresPayment) {
+        await upgradeTier(selectedTier);
+        Alert.alert(
+          'Success!',
+          `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
+          [{ text: 'OK', onPress: () => router.back() }]
+        );
+        setIsProcessing(false);
+      }
+    },
+    onError: (error) => {
+      console.error('[Premium] Upgrade mutation error:', error);
+      setIsProcessing(false);
+      Alert.alert('Upgrade Failed', error.message || 'Failed to process upgrade. Please try again.');
+    },
+  });
 
   const paymentMethods = [
     { id: 'CBE', name: 'CBE Bank', icon: CreditCard, description: 'Direct payment' },
@@ -119,40 +156,42 @@ export default function PremiumScreen() {
   ] as const;
 
   const handleUpgrade = async () => {
-    try {
-      if (!user?.id) {
-        Alert.alert('Authentication Required', 'Please log in to upgrade your membership.');
-        return;
-      }
-
-      if (selectedTier === 'free') {
-        Alert.alert('Free Tier', 'You are currently on the free plan. Select a paid tier to upgrade.');
-        return;
-      }
-
-      if (selectedTier === tier) {
-        Alert.alert('Current Plan', `You are already subscribed to the ${tierData[selectedTier].name} plan.`);
-        return;
-      }
-
-      setIsProcessing(true);
-      console.log('[Premium] Upgrading to:', selectedTier);
-
-      await AsyncStorage.setItem('membership_tier', JSON.stringify(selectedTier));
-      
-      console.log('[Premium] Upgrade successful');
-      
-      Alert.alert(
-        'Success!',
-        `Your membership has been upgraded to ${tierData[selectedTier].name}! Enjoy all premium features.`,
-        [{ text: 'OK', onPress: () => router.back() }]
-      );
-    } catch (e) {
-      const errorMessage = e instanceof Error ? e.message : 'Unknown error occurred';
-      Alert.alert('Upgrade Failed', errorMessage, [{ text: 'OK' }]);
-    } finally {
-      setIsProcessing(false);
+    if (!user?.id) {
+      Alert.alert('Authentication Required', 'Please log in to upgrade your membership.');
+      return;
     }
+
+    if (selectedTier === 'free') {
+      Alert.alert('Free Tier', 'You are currently on the free plan. Select a paid tier to upgrade.');
+      return;
+    }
+
+    if (selectedTier === tier) {
+      Alert.alert('Current Plan', `You are already subscribed to the ${tierData[selectedTier].name} plan.`);
+      return;
+    }
+
+    setShowPhoneModal(true);
+  };
+
+  const handleConfirmPayment = async () => {
+    if (!phoneNumber.trim()) {
+      Alert.alert('Phone Required', 'Please enter your phone number to proceed with payment.');
+      return;
+    }
+
+    setShowPhoneModal(false);
+    setIsProcessing(true);
+    console.log('[Premium] Upgrading to:', selectedTier);
+    console.log('[Premium] Phone:', phoneNumber);
+    console.log('[Premium] Payment method:', paymentMethod);
+
+    upgradeMutation.mutate({
+      userId: user!.id,
+      tier: selectedTier,
+      paymentMethod,
+      phone: phoneNumber,
+    });
   };
 
   const formatETB = (amount: number) => `${amount.toLocaleString()} ETB`;
@@ -337,6 +376,60 @@ export default function PremiumScreen() {
             </View>
             <Text style={styles.modalBody}>Save 50% when you choose yearly billing. Lock in the best price and enjoy uninterrupted premium features all year long!</Text>
             <GradientButton title="Got it" onPress={() => setShowPromo(false)} />
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={showPhoneModal} transparent animationType="slide" onRequestClose={() => setShowPhoneModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.phoneModalCard}>
+            <View style={styles.phoneModalHeader}>
+              <Text style={styles.phoneModalTitle}>Enter Phone Number</Text>
+              <TouchableOpacity onPress={() => setShowPhoneModal(false)} style={styles.phoneModalClose}>
+                <X size={24} color={Colors.text.secondary} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.phoneModalSubtitle}>
+              Enter your phone number to proceed with {paymentMethod} payment for {tierData[selectedTier].name} membership.
+            </Text>
+            
+            <View style={styles.phoneInputContainer}>
+              <Text style={styles.phonePrefix}>+251</Text>
+              <TextInput
+                style={styles.phoneInput}
+                placeholder="9XXXXXXXX"
+                placeholderTextColor={Colors.text.light}
+                keyboardType="phone-pad"
+                value={phoneNumber}
+                onChangeText={setPhoneNumber}
+                maxLength={10}
+              />
+            </View>
+            
+            <View style={styles.paymentSummary}>
+              <Text style={styles.summaryLabel}>Plan:</Text>
+              <Text style={styles.summaryValue}>{tierData[selectedTier].name}</Text>
+            </View>
+            <View style={styles.paymentSummary}>
+              <Text style={styles.summaryLabel}>Amount:</Text>
+              <Text style={styles.summaryValue}>{formatETB(tierData[selectedTier].priceMonthly)}</Text>
+            </View>
+            <View style={styles.paymentSummary}>
+              <Text style={styles.summaryLabel}>Payment:</Text>
+              <Text style={styles.summaryValue}>{paymentMethod}</Text>
+            </View>
+            
+            <GradientButton
+              title={isProcessing ? 'Processing...' : 'Proceed to Payment'}
+              onPress={handleConfirmPayment}
+              style={styles.confirmButton}
+              disabled={isProcessing}
+            />
+            
+            <TouchableOpacity onPress={() => setShowPhoneModal(false)} style={styles.cancelButton}>
+              <Text style={styles.cancelButtonText}>Cancel</Text>
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -637,5 +730,86 @@ const styles = StyleSheet.create({
   },
   modalBody: { 
     color: Colors.text.secondary 
+  },
+  phoneModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: Colors.background,
+    borderRadius: 24,
+    padding: 24,
+  },
+  phoneModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  phoneModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.text.primary,
+  },
+  phoneModalClose: {
+    padding: 4,
+  },
+  phoneModalSubtitle: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    marginBottom: 20,
+    lineHeight: 20,
+  },
+  phoneInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginBottom: 20,
+  },
+  phonePrefix: {
+    paddingHorizontal: 16,
+    fontSize: 16,
+    fontWeight: '600',
+    color: Colors.text.primary,
+    borderRightWidth: 1,
+    borderRightColor: Colors.border,
+    paddingVertical: 14,
+  },
+  phoneInput: {
+    flex: 1,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    fontSize: 16,
+    color: Colors.text.primary,
+  },
+  paymentSummary: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  summaryLabel: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+  },
+  summaryValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.text.primary,
+  },
+  confirmButton: {
+    marginTop: 20,
+  },
+  cancelButton: {
+    marginTop: 12,
+    alignItems: 'center',
+    paddingVertical: 12,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    color: Colors.text.secondary,
+    fontWeight: '500',
   },
 });

@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { publicProcedure } from "../../../create-context";
 import { createClient } from "@supabase/supabase-js";
+import { arifpay } from "../../../../lib/arifpay";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://nizdrhdfhddtrukeemhp.supabase.co';
 const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg';
@@ -8,9 +9,9 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 const TIER_PRICES: Record<string, number> = {
   free: 0,
-  silver: 1600,
-  gold: 3200,
-  vip: 4800,
+  silver: 500,
+  gold: 1500,
+  vip: 2600,
 };
 
 export const upgradeProcedure = publicProcedure
@@ -19,61 +20,16 @@ export const upgradeProcedure = publicProcedure
       userId: z.string(),
       tier: z.enum(["free", "silver", "gold", "vip"]),
       paymentMethod: z.string().optional(),
+      phone: z.string().optional(),
     })
   )
   .mutation(async ({ input, ctx }) => {
-    console.log("[tRPC Upgrade] TEST MODE: Processing upgrade for user:", input.userId);
-    console.log("[tRPC Upgrade] TEST MODE: Upgrading to tier:", input.tier);
+    console.log("[tRPC Upgrade] Processing upgrade for user:", input.userId);
+    console.log("[tRPC Upgrade] Upgrading to tier:", input.tier);
 
     const amount = TIER_PRICES[input.tier];
-    console.log("[tRPC Upgrade] TEST MODE: Amount (bypassed):", amount, "ETB");
+    console.log("[tRPC Upgrade] Amount:", amount, "ETB");
 
-    try {
-      const now = new Date();
-      const expiresAt = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000);
-
-      const { error: membershipError } = await supabase
-        .from('memberships')
-        .upsert({
-          user_id: input.userId,
-          tier: input.tier,
-          expires_at: input.tier === 'free' ? null : expiresAt.toISOString(),
-          updated_at: now.toISOString(),
-        }, { onConflict: 'user_id' });
-
-      if (membershipError) {
-        console.error("[tRPC Upgrade] TEST MODE: Failed to update membership:", membershipError.message);
-      }
-
-      const { error: profileError } = await supabase
-        .from('profiles')
-        .update({ membership_tier: input.tier })
-        .eq('id', input.userId);
-
-      if (profileError) {
-        console.error("[tRPC Upgrade] TEST MODE: Failed to update profile tier:", profileError.message);
-      }
-
-      console.log("[tRPC Upgrade] TEST MODE: Successfully upgraded to", input.tier);
-      
-      return {
-        success: true as const,
-        newTier: input.tier,
-        requiresPayment: false,
-        testMode: true,
-      };
-    } catch (error) {
-      console.error("[tRPC Upgrade] TEST MODE: Upgrade failed:", error);
-      return {
-        success: true as const,
-        newTier: input.tier,
-        requiresPayment: false,
-        testMode: true,
-      };
-    }
-
-    // OLD PAYMENT CODE - Disabled for testing
-    /*
     if (amount === 0) {
       console.log("[tRPC Upgrade] Free tier, no payment required");
       return {
@@ -90,13 +46,9 @@ export const upgradeProcedure = publicProcedure
         .eq('id', input.userId)
         .single();
 
-      if (!profile) {
-        throw new Error('User profile not found');
-      }
-
-      const phone = profile.phone || profile.email;
+      let phone = input.phone || profile?.phone || profile?.email;
       if (!phone) {
-        throw new Error('User phone or email required for payment');
+        throw new Error('Phone number is required for payment');
       }
 
       const envBase = process.env.EXPO_PUBLIC_API_URL;
@@ -115,11 +67,11 @@ export const upgradeProcedure = publicProcedure
 
       if (!baseUrl) {
         const host = ctx.req.headers.get("x-forwarded-host") || ctx.req.headers.get("host");
-        const proto = ctx.req.headers.get("x-forwarded-proto") || "http";
+        const proto = ctx.req.headers.get("x-forwarded-proto") || "https";
         if (host) baseUrl = `${proto}://${host}`;
       }
 
-      if (!baseUrl) baseUrl = "http://localhost:8081";
+      if (!baseUrl) baseUrl = "https://01sqivqojn0aq61khqyvn.rork.app";
 
       console.log("[tRPC Upgrade] Base URL:", baseUrl);
 
@@ -128,6 +80,7 @@ export const upgradeProcedure = publicProcedure
       const errorUrl = `${baseUrl}/payment-error`;
 
       console.log("[tRPC Upgrade] Creating ArifPay payment...");
+      console.log("[tRPC Upgrade] Success URL:", successUrl);
 
       const payment = await arifpay.createPayment({
         amount,
@@ -138,7 +91,7 @@ export const upgradeProcedure = publicProcedure
         successUrl,
         cancelUrl,
         errorUrl,
-        notifyUrl: `${baseUrl}/webhooks/arifpay`,
+        notifyUrl: `${baseUrl}/api/webhooks/arifpay`,
       });
 
       const { error: txError } = await supabase
@@ -184,7 +137,6 @@ export const upgradeProcedure = publicProcedure
       
       throw new Error(errorMsg);
     }
-    */
   });
 
 export default upgradeProcedure;
