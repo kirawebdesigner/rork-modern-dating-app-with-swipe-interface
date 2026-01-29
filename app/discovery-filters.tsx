@@ -22,7 +22,10 @@ export default function DiscoveryFilters() {
   const router = useRouter();
   const { filters, setFilters } = useApp();
   const { features } = useMembership();
-  const [localFilters, setLocalFilters] = useState(filters);
+  const [localFilters, setLocalFilters] = useState(() => ({
+    ...filters,
+    interestedIn: filters.interestedIn || 'girl',
+  }));
 
   const handleSave = async () => {
     try {

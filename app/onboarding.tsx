@@ -37,19 +37,19 @@ const slides = [
     id: '3',
     title: 'Matches',
     description: 'We match you with people that have a large array of similar interests.',
-    image: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?w=800',
+    image: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/shiiaapmpjs259hdyagf5',
   },
   {
     id: '4',
     title: 'Premium',
     description: 'Sign up today and enjoy the first month of premium benefits on us.',
-    image: 'https://images.unsplash.com/photo-1517365830460-955ce3ccd263?w=800',
+    image: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/hcurirtv54zoche8cbolw',
   },
   {
     id: '5',
     title: 'Algorithm',
     description: 'Users go through a vetting process to help prevent matching with bots.',
-    image: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=800',
+    image: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/tpy6y37ytrmloqnx4k1oh',
   },
 ];
 

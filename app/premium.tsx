@@ -57,7 +57,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
   },
   silver: {
     name: 'Silver',
-    priceMonthly: 10,
+    priceMonthly: 500,
     color: '#C0C0C0',
     gradient: ['#C0C0C0', '#9CA3AF'],
     features: [
@@ -72,7 +72,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
   },
   gold: {
     name: 'Gold',
-    priceMonthly: 20,
+    priceMonthly: 1500,
     color: '#FFD700',
     gradient: ['#FFE55C', '#FFD700'],
     popular: true,
@@ -88,7 +88,7 @@ const tierData: Record<MembershipTier, TierInfo> = {
   },
   vip: {
     name: 'VIP',
-    priceMonthly: 30,
+    priceMonthly: 2600,
     color: '#8A2BE2',
     gradient: ['#9932CC', '#8A2BE2'],
     features: [
@@ -207,9 +207,8 @@ export default function PremiumScreen() {
     }
   };
 
-  const USD_TO_ETB = 160;
-  const formatETB = (amount: number) => `${amount * USD_TO_ETB} ETB`;
-  const formatDual = useCallback((usdAmount: number) => formatETB(usdAmount), []);
+  const formatETB = (amount: number) => `${amount.toLocaleString()} ETB`;
+  const formatDual = useCallback((etbAmount: number) => formatETB(etbAmount), []);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -251,7 +250,7 @@ export default function PremiumScreen() {
             const priceText = showPrice
               ? (billingPeriod === 'monthly'
                 ? `${formatDual(tierInfo.priceMonthly)}/mo`
-                : `${formatDual(tierInfo.priceMonthly * 6)}/yr`)
+                : `${formatDual(Math.round(tierInfo.priceMonthly * 6 * 0.5))}/yr`)
               : 'Free';
             
             return (

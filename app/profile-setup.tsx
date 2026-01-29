@@ -90,17 +90,27 @@ export default function ProfileSetup() {
     })();
   }, [currentStep, profileData]);
 
+  const saveProgress = async () => {
+    try {
+      const payload = JSON.stringify({ step: currentStep, data: profileData });
+      await AsyncStorage.setItem('profile_setup_state', payload);
+      console.log('[ProfileSetup] Progress saved');
+    } catch (e) {
+      console.log('[ProfileSetup] Failed to save progress', e);
+    }
+  };
+
   const handleBack = () => {
     if (currentStep === 'details') {
       Alert.alert(
-        t('Cancel Setup?'),
-        t('Are you sure you want to cancel profile setup?'),
+        t('Save Progress?'),
+        t('Do you want to save your progress and continue later?'),
         [
-          { text: t('No'), style: 'cancel' },
           { 
-            text: t('Yes'), 
+            text: t('Discard'), 
             style: 'destructive',
-            onPress: () => {
+            onPress: async () => {
+              await AsyncStorage.removeItem('profile_setup_state');
               const canGoBack = (router as any)?.canGoBack?.() ?? false;
               if (canGoBack) {
                 router.back();
@@ -109,13 +119,30 @@ export default function ProfileSetup() {
               }
             }
           },
+          { 
+            text: t('Save & Exit'), 
+            style: 'default',
+            onPress: async () => {
+              await saveProgress();
+              const canGoBack = (router as any)?.canGoBack?.() ?? false;
+              if (canGoBack) {
+                router.back();
+              } else {
+                router.replace('/(tabs)' as any);
+              }
+            }
+          },
+          { text: t('Cancel'), style: 'cancel' },
         ]
       );
     } else if (currentStep === 'gender') {
+      saveProgress();
       setCurrentStep('details');
     } else if (currentStep === 'extras') {
+      saveProgress();
       setCurrentStep('gender');
     } else if (currentStep === 'interests') {
+      saveProgress();
       setCurrentStep('extras');
     }
   };
@@ -136,6 +163,10 @@ export default function ProfileSetup() {
     if (currentStep === 'details') {
       if (!profileData.firstName.trim()) {
         Alert.alert(t('Error'), t('Please enter your first name'));
+        return;
+      }
+      if (!profileData.photoUri) {
+        Alert.alert(t('Photo Required'), t('Please add at least one photo to continue'));
         return;
       }
       if (!profileData.birthday) {
@@ -771,8 +802,10 @@ export default function ProfileSetup() {
               ))}
             </View>
             <CalendarGrid />
+            </ScrollView>
+          <View style={styles.datePickerFooter}>
             <GradientButton title={t('Save')} onPress={handleSaveDate} style={[styles.saveButton, !selectedDay && styles.saveButtonDisabled]} disabled={!selectedDay} testID="save-date" />
-          </ScrollView>
+          </View>
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -1058,6 +1091,12 @@ const styles = StyleSheet.create({
   calendarDayText: { fontSize: 15, fontWeight: '600', color: colors.text.primary },
   calendarDayTextSelected: { color: colors.text.white, fontWeight: '800' },
   calendarDayTextDisabled: { color: colors.text.secondary },
+  datePickerFooter: {
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+    marginTop: 8,
+  },
   saveButton: { marginTop: 12 },
   saveButtonDisabled: { opacity: 0.5 },
 });

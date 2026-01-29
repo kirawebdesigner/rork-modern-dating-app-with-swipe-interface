@@ -5,7 +5,7 @@ import { MembershipTier, MembershipFeatures, UserCredits, MonthlyAllowances } fr
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from './auth-context';
 
-const TEST_MODE = true;
+const TEST_MODE = false;
 
 const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
   free: {

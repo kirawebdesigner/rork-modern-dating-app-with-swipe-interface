@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 import Constants from 'expo-constants';
 
-export const TEST_MODE = true;
+export const TEST_MODE = false;
 
 const env = process.env as Record<string, string | undefined>;
 const extra = (Constants.expoConfig?.extra as Record<string, any> | undefined) ?? {};
