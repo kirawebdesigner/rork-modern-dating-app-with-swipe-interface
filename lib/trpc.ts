@@ -31,8 +31,9 @@ const toHttpOrigin = (hostLike: string) => {
 
 const getBaseUrl = () => {
   const envUrl =
-    (process.env.EXPO_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+    (process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '').trim();
   if (envUrl.length > 0) {
+    console.log('[tRPC] Using API URL from env:', envUrl);
     return normalize(envUrl);
   }
 
