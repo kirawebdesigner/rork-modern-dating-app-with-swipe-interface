@@ -49,7 +49,7 @@ app.onError((err, c) => {
 });
 
 app.use(
-  "/api/trpc/*",
+  "/trpc/*",
   trpcServer({
     endpoint: "/api/trpc",
     router: appRouter,
@@ -66,7 +66,7 @@ app.use(
   }),
 );
 
-console.log("[Hono] tRPC server mounted at /api/trpc");
+console.log("[Hono] tRPC server mounted at /trpc (full path: /api/trpc)");
 
 app.route("/webhooks", webhooks);
 
