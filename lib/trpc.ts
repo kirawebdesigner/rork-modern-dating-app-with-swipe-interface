@@ -9,65 +9,81 @@ export const trpc = createTRPCReact<AppRouter>();
 
 const normalize = (base: string) => base.replace(/\/$/, "");
 
-const toHttpOrigin = (hostLike: string) => {
-  try {
-    const raw = hostLike.trim();
-    const withoutScheme = raw.includes("://") ? raw.split("://")[1] : raw;
-    const justHost = withoutScheme.replace(/^exp\+?\w*:\/\//, "");
-    
-    // If it looks like a tunnel domain (no port, valid TLD)
-    // We assume the tunnel handles the port or proxying
-    if (!justHost.includes(':') && justHost.includes('.')) {
-       return `https://${justHost}`;
-    }
-
-    const url = new URL(`http://${justHost}`);
-    const port = url.port || "8081";
-    return `${url.protocol}//${url.hostname}:${port}`;
-  } catch {
-    return "http://localhost:8081";
-  }
-};
-
 const getBaseUrl = () => {
-  const envUrl =
-    (process.env.EXPO_PUBLIC_RORK_API_BASE_URL ?? process.env.EXPO_PUBLIC_API_URL ?? process.env.NEXT_PUBLIC_API_URL ?? '').trim();
+  // Priority 1: Explicit API URL from environment
+  const rorkApiUrl = process.env.EXPO_PUBLIC_RORK_API_BASE_URL;
+  if (rorkApiUrl && rorkApiUrl.trim().length > 0) {
+    console.log('[tRPC] Using RORK API URL:', rorkApiUrl);
+    return normalize(rorkApiUrl.trim());
+  }
+
+  const envUrl = (process.env.EXPO_PUBLIC_API_URL ?? '').trim();
   if (envUrl.length > 0) {
     console.log('[tRPC] Using API URL from env:', envUrl);
     return normalize(envUrl);
   }
 
+  // Priority 2: Web - use current origin
   if (Platform.OS === "web" && typeof location !== "undefined") {
     try {
-      const webUrl = new URL(location.origin);
-      const bundlerPorts = new Set(["19000", "19001", "19002", "19006", "8081"]);
-      if (bundlerPorts.has(webUrl.port)) {
-        return normalize(`${webUrl.protocol}//${webUrl.hostname}:8081`);
-      }
+      console.log('[tRPC] Web platform, using location origin:', location.origin);
       return normalize(location.origin);
     } catch {
-      return normalize(location.origin);
+      console.log('[tRPC] Failed to get location origin');
     }
   }
 
+  // Priority 3: Expo Go host
   const hostUri = (Constants as any)?.expoGo?.hostUri as string | undefined;
   if (hostUri) {
-    return toHttpOrigin(hostUri);
+    try {
+      const raw = hostUri.trim();
+      const withoutScheme = raw.includes("://") ? raw.split("://")[1] : raw;
+      const justHost = withoutScheme.replace(/^exp\+?\w*:\/\//, "");
+      
+      if (!justHost.includes(':') && justHost.includes('.')) {
+        const url = `https://${justHost}`;
+        console.log('[tRPC] Using Expo Go host (tunnel):', url);
+        return url;
+      }
+
+      const url = new URL(`http://${justHost}`);
+      const port = url.port || "8081";
+      const result = `${url.protocol}//${url.hostname}:${port}`;
+      console.log('[tRPC] Using Expo Go host:', result);
+      return result;
+    } catch {
+      console.log('[tRPC] Failed to parse Expo Go host');
+    }
   }
 
+  // Priority 4: Fallback
   const isAndroid = Platform.OS === "android";
-  return isAndroid ? "http://10.0.2.2:8081" : "http://localhost:8081";
+  const fallback = isAndroid ? "http://10.0.2.2:8081" : "http://localhost:8081";
+  console.log('[tRPC] Using fallback URL:', fallback);
+  return fallback;
 };
 
 const baseUrl = getBaseUrl();
 const apiUrl = `${baseUrl}/api/trpc`;
+console.log('[tRPC] Final API URL:', apiUrl);
 
 export const trpcClient = trpc.createClient({
   links: [
     httpLink<AppRouter>({
       url: apiUrl,
       transformer: superjson,
-      fetch: (input, init) => fetch(input, init),
+      fetch: async (input, init) => {
+        console.log('[tRPC] Fetching:', input);
+        try {
+          const response = await fetch(input, init);
+          console.log('[tRPC] Response status:', response.status);
+          return response;
+        } catch (error) {
+          console.error('[tRPC] Fetch error:', error);
+          throw error;
+        }
+      },
     }),
   ],
 });

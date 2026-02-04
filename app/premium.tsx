@@ -115,6 +115,8 @@ export default function PremiumScreen() {
   const [showPhoneModal, setShowPhoneModal] = useState(false);
 
   const upgradeMutation = trpc.membership.upgrade.useMutation({
+    retry: 2,
+    retryDelay: 1000,
     onSuccess: async (data) => {
       console.log('[Premium] Upgrade mutation success:', data);
       
@@ -145,7 +147,20 @@ export default function PremiumScreen() {
     onError: (error) => {
       console.error('[Premium] Upgrade mutation error:', error);
       setIsProcessing(false);
-      Alert.alert('Upgrade Failed', error.message || 'Failed to process upgrade. Please try again.');
+      
+      let errorMessage = 'Failed to process upgrade. Please try again.';
+      
+      if (error.message) {
+        if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
+          errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
+        } else if (error.message.includes('<!DOCTYPE') || error.message.includes('<html')) {
+          errorMessage = 'Server error. Please try again later.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
+      Alert.alert('Upgrade Failed', errorMessage);
     },
   });
 
