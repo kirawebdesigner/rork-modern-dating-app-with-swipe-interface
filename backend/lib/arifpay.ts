@@ -1,6 +1,6 @@
 import { v4 as uuidv4 } from "uuid";
 
-const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
+const ARIFPAY_API_KEY: string = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
 const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.net";
 const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER;
 
@@ -54,7 +54,7 @@ export class ArifpayClient {
   private baseUrl: string;
 
   constructor() {
-    this.apiKey = ARIFPAY_API_KEY as string;
+    this.apiKey = ARIFPAY_API_KEY;
     this.baseUrl = ARIFPAY_BASE_URL;
 
     if (!this.apiKey) {

@@ -1,6 +1,6 @@
-import { Redirect, Tabs } from 'expo-router';
+import React, { useEffect } from 'react';
+import { Tabs, useRouter } from 'expo-router';
 import { User, Sparkles, Diamond, MessageCircle } from 'lucide-react-native';
-import React from 'react';
 import { Platform } from 'react-native';
 import Colors from '@/constants/colors';
 import { useI18n } from '@/hooks/i18n-context';
@@ -11,8 +11,15 @@ export default function TabLayout() {
   const { t, lang } = useI18n() as { t: (k: string) => string; lang: 'en' | 'am' };
   const { isAuthenticated, isLoading } = useAuth();
 
-  if (isLoading) return null;
-  if (!isAuthenticated) return <Redirect href={"/onboarding" as any} />;
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && !isAuthenticated) {
+      router.replace('/onboarding');
+    }
+  }, [isLoading, isAuthenticated, router]);
+
+  if (isLoading || !isAuthenticated) return null;
 
   return (
     <Tabs
