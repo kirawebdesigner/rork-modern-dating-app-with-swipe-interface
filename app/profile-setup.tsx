@@ -592,6 +592,7 @@ export default function ProfileSetup() {
             </TouchableOpacity>
           </View>
         </View>
+        <View style={styles.bottomSpacing} />
       </ScrollView>
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
         <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
@@ -908,7 +909,7 @@ const styles = StyleSheet.create({
     fontWeight: '900',
   },
   bottomContainer: { paddingBottom: 16 },
-  bottomContainerFixed: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+  bottomContainerFixed: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 24, paddingTop: 12, paddingBottom: 16, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border, zIndex: 10, elevation: 10 },
   confirmButton: { marginTop: 16 },
   bottomSpacing: { height: 120 },
   quickRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 10 },
