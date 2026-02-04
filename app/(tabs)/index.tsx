@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from 'react';
+import React, { useState, useRef, useMemo, useEffect } from 'react';
 import {
   View,
   StyleSheet,
@@ -23,19 +23,29 @@ const { width: screenWidth } = Dimensions.get('window');
 const SWIPE_THRESHOLD = screenWidth * 0.25;
 
 export default function DiscoverScreen() {
-  const { potentialMatches, swipeUser, filters } = useApp();
+  const { potentialMatches, swipeUser, filters, swipeHistory } = useApp();
   const { t } = useI18n();
   const { colors } = useTheme();
   const { tier, features, remainingProfileViews, useDaily, remainingRightSwipes, useSuperLike } = useMembership();
   const router = useRouter();
-  const [currentIndex, setCurrentIndex] = useState<number>(0);
   const countedViewsRef = useRef<Set<string>>(new Set());
   const position = useRef(new Animated.ValueXY()).current;
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
-  const [history, setHistory] = useState<string[]>([]);
+  const [localSwipedIds, setLocalSwipedIds] = useState<Set<string>>(new Set());
+  const [rewindStack, setRewindStack] = useState<string[]>([]);
 
-  const currentUser = potentialMatches[currentIndex];
-  const nextUser = potentialMatches[currentIndex + 1];
+  const swipedIdsSet = useMemo(() => {
+    const set = new Set(localSwipedIds);
+    swipeHistory.forEach(s => set.add(s.userId));
+    return set;
+  }, [localSwipedIds, swipeHistory]);
+
+  const availableProfiles = useMemo(() => {
+    return potentialMatches.filter(u => !swipedIdsSet.has(u.id));
+  }, [potentialMatches, swipedIdsSet]);
+
+  const currentUser = availableProfiles[0];
+  const nextUser = availableProfiles[1];
 
   const rotate = position.x.interpolate({
     inputRange: [-screenWidth / 2, 0, screenWidth / 2],
@@ -61,7 +71,7 @@ export default function DiscoverScreen() {
     extrapolate: 'clamp',
   });
 
-  React.useEffect(() => {
+  useEffect(() => {
     if (currentUser?.id && !countedViewsRef.current.has(currentUser.id)) {
       countedViewsRef.current.add(currentUser.id);
       // eslint-disable-next-line react-hooks/rules-of-hooks
@@ -106,11 +116,11 @@ export default function DiscoverScreen() {
   const onSwipeComplete = (direction: 'left' | 'right') => {
     const action = direction === 'right' ? 'like' : 'nope';
     if (currentUser) {
+      setLocalSwipedIds(prev => new Set(prev).add(currentUser.id));
+      setRewindStack(prev => [currentUser.id, ...prev].slice(0, 50));
       swipeUser(currentUser.id, action);
-      setHistory(prev => [currentUser.id, ...prev].slice(0, 50));
     }
     position.setValue({ x: 0, y: 0 });
-    setCurrentIndex(prev => prev + 1);
     setIsAnimating(false);
   };
 
@@ -170,9 +180,10 @@ export default function DiscoverScreen() {
         duration: 300,
         useNativeDriver: false,
       }).start(() => {
+        setLocalSwipedIds(prev => new Set(prev).add(currentUser.id));
+        setRewindStack(prev => [currentUser.id, ...prev].slice(0, 50));
         swipeUser(currentUser.id, 'superlike');
         position.setValue({ x: 0, y: 0 });
-        setCurrentIndex(prev => prev + 1);
         setIsAnimating(false);
       });
     }
@@ -183,11 +194,14 @@ export default function DiscoverScreen() {
       showUpgradePrompt('rewind');
       return;
     }
-    const lastId = history[0];
+    const lastId = rewindStack[0];
     if (!lastId) return;
-    const prevIndex = Math.max(0, currentIndex - 1);
-    setCurrentIndex(prevIndex);
-    setHistory(prev => prev.slice(1));
+    setLocalSwipedIds(prev => {
+      const next = new Set(prev);
+      next.delete(lastId);
+      return next;
+    });
+    setRewindStack(prev => prev.slice(1));
   };
 
 

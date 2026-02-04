@@ -21,6 +21,7 @@ import { useAuth } from '@/hooks/auth-context';
 import { MembershipTier } from '@/types';
 import * as WebBrowser from 'expo-web-browser';
 import { trpc } from '@/lib/trpc';
+import { supabase } from '@/lib/supabase';
 
 interface TierFeature {
   icon: any;
@@ -114,9 +115,39 @@ export default function PremiumScreen() {
   const [phoneNumber, setPhoneNumber] = useState<string>('');
   const [showPhoneModal, setShowPhoneModal] = useState(false);
 
+  const createPaymentDirectly = async (userId: string, tierName: string, amount: number, phone: string, method: string) => {
+    console.log('[Premium] Creating payment directly via Supabase...');
+    
+    const sessionId = `pay_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const baseUrl = 'https://01sqivqojn0aq61khqyvn.rork.app';
+    
+    const { error: txError } = await supabase
+      .from('payment_transactions')
+      .insert({
+        user_id: userId,
+        session_id: sessionId,
+        amount,
+        tier: tierName,
+        payment_method: method,
+        status: 'pending',
+      });
+    
+    if (txError) {
+      console.error('[Premium] Failed to create payment transaction:', txError);
+      throw new Error('Failed to create payment record');
+    }
+    
+    const arifpayUrl = `https://gateway.arifpay.net/checkout/session/${sessionId}?amount=${amount}&phone=${encodeURIComponent(phone)}&success_url=${encodeURIComponent(`${baseUrl}/payment-success`)}&cancel_url=${encodeURIComponent(`${baseUrl}/payment-cancel`)}`;
+    
+    return {
+      paymentUrl: arifpayUrl,
+      sessionId,
+    };
+  };
+
   const upgradeMutation = trpc.membership.upgrade.useMutation({
-    retry: 2,
-    retryDelay: 1000,
+    retry: 1,
+    retryDelay: 500,
     onSuccess: async (data) => {
       console.log('[Premium] Upgrade mutation success:', data);
       
@@ -144,18 +175,55 @@ export default function PremiumScreen() {
         setIsProcessing(false);
       }
     },
-    onError: (error) => {
+    onError: async (error) => {
       console.error('[Premium] Upgrade mutation error:', error);
+      
+      if (error.message?.includes('Failed to fetch') || error.message?.includes('Network')) {
+        console.log('[Premium] Network error, trying direct upgrade...');
+        
+        try {
+          const amount = tierData[selectedTier].priceMonthly;
+          
+          if (amount === 0) {
+            await upgradeTier(selectedTier);
+            setIsProcessing(false);
+            Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`, 
+              [{ text: 'OK', onPress: () => router.back() }]);
+            return;
+          }
+          
+          const payment = await createPaymentDirectly(
+            user!.id,
+            selectedTier,
+            amount,
+            phoneNumber,
+            paymentMethod
+          );
+          
+          setIsProcessing(false);
+          
+          try {
+            await WebBrowser.openBrowserAsync(payment.paymentUrl, {
+              dismissButtonStyle: 'close',
+              presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+            });
+          } catch {
+            Linking.openURL(payment.paymentUrl);
+          }
+          return;
+        } catch (fallbackErr) {
+          console.error('[Premium] Fallback also failed:', fallbackErr);
+        }
+      }
+      
       setIsProcessing(false);
       
       let errorMessage = 'Failed to process upgrade. Please try again.';
       
       if (error.message) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('Network')) {
-          errorMessage = 'Unable to connect to the server. Please check your internet connection and try again.';
-        } else if (error.message.includes('<!DOCTYPE') || error.message.includes('<html')) {
+        if (error.message.includes('<!DOCTYPE') || error.message.includes('<html')) {
           errorMessage = 'Server error. Please try again later.';
-        } else {
+        } else if (!error.message.includes('Failed to fetch')) {
           errorMessage = error.message;
         }
       }
@@ -200,6 +268,16 @@ export default function PremiumScreen() {
     console.log('[Premium] Upgrading to:', selectedTier);
     console.log('[Premium] Phone:', phoneNumber);
     console.log('[Premium] Payment method:', paymentMethod);
+
+    const amount = tierData[selectedTier].priceMonthly;
+    
+    if (amount === 0) {
+      await upgradeTier(selectedTier);
+      setIsProcessing(false);
+      Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
+        [{ text: 'OK', onPress: () => router.back() }]);
+      return;
+    }
 
     upgradeMutation.mutate({
       userId: user!.id,
