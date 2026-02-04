@@ -1,12 +1,10 @@
 import { v4 as uuidv4 } from "uuid";
 
-const ARIFPAY_API_KEY: string = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
+const ARIFPAY_API_KEY = "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
 const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.net";
 const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER;
 
-if (!ARIFPAY_API_KEY) {
-  console.error("[Arifpay] CRITICAL: ARIFPAY_API_KEY environment variable is not set!");
-}
+// API Key is hardcoded for production - CBE Birr only
 if (!ARIFPAY_ACCOUNT_NUMBER) {
   console.error("[Arifpay] CRITICAL: ARIFPAY_ACCOUNT_NUMBER environment variable is not set!");
 }
@@ -235,21 +233,7 @@ export class ArifpayClient {
       }
     }
 
-    // Generic Checkout (TeleBirr, etc)
-    const paymentMethodsMap: Record<string, string> = {
-      'TELEBIRR': 'TELEBIRR',
-      'CBE': 'CBE',
-      'AMOLE': 'AMOLE',
-      'MPESSA': 'MPESSA',
-      'AWAASH': 'AWAASH',
-      'AWAASH_WALLET': 'AWAASH_WALLET',
-      'PSS': 'PSS',
-      'BOA': 'BOA',
-      'KACHA': 'KACHA',
-      'HELLOCASH': 'HELLOCASH',
-    };
-
-    const selectedMethod = paymentMethodsMap[options.paymentMethod] || 'TELEBIRR';
+    // Generic Checkout - CBE Birr only
 
     // Generic checkout payload for other payment methods
     const payload = {
@@ -260,7 +244,7 @@ export class ArifpayClient {
       errorUrl: options.errorUrl,
       notifyUrl: options.notifyUrl,
       successUrl: options.successUrl,
-      paymentMethods: [selectedMethod],
+      paymentMethods: ['CBE'], // CBE Birr only
       expireDate: expireDateStr,
       items: [
         {
