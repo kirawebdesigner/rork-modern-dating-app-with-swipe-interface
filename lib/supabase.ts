@@ -77,6 +77,11 @@ export const testConnection = async () => {
     return;
   }
   
+  if (!isSupabaseConfigured) {
+    console.log('[Supabase] Skipping connection test - using default credentials');
+    return;
+  }
+  
   if (connectionTested) return;
   connectionTested = true;
   
@@ -87,16 +92,15 @@ export const testConnection = async () => {
       .limit(1);
     
     if (error) {
-      console.error('[Supabase] ❌ Connection test failed!');
-      console.error('[Supabase] Error message:', error.message);
+      console.warn('[Supabase] Connection test failed:', error.message);
     } else {
       console.log('[Supabase] ✅ Connection test successful');
     }
   } catch (err) {
-    console.error('[Supabase] ❌ Connection test exception:', err);
+    console.warn('[Supabase] Connection test skipped - network unavailable');
   }
 };
 
-if (!TEST_MODE) {
+if (!TEST_MODE && isSupabaseConfigured) {
   testConnection();
 }
