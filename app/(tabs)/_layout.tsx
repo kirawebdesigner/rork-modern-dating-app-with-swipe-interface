@@ -1,5 +1,5 @@
 import React, { useEffect } from 'react';
-import { Tabs, useRouter, Href } from 'expo-router';
+import { Tabs, useRouter } from 'expo-router';
 import { User, Sparkles, Diamond, MessageCircle } from 'lucide-react-native';
 import { Platform } from 'react-native';
 import Colors from '@/constants/colors';
@@ -15,7 +15,7 @@ export default function TabLayout() {
 
   useEffect(() => {
     if (!isLoading && !isAuthenticated) {
-      router.replace('/onboarding' as Href);
+      router.replace('/onboarding' as any);
     }
   }, [isLoading, isAuthenticated, router]);
 
