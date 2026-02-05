@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert, StatusBar } from 'react-native';
-import { ArrowLeft, Send, ShieldAlert, Crown, MoreVertical, Phone, Video } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert, StatusBar, Image } from 'react-native';
+import { ChevronLeft, Send, ShieldAlert, MoreVertical, Smile, Mic, Check } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types';
@@ -34,7 +34,7 @@ class Boundary extends React.Component<{ children: React.ReactNode }, { hasError
 export default function ChatScreen() {
   const router = useRouter();
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
-  const { tier, remainingDailyMessages, useDaily: consumeDailyLimit } = useMembership();
+  const { useDaily: consumeDailyLimit } = useMembership();
   const { user } = useAuth();
   const uid = user?.id ?? null;
   const [input, setInput] = useState<string>('');
@@ -43,6 +43,7 @@ export default function ChatScreen() {
 
   const [otherId, setOtherId] = useState<string | null>(null);
   const [otherName, setOtherName] = useState<string>('Chat');
+  const [otherAvatar, setOtherAvatar] = useState<string | null>(null);
 
   const { messages, loading, error, sendMessage } = useRealtimeMessages(chatId ?? null, uid, otherId);
 
@@ -115,11 +116,15 @@ export default function ChatScreen() {
           setOtherId(other);
           const { data: prof, error: pErr } = await supabase
             .from('profiles')
-            .select('name')
+            .select('name, photos')
             .eq('id', other)
             .maybeSingle();
           if (pErr) console.log('[Chat] Profile fetch error', pErr);
           setOtherName((prof?.name as string) ?? 'User');
+          const photos = prof?.photos as string[] | null;
+          if (photos && photos.length > 0) {
+            setOtherAvatar(photos[0]);
+          }
         }
       } catch (e) {
         console.error('[Chat] init error', e);
@@ -172,44 +177,55 @@ export default function ChatScreen() {
     }
   }, [input, router, consumeDailyLimit, sendMessage]);
 
+  const formatMessageTime = (timestamp: string | Date) => {
+    const date = typeof timestamp === 'string' ? new Date(timestamp) : timestamp;
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit', hour12: true });
+  };
+
+  const renderDateSeparator = () => (
+    <View style={styles.dateSeparator}>
+      <View style={styles.dateLine} />
+      <Text style={styles.dateText}>Today</Text>
+      <View style={styles.dateLine} />
+    </View>
+  );
+
   const renderItem = useCallback(({ item, index }: { item: Message, index: number }) => {
     const isMine = uid != null && item.senderId === uid;
-    
-    // Check if next message is from same sender to group them visually (reduce border radius, margin)
-    const nextMessage = messages[index + 1];
-    const isNextMine = nextMessage && nextMessage.senderId === item.senderId;
+    const showDateSeparator = index === 0;
     
     return (
-      <View style={[styles.messageWrapper, isMine ? styles.messageWrapperMine : styles.messageWrapperTheirs, isNextMine ? styles.groupedMessage : styles.lastInGroup]}>
-        {isMine ? (
-          <LinearGradient
-            colors={[Colors.gradient.start, Colors.gradient.end]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={[styles.bubbleMine, isNextMine && styles.bubbleMineGrouped]}
-          >
-            <Text style={styles.bubbleTextMine}>{item.text}</Text>
-            <Text style={styles.timeMine}>
-              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
-          </LinearGradient>
-        ) : (
-          <View style={[styles.bubbleTheirs, isNextMine && styles.bubbleTheirsGrouped]} testID="message-bubble-theirs">
-            <Text style={styles.bubbleTextTheirs}>{item.text}</Text>
-            <Text style={styles.timeTheirs}>
-              {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-            </Text>
+      <View>
+        {showDateSeparator && renderDateSeparator()}
+        <View style={[styles.messageWrapper, isMine ? styles.messageWrapperMine : styles.messageWrapperTheirs]}>
+          {isMine ? (
+            <View style={styles.sentBubble}>
+              <Text style={styles.sentText}>{item.text}</Text>
+            </View>
+          ) : (
+            <View style={styles.receivedBubble}>
+              <Text style={styles.receivedText}>{item.text}</Text>
+            </View>
+          )}
+          <View style={[styles.timeRow, isMine ? styles.timeRowMine : styles.timeRowTheirs]}>
+            <Text style={styles.timeText}>{formatMessageTime(item.timestamp)}</Text>
+            {isMine && (
+              <View style={styles.readReceipt}>
+                <Check size={12} color="#FF4D67" strokeWidth={3} />
+                <Check size={12} color="#FF4D67" strokeWidth={3} style={styles.checkOverlap} />
+              </View>
+            )}
           </View>
-        )}
+        </View>
       </View>
     );
-  }, [uid, messages]);
+  }, [uid]);
 
   if (initLoading) {
     return (
       <View style={styles.container}>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={Colors.primary} size="large" />
+          <ActivityIndicator color="#FF4D67" size="large" />
           <Text style={styles.loadingText}>Connecting...</Text>
         </View>
       </View>
@@ -221,32 +237,46 @@ export default function ChatScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" />
         <SafeAreaView style={styles.safeArea}>
+          <View style={styles.dragHandle} />
+          
           <View style={styles.header}>
-            <View style={styles.headerLeft}>
-              <TouchableOpacity onPress={handleBack} style={styles.backBtn} testID="chat-back">
-                <ArrowLeft size={24} color={Colors.text.primary} strokeWidth={2.5} />
-              </TouchableOpacity>
+            <TouchableOpacity onPress={handleBack} style={styles.backBtn} testID="chat-back">
+              <ChevronLeft size={28} color="#1A1A1A" strokeWidth={2} />
+            </TouchableOpacity>
+            
+            <View style={styles.headerProfile}>
+              <View style={styles.avatarWrapper}>
+                <LinearGradient
+                  colors={['#FF6B6B', '#FF8E53', '#FFA726']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.avatarGradient}
+                >
+                  <View style={styles.avatarInner}>
+                    {otherAvatar ? (
+                      <Image source={{ uri: otherAvatar }} style={styles.avatar} />
+                    ) : (
+                      <View style={[styles.avatar, styles.placeholderAvatar]}>
+                        <Text style={styles.placeholderText}>
+                          {otherName.substring(0, 1).toUpperCase()}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </LinearGradient>
+              </View>
               <View style={styles.headerInfo}>
-                <Text style={styles.title} numberOfLines={1} testID="chat-title">{otherName}</Text>
-                <Text style={styles.subtitle}>Active now</Text>
+                <Text style={styles.headerName} numberOfLines={1}>{otherName}</Text>
+                <View style={styles.onlineStatus}>
+                  <View style={styles.onlineDot} />
+                  <Text style={styles.onlineText}>Online</Text>
+                </View>
               </View>
             </View>
-            
-            <View style={styles.headerRightActions}>
-              {/* Fake call buttons for sleek look */}
-              <TouchableOpacity style={styles.iconBtn}>
-                <Phone size={20} color={Colors.text.primary} />
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.iconBtn}>
-                <Video size={22} color={Colors.text.primary} />
-              </TouchableOpacity>
 
-              {tier === 'free' ? (
-                <View style={styles.limitBadge}>
-                  <Text style={styles.limitText}>{remainingDailyMessages}</Text>
-                </View>
-              ) : null}
-            </View>
+            <TouchableOpacity style={styles.moreBtn}>
+              <MoreVertical size={22} color="#1A1A1A" />
+            </TouchableOpacity>
           </View>
 
           <KeyboardAvoidingView
@@ -256,7 +286,7 @@ export default function ChatScreen() {
           >
             {loading ? (
               <View style={styles.loadingWrap}>
-                <ActivityIndicator color={Colors.primary} />
+                <ActivityIndicator color="#FF4D67" />
                 <Text style={styles.loadingText}>Loading history...</Text>
               </View>
             ) : error ? (
@@ -277,40 +307,45 @@ export default function ChatScreen() {
             )}
 
             <View style={styles.composerContainer}>
-              <View style={styles.composerShadow}>
+              <View style={styles.inputWrapper}>
                 <TextInput
                   style={styles.input}
                   value={input}
                   onChangeText={setInput}
-                  placeholder="Type a message..."
-                  placeholderTextColor={Colors.text.light}
+                  placeholder="Your message"
+                  placeholderTextColor="#9CA3AF"
                   editable={!sending}
                   testID="chat-input"
                   multiline
                   maxLength={1000}
                 />
-                <TouchableOpacity
-                  onPress={onSend}
-                  disabled={!input.trim() || sending}
-                  testID="chat-send"
-                  activeOpacity={0.8}
-                >
-                  {(!input.trim() || sending) ? (
-                    <View style={styles.sendBtnDisabled}>
-                      <Send size={20} color={Colors.text.light} />
-                    </View>
-                  ) : (
-                    <LinearGradient
-                      colors={[Colors.gradient.start, Colors.gradient.end]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.sendBtn}
-                    >
-                      <Send size={18} color="#FFF" fill="#FFF" style={{ marginLeft: 2 }} />
-                    </LinearGradient>
-                  )}
+                <TouchableOpacity style={styles.emojiBtn}>
+                  <Smile size={24} color="#9CA3AF" />
                 </TouchableOpacity>
               </View>
+              
+              <TouchableOpacity
+                onPress={input.trim() ? onSend : undefined}
+                disabled={sending}
+                testID="chat-send"
+                activeOpacity={0.8}
+                style={styles.micBtn}
+              >
+                {input.trim() ? (
+                  <LinearGradient
+                    colors={['#FF4D67', '#FF8E53']}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sendGradient}
+                  >
+                    <Send size={20} color="#FFF" style={{ marginLeft: 2 }} />
+                  </LinearGradient>
+                ) : (
+                  <View style={styles.micBtnInner}>
+                    <Mic size={22} color="#FF4D67" />
+                  </View>
+                )}
+              </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
         </SafeAreaView>
@@ -329,167 +364,227 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   flex: { flex: 1 },
+  dragHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E5E5E5',
+    borderRadius: 3,
+    alignSelf: 'center',
+    marginTop: 8,
+    marginBottom: 8,
+  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
     paddingHorizontal: 16,
     paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
     backgroundColor: '#FFFFFF',
-    zIndex: 10,
-  },
-  headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
-  },
-  headerRightActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 16,
   },
   backBtn: { 
     width: 40,
     height: 40,
-    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 8,
+  },
+  headerProfile: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+  },
+  avatarWrapper: {
+    marginRight: 12,
+  },
+  avatarGradient: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    padding: 2.5,
+  },
+  avatarInner: {
+    flex: 1,
+    borderRadius: 24,
+    backgroundColor: '#FFFFFF',
+    padding: 2,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 22,
+    backgroundColor: '#F0F0F0',
+  },
+  placeholderAvatar: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFE5E9',
+  },
+  placeholderText: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#FF4D67',
   },
   headerInfo: {
     flex: 1,
   },
-  title: { 
-    fontSize: 17, 
+  headerName: { 
+    fontSize: 18, 
     fontWeight: '700', 
-    color: Colors.text.primary,
+    color: '#1A1A1A',
+    marginBottom: 2,
   },
-  subtitle: {
-    fontSize: 12,
-    color: Colors.success,
+  onlineStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  onlineDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#FF4D67',
+  },
+  onlineText: {
+    fontSize: 13,
+    color: '#6B7280',
     fontWeight: '500',
   },
-  iconBtn: {
-    padding: 4,
-  },
-  limitBadge: {
-    backgroundColor: Colors.backgroundSecondary,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    minWidth: 28,
+  moreBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
-  },
-  limitText: {
-    color: Colors.primary,
-    fontSize: 12,
-    fontWeight: '700',
+    justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#F0F0F0',
   },
   listContent: { 
-    paddingHorizontal: 16, 
+    paddingHorizontal: 20, 
     paddingTop: 16,
     paddingBottom: 24,
   },
+  dateSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginVertical: 20,
+    paddingHorizontal: 20,
+  },
+  dateLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E5E5',
+  },
+  dateText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    marginHorizontal: 16,
+  },
   messageWrapper: {
-    marginBottom: 2,
-    width: '100%',
+    marginBottom: 4,
+    maxWidth: '80%',
   },
   messageWrapperMine: {
-    alignItems: 'flex-end',
-  },
-  messageWrapperTheirs: {
-    alignItems: 'flex-start',
-  },
-  groupedMessage: {
-    marginBottom: 2,
-  },
-  lastInGroup: {
-    marginBottom: 12,
-  },
-  bubbleMine: { 
-    maxWidth: '75%',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderBottomRightRadius: 4,
-  },
-  bubbleMineGrouped: {
-    borderBottomRightRadius: 4,
-    borderTopRightRadius: 4,
-  },
-  bubbleTheirs: { 
-    maxWidth: '75%',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderRadius: 20,
-    borderBottomLeftRadius: 4,
-    backgroundColor: '#F3F4F6',
-  },
-  bubbleTheirsGrouped: {
-    borderBottomLeftRadius: 4,
-    borderTopLeftRadius: 4,
-  },
-  bubbleTextMine: { 
-    fontSize: 16, 
-    color: '#FFFFFF',
-    lineHeight: 22,
-  },
-  bubbleTextTheirs: { 
-    fontSize: 16, 
-    color: Colors.text.primary,
-    lineHeight: 22,
-  },
-  timeMine: { 
-    fontSize: 10, 
-    marginTop: 4,
-    color: 'rgba(255, 255, 255, 0.7)',
     alignSelf: 'flex-end',
   },
-  timeTheirs: { 
-    fontSize: 10, 
-    marginTop: 4,
-    color: Colors.text.light,
+  messageWrapperTheirs: {
     alignSelf: 'flex-start',
   },
+  receivedBubble: { 
+    backgroundColor: '#FFE5E9',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderTopLeftRadius: 4,
+  },
+  receivedText: { 
+    fontSize: 15, 
+    color: '#1A1A1A',
+    lineHeight: 22,
+  },
+  sentBubble: { 
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    borderTopRightRadius: 4,
+  },
+  sentText: { 
+    fontSize: 15, 
+    color: '#1A1A1A',
+    lineHeight: 22,
+  },
+  timeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 6,
+    marginBottom: 12,
+    gap: 4,
+  },
+  timeRowMine: {
+    justifyContent: 'flex-end',
+  },
+  timeRowTheirs: {
+    justifyContent: 'flex-start',
+  },
+  timeText: { 
+    fontSize: 12, 
+    color: '#9CA3AF',
+    fontWeight: '400',
+  },
+  readReceipt: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  checkOverlap: {
+    marginLeft: -8,
+  },
   composerContainer: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
     paddingHorizontal: 16,
     paddingVertical: 12,
     backgroundColor: '#FFFFFF',
+    gap: 12,
   },
-  composerShadow: {
+  inputWrapper: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
-    backgroundColor: '#F8F9FA',
+    backgroundColor: '#F5F5F5',
     borderRadius: 28,
-    padding: 6,
-    borderWidth: 1,
-    borderColor: '#EEEEEE',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
   },
   input: {
     flex: 1,
     minHeight: 40,
     maxHeight: 120,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    color: Colors.text.primary,
+    paddingVertical: 8,
+    color: '#1A1A1A',
     fontSize: 16,
   },
-  sendBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
+  emojiBtn: {
+    padding: 8,
   },
-  sendBtnDisabled: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
+  micBtn: {
+    width: 52,
+    height: 52,
+  },
+  micBtnInner: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFE5E9',
     alignItems: 'center',
-    backgroundColor: '#F0F0F0',
+    justifyContent: 'center',
+  },
+  sendGradient: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   loadingWrap: { 
     flex: 1, 
@@ -498,7 +593,7 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   loadingText: { 
-    color: Colors.text.secondary,
+    color: '#6B7280',
     fontSize: 15,
     fontWeight: '500',
   },
@@ -515,7 +610,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
   },
   errorText: { 
-    color: Colors.text.secondary, 
+    color: '#6B7280', 
     textAlign: 'center',
     fontSize: 15,
   },

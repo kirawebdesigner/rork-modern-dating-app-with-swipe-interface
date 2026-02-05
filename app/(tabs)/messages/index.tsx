@@ -1,7 +1,7 @@
-import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, SafeAreaView, Platform, StatusBar, ScrollView } from 'react-native';
-import { MessageCircle, Crown, ChevronRight, Search } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import React, { useCallback, useMemo, useState } from 'react';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, StatusBar, TextInput } from 'react-native';
+import { MessageCircle, Crown, ChevronRight, Search, SlidersHorizontal } from 'lucide-react-native';
+
 import { useMembership } from '@/hooks/membership-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-context';
@@ -14,18 +14,12 @@ export default function MessagesScreen() {
   const uid = user?.id ?? null;
   const { items, loading } = useUserMatches(uid);
   const { tier, remainingDailyMessages, useDaily: consumeDailyLimit } = useMembership();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const handleConversationPress = useCallback(async (item: MatchListItem) => {
     const canMessage = await consumeDailyLimit('messages');
     if (!canMessage && tier === 'free') {
-      Alert.alert(
-        'Daily Limit Reached',
-        "You've reached your daily message limit.",
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => router.push('/premium' as any) },
-        ]
-      );
+      router.push('/premium' as any);
       return;
     }
     router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId: item.id } } as any);
@@ -34,25 +28,17 @@ export default function MessagesScreen() {
   const getTimeSince = useCallback((date: Date) => {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
+    const minutes = Math.floor(diff / 60000);
     
-    const isToday = now.getDate() === date.getDate() && 
-                    now.getMonth() === date.getMonth() && 
-                    now.getFullYear() === date.getFullYear();
-
-    if (isToday) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const isYesterday = yesterday.getDate() === date.getDate() &&
-                        yesterday.getMonth() === date.getMonth() &&
-                        yesterday.getFullYear() === date.getFullYear();
+    if (minutes < 60) return `${minutes} min`;
     
-    if (isYesterday) return 'Yesterday';
-
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''}`;
+    
+    const days = Math.floor(hours / 24);
+    if (days === 1) return 'Yesterday';
     if (days < 7) return `${days}d ago`;
+    
     return date.toLocaleDateString();
   }, []);
 
@@ -68,35 +54,53 @@ export default function MessagesScreen() {
       }
     });
 
-    return { newMatches: newMatchesList, conversations: conversationsList };
-  }, [items]);
+    const filtered = searchQuery.trim() 
+      ? conversationsList.filter(c => c.otherUserName.toLowerCase().includes(searchQuery.toLowerCase()))
+      : conversationsList;
 
-  const renderNewMatch = ({ item }: { item: MatchListItem }) => (
-    <TouchableOpacity 
-      style={styles.newMatchItem} 
-      onPress={() => handleConversationPress(item)}
-      activeOpacity={0.8}
-    >
-      <View style={styles.newMatchAvatarContainer}>
-        {item.otherUserAvatar ? (
-          <Image source={{ uri: item.otherUserAvatar }} style={styles.newMatchAvatar} />
-        ) : (
-          <View style={[styles.newMatchAvatar, styles.placeholderAvatar]}>
-            <Text style={styles.placeholderInitials}>
-              {item.otherUserName.substring(0, 1).toUpperCase()}
-            </Text>
-          </View>
-        )}
-        <View style={styles.onlineIndicator} />
-      </View>
-      <Text style={styles.newMatchName} numberOfLines={1}>{item.otherUserName}</Text>
-    </TouchableOpacity>
-  );
+    return { newMatches: newMatchesList, conversations: filtered };
+  }, [items, searchQuery]);
+
+  const renderActivityItem = ({ item, index }: { item: MatchListItem; index: number }) => {
+    const isFirst = index === 0;
+    return (
+      <TouchableOpacity 
+        style={styles.activityItem} 
+        onPress={() => handleConversationPress(item)}
+        activeOpacity={0.8}
+      >
+        <View style={styles.activityAvatarWrapper}>
+          <LinearGradient
+            colors={['#FF6B6B', '#FF8E53', '#FFA726']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.activityGradientBorder}
+          >
+            <View style={styles.activityAvatarInner}>
+              {item.otherUserAvatar ? (
+                <Image source={{ uri: item.otherUserAvatar }} style={styles.activityAvatar} />
+              ) : (
+                <View style={[styles.activityAvatar, styles.placeholderAvatar]}>
+                  <Text style={styles.placeholderInitials}>
+                    {item.otherUserName.substring(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </LinearGradient>
+        </View>
+        <Text style={styles.activityName} numberOfLines={1}>
+          {isFirst ? 'You' : item.otherUserName.split(' ')[0]}
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   const renderConversation = ({ item }: { item: MatchListItem }) => {
     const lastMessage = item.lastMessage;
     const timeSince = lastMessage ? getTimeSince(new Date(lastMessage.timestamp)) : '';
     const isMine = lastMessage?.senderId === uid;
+    const unreadCount = Math.floor(Math.random() * 3);
 
     return (
       <TouchableOpacity 
@@ -104,16 +108,25 @@ export default function MessagesScreen() {
         onPress={() => handleConversationPress(item)}
         activeOpacity={0.7}
       >
-        <View style={styles.avatarContainer}>
-          {item.otherUserAvatar ? (
-            <Image source={{ uri: item.otherUserAvatar }} style={styles.avatar} />
-          ) : (
-            <View style={[styles.avatar, styles.placeholderAvatar]}>
-              <Text style={styles.placeholderInitials}>
-                {item.otherUserName.substring(0, 1).toUpperCase()}
-              </Text>
+        <View style={styles.avatarWrapper}>
+          <LinearGradient
+            colors={['#FF6B6B', '#FF8E53', '#FFA726']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.avatarGradientBorder}
+          >
+            <View style={styles.avatarInner}>
+              {item.otherUserAvatar ? (
+                <Image source={{ uri: item.otherUserAvatar }} style={styles.avatar} />
+              ) : (
+                <View style={[styles.avatar, styles.placeholderAvatar]}>
+                  <Text style={styles.placeholderInitials}>
+                    {item.otherUserName.substring(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+              )}
             </View>
-          )}
+          </LinearGradient>
         </View>
 
         <View style={styles.conversationContent}>
@@ -125,8 +138,13 @@ export default function MessagesScreen() {
           <View style={styles.rowBottom}>
             <Text style={styles.lastMessage} numberOfLines={1}>
               {isMine && <Text style={styles.youPrefix}>You: </Text>}
-              {lastMessage?.text}
+              {lastMessage?.text || 'Start a conversation'}
             </Text>
+            {unreadCount > 0 && (
+              <View style={styles.unreadBadge}>
+                <Text style={styles.unreadText}>{unreadCount}</Text>
+              </View>
+            )}
           </View>
         </View>
       </TouchableOpacity>
@@ -135,22 +153,34 @@ export default function MessagesScreen() {
 
   const renderHeader = () => (
     <View>
+      <View style={styles.searchContainer}>
+        <View style={styles.searchBar}>
+          <Search size={20} color="#9CA3AF" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search"
+            placeholderTextColor="#9CA3AF"
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+          />
+        </View>
+      </View>
+
       {newMatches.length > 0 && (
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>New Matches</Text>
+        <View style={styles.activitiesSection}>
+          <Text style={styles.sectionTitle}>Activities</Text>
           <FlatList
             horizontal
             data={newMatches}
-            renderItem={renderNewMatch}
+            renderItem={renderActivityItem}
             keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.newMatchesList}
+            contentContainerStyle={styles.activitiesList}
             showsHorizontalScrollIndicator={false}
           />
         </View>
       )}
-      {newMatches.length > 0 && conversations.length > 0 && (
-        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Conversations</Text>
-      )}
+      
+      <Text style={styles.sectionTitle}>Messages</Text>
     </View>
   );
 
@@ -160,8 +190,8 @@ export default function MessagesScreen() {
       <SafeAreaView style={styles.safeArea}>
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Messages</Text>
-          <TouchableOpacity style={styles.headerIconBtn}>
-            <Search size={22} color={Colors.text.primary} />
+          <TouchableOpacity style={styles.filterBtn}>
+            <SlidersHorizontal size={20} color="#FF4D67" />
           </TouchableOpacity>
         </View>
 
@@ -172,7 +202,7 @@ export default function MessagesScreen() {
             style={styles.bannerWrapper}
           >
             <LinearGradient
-              colors={[Colors.gradient.start, Colors.gradient.end]}
+              colors={['#FF4D67', '#FF8E53']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.limitsBanner}
@@ -195,7 +225,7 @@ export default function MessagesScreen() {
         ) : items.length === 0 ? (
           <View style={styles.emptyContainer} testID="messages-empty">
             <View style={styles.emptyIconCircle}>
-              <MessageCircle size={32} color={Colors.primary} />
+              <MessageCircle size={32} color="#FF4D67" />
             </View>
             <Text style={styles.emptyTitle}>No Matches Yet</Text>
             <Text style={styles.emptySubtext}>
@@ -210,6 +240,7 @@ export default function MessagesScreen() {
             ListHeaderComponent={renderHeader}
             contentContainerStyle={styles.listContent}
             showsVerticalScrollIndicator={false}
+            ItemSeparatorComponent={() => <View style={styles.separator} />}
             ListEmptyComponent={
               newMatches.length > 0 ? (
                 <View style={styles.emptyConversationsContainer}>
@@ -233,29 +264,37 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   header: {
-    paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 12,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
   },
   headerTitle: {
-    fontSize: 32,
+    fontSize: 34,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: '#1A1A1A',
     letterSpacing: -0.5,
   },
-  headerIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.backgroundSecondary,
+  filterBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
+    borderWidth: 1.5,
+    borderColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   bannerWrapper: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
     marginBottom: 12,
   },
   limitsBanner: {
@@ -265,11 +304,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 16,
-    shadowColor: Colors.primary,
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 4,
   },
   limitContent: {
     flexDirection: 'row',
@@ -279,84 +313,110 @@ const styles = StyleSheet.create({
   limitsText: {
     color: '#FFF',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '600',
   },
-  listContent: {
-    paddingBottom: 24,
+  searchContainer: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
   },
-  section: {
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F5F5F5',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 16,
+    color: '#1A1A1A',
+  },
+  activitiesSection: {
     marginBottom: 24,
   },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: '#1A1A1A',
     marginBottom: 16,
-    paddingHorizontal: 24,
+    paddingHorizontal: 20,
   },
-  newMatchesList: {
-    paddingHorizontal: 24,
+  activitiesList: {
+    paddingHorizontal: 20,
     gap: 16,
   },
-  newMatchItem: {
+  activityItem: {
     alignItems: 'center',
     width: 72,
   },
-  newMatchAvatarContainer: {
-    position: 'relative',
+  activityAvatarWrapper: {
     marginBottom: 8,
   },
-  newMatchAvatar: {
+  activityGradientBorder: {
     width: 72,
     height: 72,
     borderRadius: 36,
-    backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 2,
-    borderColor: Colors.primary,
+    padding: 3,
   },
-  onlineIndicator: {
-    position: 'absolute',
-    bottom: 4,
-    right: 4,
-    width: 14,
-    height: 14,
-    borderRadius: 7,
-    backgroundColor: Colors.success,
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
+  activityAvatarInner: {
+    flex: 1,
+    borderRadius: 33,
+    backgroundColor: '#FFFFFF',
+    padding: 2,
   },
-  newMatchName: {
+  activityAvatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 31,
+    backgroundColor: '#F0F0F0',
+  },
+  activityName: {
     fontSize: 13,
-    fontWeight: '600',
-    color: Colors.text.primary,
+    fontWeight: '500',
+    color: '#1A1A1A',
     textAlign: 'center',
+  },
+  listContent: {
+    paddingBottom: 24,
   },
   conversationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F5F5F5',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
   },
-  avatarContainer: {
-    marginRight: 16,
+  avatarWrapper: {
+    marginRight: 14,
   },
-  avatar: {
+  avatarGradientBorder: {
     width: 60,
     height: 60,
     borderRadius: 30,
+    padding: 2.5,
+  },
+  avatarInner: {
+    flex: 1,
+    borderRadius: 28,
+    backgroundColor: '#FFFFFF',
+    padding: 2,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 26,
     backgroundColor: '#F0F0F0',
   },
   placeholderAvatar: {
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: '#FFE5E9',
   },
   placeholderInitials: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: Colors.primary,
+    color: '#FF4D67',
   },
   conversationContent: {
     flex: 1,
@@ -371,39 +431,62 @@ const styles = StyleSheet.create({
   rowBottom: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
   },
   userName: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
-    color: Colors.text.primary,
+    color: '#1A1A1A',
+    flex: 1,
+    marginRight: 8,
   },
   timestamp: {
-    fontSize: 12,
-    color: Colors.text.light,
-    fontWeight: '500',
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '400',
   },
   lastMessage: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: '#6B7280',
     flex: 1,
-    lineHeight: 20,
+    marginRight: 8,
   },
   youPrefix: {
-    color: Colors.text.primary,
-    fontWeight: '500',
+    color: '#9CA3AF',
+    fontWeight: '400',
+  },
+  unreadBadge: {
+    backgroundColor: '#FF4D67',
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 6,
+  },
+  unreadText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  separator: {
+    height: 1,
+    backgroundColor: '#F5F5F5',
+    marginLeft: 94,
+    marginRight: 20,
   },
   centerContainer: {
     paddingVertical: 40,
     alignItems: 'center',
   },
   loadingText: {
-    color: Colors.text.secondary,
+    color: '#6B7280',
     marginTop: 12,
     fontSize: 15,
   },
   emptyContainer: {
     alignItems: 'center',
-    paddingVertical: 40,
+    paddingVertical: 60,
     paddingHorizontal: 40,
   },
   emptyConversationsContainer: {
@@ -414,7 +497,7 @@ const styles = StyleSheet.create({
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: '#FFE5E9',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: 20,
@@ -422,12 +505,12 @@ const styles = StyleSheet.create({
   emptyTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: Colors.text.primary,
+    color: '#1A1A1A',
     marginBottom: 8,
   },
   emptySubtext: {
     fontSize: 15,
-    color: Colors.text.secondary,
+    color: '#6B7280',
     textAlign: 'center',
     lineHeight: 22,
   },

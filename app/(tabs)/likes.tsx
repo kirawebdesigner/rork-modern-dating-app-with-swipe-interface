@@ -1,28 +1,24 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions, Platform } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-import Colors from '@/constants/colors';
 
-import { Match, User } from '@/types';
-import { Diamond } from 'lucide-react-native';
+import { User } from '@/types';
+import { ArrowUpDown, X, Heart } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
 import { useApp } from '@/hooks/app-context';
+import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
 const GAP = 12;
 const NUM_COLUMNS = 2 as const;
-const CARD_SIZE = Math.floor((width - 20 * 2 - GAP) / NUM_COLUMNS);
+const CARD_WIDTH = Math.floor((width - 20 * 2 - GAP) / NUM_COLUMNS);
+const CARD_HEIGHT = CARD_WIDTH * 1.35;
 
-type LikesTab = 'likes' | 'matches';
-
-export default function LikesAndMatchesScreen() {
+export default function MatchesScreen() {
   const router = useRouter();
-
   const { matches: contextMatches } = useApp();
-  const [active, setActive] = useState<LikesTab>('likes');
   const [likesData, setLikesData] = useState<User[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
-  const canSee = true;
 
   useEffect(() => {
     loadLikes();
@@ -96,217 +92,289 @@ export default function LikesAndMatchesScreen() {
     router.push({ pathname: '/(tabs)/messages/[chatId]' as any, params: { chatId } });
   }, [router]);
 
-  const renderLike = ({ item }: { item: User }) => {
-    const blurred = !canSee;
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => router.push(`/(tabs)/profile-details/${item.id}` as any)}
-        disabled={blurred}
-        testID={`likes-card-${item.id}`}
-      >
-        <Image
-          source={{ uri: item.photos[0] }}
-          style={styles.image}
-          blurRadius={blurred ? (Platform.OS === 'web' ? 8 : 20) : 0}
-        />
-        <View style={styles.gradientOverlay} />
-        <View style={styles.infoRow}>
-          <Text style={styles.name} numberOfLines={1}>{item.name}</Text>
-          <Text style={styles.age}>{item.age}</Text>
-        </View>
+  const onViewProfile = useCallback((userId: string) => {
+    router.push(`/(tabs)/profile-details/${userId}` as any);
+  }, [router]);
 
-      </TouchableOpacity>
+  const allItems = [...likesData, ...contextMatches.map(m => ({ ...m.user, matchId: m.id }))];
+
+  const renderDateSeparator = (title: string) => (
+    <View style={styles.dateSeparator}>
+      <View style={styles.dateLine} />
+      <Text style={styles.dateText}>{title}</Text>
+      <View style={styles.dateLine} />
+    </View>
+  );
+
+  const renderCard = ({ item, index }: { item: any; index: number }) => {
+    const isMatch = 'matchId' in item;
+    const showTodayHeader = index === 0;
+    const showYesterdayHeader = index === Math.min(4, Math.floor(allItems.length / 2));
+    
+    return (
+      <View>
+        {showTodayHeader && index % 2 === 0 && (
+          <View style={styles.fullWidthHeader}>
+            {renderDateSeparator('Today')}
+          </View>
+        )}
+        {showYesterdayHeader && index % 2 === 0 && allItems.length > 4 && (
+          <View style={styles.fullWidthHeader}>
+            {renderDateSeparator('Yesterday')}
+          </View>
+        )}
+        <TouchableOpacity
+          style={styles.card}
+          onPress={() => isMatch ? onOpenMatchChat(item.matchId) : onViewProfile(item.id)}
+          activeOpacity={0.9}
+          testID={`match-card-${item.id}`}
+        >
+          <Image
+            source={{ uri: item.photos?.[0] || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
+            style={styles.cardImage}
+          />
+          <LinearGradient
+            colors={['transparent', 'rgba(0,0,0,0.7)']}
+            style={styles.cardGradient}
+          />
+          
+          <View style={styles.cardInfo}>
+            <Text style={styles.cardName}>{item.name}, {item.age}</Text>
+          </View>
+
+          <View style={styles.cardActions}>
+            <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
+              <X size={20} color="#FFFFFF" strokeWidth={2.5} />
+            </TouchableOpacity>
+            <View style={styles.actionDivider} />
+            <TouchableOpacity style={styles.actionBtn} onPress={() => isMatch ? onOpenMatchChat(item.matchId) : onViewProfile(item.id)}>
+              <Heart size={20} color="#FFFFFF" fill="#FFFFFF" />
+            </TouchableOpacity>
+          </View>
+
+          {!isMatch && (
+            <View style={styles.likeBadge}>
+              <Heart size={14} color="#FFFFFF" fill="#FFFFFF" />
+            </View>
+          )}
+        </TouchableOpacity>
+      </View>
     );
   };
 
-  const renderMatch = ({ item }: { item: Match }) => {
-    return (
-      <TouchableOpacity
-        style={styles.card}
-        onPress={() => onOpenMatchChat(item.id)}
-        testID={`match-card-${item.id}`}
-      >
-        <Image
-          source={{ uri: item.user.photos[0] }}
-          style={styles.image}
-        />
-        <View style={styles.gradientOverlay} />
-        <View style={styles.infoRow}>
-          <Text style={styles.name} numberOfLines={1}>{item.user.name}</Text>
-          <Text style={styles.age}>{item.user.age}</Text>
-        </View>
-      </TouchableOpacity>
-    );
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
+    return renderCard({ item, index });
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View style={styles.headerLeft} />
-        <View style={styles.headerCenter}>
-          <View style={styles.titleRow}>
-            <Diamond size={20} color={Colors.primary} />
-            <Text style={styles.title}>Likes & Matches</Text>
-          </View>
-          <Text style={styles.subtitle}>{likesData.length} likes • {contextMatches.length} matches</Text>
+        <View>
+          <Text style={styles.title}>Matches</Text>
+          <Text style={styles.subtitle}>
+            This is a list of people who have liked you{'\n'}and your matches.
+          </Text>
         </View>
-        <View style={styles.headerRight} />
-      </View>
-
-      <View style={styles.segment}>
-        <TouchableOpacity
-          onPress={() => setActive('likes')}
-          style={[styles.segmentItem, active === 'likes' && styles.segmentItemActive]}
-          testID="segment-likes"
-        >
-          <Text style={[styles.segmentText, active === 'likes' && styles.segmentTextActive]}>Likes You</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => setActive('matches')}
-          style={[styles.segmentItem, active === 'matches' && styles.segmentItemActive]}
-          testID="segment-matches"
-        >
-          <Text style={[styles.segmentText, active === 'matches' && styles.segmentTextActive]}>Matches</Text>
+        <TouchableOpacity style={styles.sortBtn}>
+          <ArrowUpDown size={20} color="#FF4D67" />
         </TouchableOpacity>
       </View>
-
-
 
       {loading ? (
         <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Loading...</Text>
+          <Text style={styles.loadingText}>Loading...</Text>
         </View>
-      ) : active === 'likes' ? (
-        likesData.length > 0 ? (
-          <FlatList
-            data={likesData}
-            keyExtractor={(u) => u.id}
-            numColumns={NUM_COLUMNS}
-            columnWrapperStyle={styles.row}
-            renderItem={renderLike}
-            contentContainerStyle={styles.list}
-            testID="likes-grid"
-          />
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Diamond size={48} color={Colors.text.secondary} />
-            <Text style={styles.emptyTitle}>No likes yet</Text>
-            <Text style={styles.emptyText}>Keep swiping to find your matches!</Text>
-          </View>
-        )
+      ) : allItems.length > 0 ? (
+        <FlatList
+          data={allItems}
+          keyExtractor={(item, index) => item.id + '-' + index}
+          numColumns={NUM_COLUMNS}
+          columnWrapperStyle={styles.row}
+          renderItem={renderItem}
+          contentContainerStyle={styles.list}
+          showsVerticalScrollIndicator={false}
+          ListHeaderComponent={<View style={styles.listHeader}>{renderDateSeparator('Today')}</View>}
+        />
       ) : (
-        contextMatches.length > 0 ? (
-          <FlatList
-            data={contextMatches}
-            keyExtractor={(m) => m.id}
-            numColumns={NUM_COLUMNS}
-            columnWrapperStyle={styles.row}
-            renderItem={renderMatch}
-            contentContainerStyle={styles.list}
-            testID="matches-grid"
-          />
-        ) : (
-          <View style={styles.emptyContainer}>
-            <Diamond size={48} color={Colors.text.secondary} />
-            <Text style={styles.emptyTitle}>No matches yet</Text>
-            <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconCircle}>
+            <Heart size={32} color="#FF4D67" />
           </View>
-        )
+          <Text style={styles.emptyTitle}>No matches yet</Text>
+          <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
+        </View>
       )}
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.background },
+  container: { 
+    flex: 1, 
+    backgroundColor: '#FFFFFF',
+  },
   header: {
     paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingTop: 8,
+    paddingBottom: 16,
     flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    alignItems: 'flex-start',
   },
-  headerLeft: { width: 24 },
-  headerRight: { width: 24 },
-  headerCenter: { alignItems: 'center', justifyContent: 'center', flex: 1 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  title: { fontSize: 22, fontWeight: '700', color: Colors.text.primary },
-  subtitle: { fontSize: 12, color: Colors.text.secondary, marginTop: 2 },
-  segment: {
-    flexDirection: 'row',
-    margin: 16,
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  segmentItem: {
-    flex: 1,
-    paddingVertical: 10,
-    alignItems: 'center',
-    borderRadius: 8,
-  },
-  segmentItemActive: {
-    backgroundColor: Colors.card,
-  },
-  segmentText: { color: Colors.text.secondary, fontWeight: '600' },
-  segmentTextActive: { color: Colors.text.primary },
-  banner: {
-    marginHorizontal: 16,
+  title: { 
+    fontSize: 34, 
+    fontWeight: '800', 
+    color: '#1A1A1A',
+    letterSpacing: -0.5,
     marginBottom: 8,
-    backgroundColor: Colors.gradient.start,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    alignItems: 'center',
   },
-  bannerText: { color: Colors.text.white, fontWeight: '700' },
-  list: { paddingHorizontal: 20, paddingBottom: 24 },
-  row: { gap: GAP, marginBottom: GAP },
-  card: {
-    width: CARD_SIZE,
-    height: CARD_SIZE * 1.25,
+  subtitle: { 
+    fontSize: 14, 
+    color: '#6B7280',
+    lineHeight: 20,
+  },
+  sortBtn: {
+    width: 48,
+    height: 48,
     borderRadius: 14,
-    overflow: 'hidden',
-    backgroundColor: Colors.card,
-  },
-  image: { width: '100%', height: '100%' },
-  gradientOverlay: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    height: 80,
-    backgroundColor: 'rgba(0,0,0,0.25)',
-  },
-  infoRow: {
-    position: 'absolute',
-    left: 8,
-    right: 8,
-    bottom: 8,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
-    gap: 6,
-  },
-  name: { color: Colors.text.white, fontWeight: '700', fontSize: 14, flexShrink: 1 },
-  age: { color: Colors.text.white, opacity: 0.9 },
-  lockOverlay: {
-    ...Platform.select({ default: { position: 'absolute' }, web: { position: 'absolute' } }),
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
+    borderWidth: 1.5,
+    borderColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  lockText: { color: Colors.text.white, fontWeight: '700' },
-  emptyContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
-  emptyTitle: { fontSize: 20, fontWeight: '700', color: Colors.text.primary, marginTop: 16, marginBottom: 8 },
-  emptyText: { fontSize: 14, color: Colors.text.secondary, textAlign: 'center' },
+  listHeader: {
+    marginBottom: 8,
+  },
+  fullWidthHeader: {
+    width: width - 40,
+    marginBottom: 12,
+  },
+  dateSeparator: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+  dateLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: '#E5E5E5',
+  },
+  dateText: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    marginHorizontal: 16,
+  },
+  list: { 
+    paddingHorizontal: 20, 
+    paddingBottom: 24,
+  },
+  row: { 
+    gap: GAP, 
+    marginBottom: GAP,
+  },
+  card: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+    borderRadius: 16,
+    overflow: 'hidden',
+    backgroundColor: '#F0F0F0',
+  },
+  cardImage: { 
+    width: '100%', 
+    height: '100%',
+  },
+  cardGradient: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: '50%',
+  },
+  cardInfo: {
+    position: 'absolute',
+    left: 12,
+    right: 12,
+    bottom: 52,
+  },
+  cardName: { 
+    color: '#FFFFFF', 
+    fontWeight: '700', 
+    fontSize: 16,
+    textShadowColor: 'rgba(0,0,0,0.3)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  cardActions: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    height: 44,
+    flexDirection: 'row',
+    backgroundColor: 'rgba(0,0,0,0.4)',
+  },
+  actionBtn: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionDivider: {
+    width: 1,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    marginVertical: 10,
+  },
+  likeBadge: {
+    position: 'absolute',
+    top: 10,
+    right: 10,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#FF4D67',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#FF4D67',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  emptyContainer: { 
+    flex: 1, 
+    justifyContent: 'center', 
+    alignItems: 'center', 
+    paddingHorizontal: 40,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: '#FFE5E9',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: { 
+    fontSize: 20, 
+    fontWeight: '700', 
+    color: '#1A1A1A', 
+    marginBottom: 8,
+  },
+  emptyText: { 
+    fontSize: 14, 
+    color: '#6B7280', 
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  loadingText: {
+    fontSize: 15,
+    color: '#6B7280',
+  },
 });
