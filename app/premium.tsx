@@ -299,9 +299,7 @@ export default function PremiumScreen() {
   });
 
   const paymentMethods = [
-    { id: 'CBE', name: 'CBE Bank', icon: CreditCard, description: 'Direct payment' },
-    { id: 'TELEBIRR', name: 'TeleBirr', icon: Phone, description: 'Mobile wallet' },
-    { id: 'AMOLE', name: 'Amole', icon: Phone, description: 'Mobile wallet' },
+    { id: 'CBE', name: 'CBE Birr', icon: CreditCard, description: 'Direct bank payment' },
   ] as const;
 
   const handleUpgrade = async () => {
