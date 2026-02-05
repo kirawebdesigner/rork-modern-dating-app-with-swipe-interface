@@ -151,11 +151,15 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         AsyncStorage.getItem('user_id'),
       ]);
 
+      let myUserId: string | null = storedId;
+      let localHistory = history ? JSON.parse(history) : [];
+
       if (profile) {
         const parsedProfile = normalizeProfile(JSON.parse(profile));
         if (parsedProfile) {
           console.log('[App] Loaded profile from AsyncStorage:', parsedProfile.id);
           setCurrentProfileState(parsedProfile);
+          myUserId = parsedProfile.id;
         }
       } else if (storedId || storedPhone) {
         console.log('[App] No cached profile, fetching from Supabase...');
@@ -192,13 +196,52 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           
           console.log('[App] Fetched and cached profile from Supabase:', mappedProfile.id);
           setCurrentProfileState(mappedProfile);
+          myUserId = mappedProfile.id;
           await AsyncStorage.setItem('user_profile', JSON.stringify(mappedProfile));
         }
       }
       if (storedTier) setTierState(JSON.parse(storedTier));
       if (storedCredits) setCredits(JSON.parse(storedCredits));
-      if (history) setSwipeHistory(JSON.parse(history));
       if (storedBlocked) setBlockedIds(JSON.parse(storedBlocked));
+
+      // Load swipe history from database to prevent showing already swiped profiles
+      if (!TEST_MODE && myUserId) {
+        try {
+          console.log('[App] Loading swipe history from database for user:', myUserId);
+          const { data: dbSwipes, error: swipeErr } = await supabase
+            .from('swipes')
+            .select('swiped_id, action, created_at')
+            .eq('swiper_id', myUserId);
+          
+          if (!swipeErr && dbSwipes && dbSwipes.length > 0) {
+            const dbHistory: SwipeAction[] = dbSwipes.map((s: any) => ({
+              userId: String(s.swiped_id),
+              action: s.action as 'like' | 'nope' | 'superlike',
+              timestamp: new Date(s.created_at),
+            }));
+            
+            // Merge with local history (db takes precedence)
+            const mergedIds = new Set(dbHistory.map(h => h.userId));
+            const mergedHistory = [
+              ...dbHistory,
+              ...localHistory.filter((h: SwipeAction) => !mergedIds.has(h.userId)),
+            ];
+            
+            console.log('[App] Loaded', dbHistory.length, 'swipes from database, merged total:', mergedHistory.length);
+            setSwipeHistory(mergedHistory);
+            await AsyncStorage.setItem('swipe_history', JSON.stringify(mergedHistory));
+            localHistory = mergedHistory;
+          } else {
+            console.log('[App] No swipes in database, using local history');
+            if (history) setSwipeHistory(JSON.parse(history));
+          }
+        } catch (swipeLoadErr) {
+          console.log('[App] Failed to load swipes from database:', swipeLoadErr);
+          if (history) setSwipeHistory(JSON.parse(history));
+        }
+      } else {
+        if (history) setSwipeHistory(JSON.parse(history));
+      }
 
       try {
         const { data: authUser } = await supabase.auth.getUser();
@@ -670,7 +713,67 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           }
           console.log('[App] swipe inserted successfully');
           
-          await new Promise(resolve => setTimeout(resolve, 500));
+          // Check for mutual like to create a match
+          console.log('[App] Checking for mutual like...');
+          const { data: mutualLike, error: mutualErr } = await supabase
+            .from('swipes')
+            .select('id')
+            .eq('swiper_id', userId)
+            .eq('swiped_id', myId)
+            .in('action', ['like', 'superlike'])
+            .maybeSingle();
+          
+          if (!mutualErr && mutualLike) {
+            console.log('[App] Mutual like found! Creating match...');
+            
+            // Check if match already exists
+            const { data: existingMatch } = await supabase
+              .from('matches')
+              .select('id')
+              .or(`and(user1_id.eq.${myId},user2_id.eq.${userId}),and(user1_id.eq.${userId},user2_id.eq.${myId})`)
+              .maybeSingle();
+            
+            if (!existingMatch) {
+              // Create match
+              const { data: newMatch, error: matchInsertErr } = await supabase
+                .from('matches')
+                .insert({
+                  user1_id: myId,
+                  user2_id: userId,
+                  matched_at: new Date().toISOString(),
+                })
+                .select('id')
+                .single();
+              
+              if (matchInsertErr) {
+                console.log('[App] Failed to create match:', matchInsertErr.message);
+              } else {
+                console.log('[App] Match created successfully:', newMatch?.id);
+                
+                // Create conversation for the match
+                const matchId = newMatch?.id;
+                if (matchId) {
+                  const { error: convErr } = await supabase
+                    .from('conversations')
+                    .insert({ id: matchId, created_by: myId });
+                  
+                  if (!convErr) {
+                    await supabase.from('conversation_participants').insert([
+                      { conversation_id: matchId, user_id: myId },
+                      { conversation_id: matchId, user_id: userId },
+                    ]);
+                    console.log('[App] Conversation created for match:', matchId);
+                  }
+                }
+              }
+            } else {
+              console.log('[App] Match already exists:', existingMatch.id);
+            }
+          } else {
+            console.log('[App] No mutual like yet');
+          }
+          
+          await new Promise(resolve => setTimeout(resolve, 300));
           
           const { data: newMatches, error: matchError } = await supabase
             .from('matches')
@@ -713,6 +816,36 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           }
         } catch (e) {
           console.log('[App] swipe sync failed', e);
+        }
+      })();
+    }
+    
+    // Also record nope swipes to database to prevent showing them again
+    if (action === 'nope') {
+      (async () => {
+        if (TEST_MODE) return;
+        try {
+          const storedPhone = await AsyncStorage.getItem('user_phone');
+          if (!storedPhone) return;
+          
+          const { data: myProfile } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('phone', storedPhone)
+            .maybeSingle();
+          
+          const myId = myProfile?.id ?? currentProfile?.id ?? null;
+          if (!myId) return;
+          
+          console.log('[App] inserting nope swipe:', myId, '->', userId);
+          const { error: swipeError } = await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action: 'nope' });
+          if (swipeError) {
+            console.log('[App] nope swipe insert error:', swipeError.message);
+          } else {
+            console.log('[App] nope swipe inserted successfully');
+          }
+        } catch (e) {
+          console.log('[App] nope swipe sync failed', e);
         }
       })();
     }

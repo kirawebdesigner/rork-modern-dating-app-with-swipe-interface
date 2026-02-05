@@ -1,13 +1,11 @@
 import { v4 as uuidv4 } from "uuid";
 
 const ARIFPAY_API_KEY = "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
-const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.net";
-const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER;
+const ARIFPAY_BASE_URL = "https://gateway.arifpay.net";
+const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "1000000000000";
 
 // API Key is hardcoded for production - CBE Birr only
-if (!ARIFPAY_ACCOUNT_NUMBER) {
-  console.error("[Arifpay] CRITICAL: ARIFPAY_ACCOUNT_NUMBER environment variable is not set!");
-}
+console.log("[Arifpay] Initializing with account:", ARIFPAY_ACCOUNT_NUMBER);
 
 export interface ArifpayPaymentOptions {
   amount: number;
@@ -54,14 +52,9 @@ export class ArifpayClient {
   constructor() {
     this.apiKey = ARIFPAY_API_KEY;
     this.baseUrl = ARIFPAY_BASE_URL;
-
-    if (!this.apiKey) {
-      console.warn("[Arifpay] API key not configured");
-    } else {
-      console.log("[Arifpay] Client initialized with API key:", this.apiKey.substring(0, 10) + "...");
-      console.log("[Arifpay] Base URL:", this.baseUrl);
-      console.log("[Arifpay] Account Number:", ARIFPAY_ACCOUNT_NUMBER);
-    }
+    console.log("[Arifpay] Client initialized with API key:", this.apiKey.substring(0, 10) + "...");
+    console.log("[Arifpay] Base URL:", this.baseUrl);
+    console.log("[Arifpay] Account Number:", ARIFPAY_ACCOUNT_NUMBER);
   }
 
   private parseJsonResponse<T>(responseText: string, context: string): T {
@@ -175,7 +168,8 @@ export class ArifpayClient {
       console.log("[Arifpay] Creating CBE direct payment with payload:", JSON.stringify(payload, null, 2));
 
       try {
-        const url = `${this.baseUrl}/api/checkout/v2/cbe/direct/transfer`;
+        const url = `${this.baseUrl}/api/checkout/session`;
+        console.log("[Arifpay] Making request to:", url);
         
         const response = await fetch(url, {
           method: "POST",

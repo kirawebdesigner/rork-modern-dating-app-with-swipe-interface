@@ -116,33 +116,99 @@ export default function PremiumScreen() {
   const [showPhoneModal, setShowPhoneModal] = useState(false);
 
   const createPaymentDirectly = async (userId: string, tierName: string, amount: number, phone: string, method: string) => {
-    console.log('[Premium] Creating payment directly via Supabase...');
+    console.log('[Premium] Creating payment directly via ArifPay...');
     
     const sessionId = `pay_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const baseUrl = 'https://01sqivqojn0aq61khqyvn.rork.app';
     
-    const { error: txError } = await supabase
-      .from('payment_transactions')
-      .insert({
-        user_id: userId,
-        session_id: sessionId,
-        amount,
-        tier: tierName,
-        payment_method: method,
-        status: 'pending',
-      });
-    
-    if (txError) {
-      console.error('[Premium] Failed to create payment transaction:', txError);
-      throw new Error('Failed to create payment record');
+    // Normalize phone number
+    let normalizedPhone = phone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
+    if (normalizedPhone.startsWith('0')) {
+      normalizedPhone = '251' + normalizedPhone.substring(1);
+    } else if (normalizedPhone.startsWith('+251')) {
+      normalizedPhone = normalizedPhone.substring(1);
+    } else if (!normalizedPhone.startsWith('251') && normalizedPhone.length === 9) {
+      normalizedPhone = '251' + normalizedPhone;
     }
     
-    const arifpayUrl = `https://gateway.arifpay.net/checkout/session/${sessionId}?amount=${amount}&phone=${encodeURIComponent(phone)}&success_url=${encodeURIComponent(`${baseUrl}/payment-success`)}&cancel_url=${encodeURIComponent(`${baseUrl}/payment-cancel`)}`;
+    const expireDate = new Date();
+    expireDate.setHours(expireDate.getHours() + 24);
+    const expireDateStr = expireDate.toISOString().split('.')[0];
     
-    return {
-      paymentUrl: arifpayUrl,
-      sessionId,
+    const payload = {
+      phone: normalizedPhone,
+      email: `${userId}@app.com`,
+      nonce: sessionId,
+      cancelUrl: `${baseUrl}/payment-cancel`,
+      errorUrl: `${baseUrl}/payment-error`,
+      notifyUrl: `${baseUrl}/api/webhooks/arifpay`,
+      successUrl: `${baseUrl}/payment-success?tier=${tierName}&session=${sessionId}`,
+      paymentMethods: ['CBE'],
+      expireDate: expireDateStr,
+      items: [
+        {
+          name: `${tierName.charAt(0).toUpperCase() + tierName.slice(1)} Membership`,
+          quantity: 1,
+          price: amount,
+          description: `Premium ${tierName} membership subscription`,
+          image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
+        },
+      ],
+      beneficiaries: [
+        {
+          accountNumber: "1000000000000",
+          bank: "AWINETAA",
+          amount: amount
+        },
+      ],
+      lang: "EN"
     };
+    
+    console.log('[Premium] Direct payment payload:', JSON.stringify(payload, null, 2));
+    
+    try {
+      const response = await fetch('https://gateway.arifpay.net/api/checkout/session', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-arifpay-key': 'hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      const responseText = await response.text();
+      console.log('[Premium] ArifPay response:', responseText.substring(0, 500));
+      
+      if (responseText.startsWith('<')) {
+        throw new Error('Payment service returned an unexpected response. Please try again.');
+      }
+      
+      const result = JSON.parse(responseText);
+      
+      if (result.error === false && result.data?.paymentUrl) {
+        // Store transaction in database
+        await supabase
+          .from('payment_transactions')
+          .insert({
+            user_id: userId,
+            session_id: result.data.sessionId || sessionId,
+            amount,
+            tier: tierName,
+            payment_method: method,
+            status: 'pending',
+          });
+        
+        return {
+          paymentUrl: result.data.paymentUrl,
+          sessionId: result.data.sessionId || sessionId,
+        };
+      } else {
+        throw new Error(result.msg || 'Failed to create payment session');
+      }
+    } catch (err: any) {
+      console.error('[Premium] Direct payment error:', err);
+      throw new Error(err.message || 'Payment service unavailable');
+    }
   };
 
   const upgradeMutation = trpc.membership.upgrade.useMutation({
@@ -279,12 +345,38 @@ export default function PremiumScreen() {
       return;
     }
 
-    upgradeMutation.mutate({
-      userId: user!.id,
-      tier: selectedTier,
-      paymentMethod,
-      phone: phoneNumber,
-    });
+    // Try direct payment first for reliability
+    try {
+      console.log('[Premium] Using direct payment method...');
+      const payment = await createPaymentDirectly(
+        user!.id,
+        selectedTier,
+        amount,
+        phoneNumber,
+        paymentMethod
+      );
+      
+      setIsProcessing(false);
+      
+      try {
+        await WebBrowser.openBrowserAsync(payment.paymentUrl, {
+          dismissButtonStyle: 'close',
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
+        });
+      } catch {
+        Linking.openURL(payment.paymentUrl);
+      }
+    } catch (directErr: any) {
+      console.error('[Premium] Direct payment failed, trying tRPC...', directErr);
+      
+      // Fallback to tRPC
+      upgradeMutation.mutate({
+        userId: user!.id,
+        tier: selectedTier,
+        paymentMethod,
+        phone: phoneNumber,
+      });
+    }
   };
 
   const formatETB = (amount: number) => `${amount.toLocaleString()} ETB`;
