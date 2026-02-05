@@ -137,64 +137,98 @@ export function useUserMatches(userId: string | null) {
       try {
         setLoading(true);
         setError(null);
-        const { data: parts, error: pErr } = await supabase
-          .from('conversation_participants')
-          .select('conversation_id')
-          .eq('user_id', userId);
-        if (pErr) throw pErr;
-        const conversationIds = (parts ?? []).map((p: any) => p.conversation_id as string);
+        console.log('[Chat] Loading matches for user:', userId);
 
-        if (conversationIds.length === 0) {
+        // First, load all matches for this user
+        const { data: matchesData, error: matchErr } = await supabase
+          .from('matches')
+          .select('id, user1_id, user2_id, matched_at')
+          .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
+        
+        if (matchErr) {
+          console.log('[Chat] Error loading matches:', matchErr.message);
+          throw matchErr;
+        }
+
+        console.log('[Chat] Found matches:', matchesData?.length ?? 0);
+
+        if (!matchesData || matchesData.length === 0) {
+          console.log('[Chat] No matches found');
           setItems([]);
           setLoading(false);
           return;
         }
 
-        const [{ data: convParts, error: cpErr }, { data: msgs, error: mErr }] = await Promise.all([
-          supabase
-            .from('conversation_participants')
-            .select('conversation_id, user_id')
-            .in('conversation_id', conversationIds),
-          supabase
-            .from('messages')
-            .select('id, conversation_id, sender_id, content, created_at')
-            .in('conversation_id', conversationIds),
-        ]);
-        if (cpErr) throw cpErr;
-        if (mErr) throw mErr;
-
-        const otherByConv = new Map<string, string>();
-        (convParts as any[]).forEach((r) => {
-          if (r.user_id !== userId) otherByConv.set(r.conversation_id as string, r.user_id as string);
+        // Get other user IDs from matches
+        const matchMap = new Map<string, { matchId: string; otherId: string; matchedAt: string }>();
+        matchesData.forEach((m: any) => {
+          const otherId = m.user1_id === userId ? m.user2_id : m.user1_id;
+          matchMap.set(m.id, { matchId: m.id, otherId, matchedAt: m.matched_at });
         });
-        const otherIds = Array.from(new Set(Array.from(otherByConv.values())));
+
+        const matchIds = Array.from(matchMap.keys());
+        const otherUserIds = Array.from(new Set(Array.from(matchMap.values()).map(m => m.otherId)));
+
+        console.log('[Chat] Other user IDs:', otherUserIds);
+
+        // Load profiles for matched users
         const { data: profiles, error: profErr } = await supabase
           .from('profiles')
-          .select('id,name,photos')
-          .in('id', otherIds);
-        if (profErr) throw profErr;
+          .select('id, name, photos')
+          .in('id', otherUserIds);
+        
+        if (profErr) console.log('[Chat] Profile fetch error:', profErr.message);
 
+        // Ensure conversations exist for all matches
+        for (const matchId of matchIds) {
+          const matchInfo = matchMap.get(matchId)!;
+          const { data: existingConv } = await supabase
+            .from('conversations')
+            .select('id')
+            .eq('id', matchId)
+            .maybeSingle();
+          
+          if (!existingConv) {
+            console.log('[Chat] Creating conversation for match:', matchId);
+            await supabase.from('conversations').insert({ id: matchId, created_by: userId });
+            await supabase.from('conversation_participants').insert([
+              { conversation_id: matchId, user_id: userId },
+              { conversation_id: matchId, user_id: matchInfo.otherId }
+            ]);
+          }
+        }
+
+        // Load messages for all match conversations
+        const { data: msgs, error: mErr } = await supabase
+          .from('messages')
+          .select('id, conversation_id, sender_id, content, created_at')
+          .in('conversation_id', matchIds);
+        
+        if (mErr) console.log('[Chat] Messages fetch error:', mErr.message);
+
+        // Build latest message map
         const latestByConv = new Map<string, DbMessageRow>();
-        (msgs as DbMessageRow[]).forEach((m) => {
+        ((msgs ?? []) as DbMessageRow[]).forEach((m) => {
           const prev = latestByConv.get(m.conversation_id);
           if (!prev || new Date(m.created_at).getTime() > new Date(prev.created_at).getTime()) {
             latestByConv.set(m.conversation_id, m);
           }
         });
 
-        const itemsNext: MatchListItem[] = conversationIds.map((cid) => {
-          const otherId = otherByConv.get(cid) as string;
-          const prof = (profiles as any[]).find((p) => p.id === otherId);
-          const latest = latestByConv.get(cid);
+        // Build final list
+        const itemsNext: MatchListItem[] = matchIds.map((matchId) => {
+          const matchInfo = matchMap.get(matchId)!;
+          const prof = (profiles as any[] | null)?.find((p) => p.id === matchInfo.otherId);
+          const latest = latestByConv.get(matchId);
           return {
-            id: cid,
-            otherUserId: otherId,
+            id: matchId,
+            otherUserId: matchInfo.otherId,
             otherUserName: prof?.name ?? 'User',
             otherUserAvatar: Array.isArray(prof?.photos) && prof.photos.length ? prof.photos[0] : null,
             lastMessage: latest ? {
               id: latest.id,
               senderId: latest.sender_id,
-              receiverId: latest.sender_id === userId ? otherId : userId,
+              receiverId: latest.sender_id === userId ? matchInfo.otherId : userId,
               text: latest.content,
               timestamp: new Date(latest.created_at),
               read: true,
@@ -203,11 +237,15 @@ export function useUserMatches(userId: string | null) {
         });
 
         if (!active) return;
+        
+        // Sort by last message time, or match time if no messages
         setItems(itemsNext.sort((a, b) => {
-          const at = a.lastMessage?.timestamp?.getTime() ?? 0;
-          const bt = b.lastMessage?.timestamp?.getTime() ?? 0;
+          const at = a.lastMessage?.timestamp?.getTime() ?? new Date(matchMap.get(a.id)!.matchedAt).getTime();
+          const bt = b.lastMessage?.timestamp?.getTime() ?? new Date(matchMap.get(b.id)!.matchedAt).getTime();
           return bt - at;
         }));
+        
+        console.log('[Chat] Loaded', itemsNext.length, 'match conversations');
       } catch (e: any) {
         console.error('[Chat] load conversations error', e);
         setError(e?.message ?? 'Failed to load conversations');
@@ -218,16 +256,19 @@ export function useUserMatches(userId: string | null) {
 
     load();
 
-    const channel = supabase.channel(`conversations-of-${userId}`);
-    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'conversation_participants', filter: `user_id=eq.${userId}` }, () => load());
-    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, (payload) => {
-      const row = payload.new as DbMessageRow;
-      void load();
+    const channel = supabase.channel(`matches-of-${userId}`);
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: 'matches' }, () => {
+      console.log('[Chat] Matches changed, reloading...');
+      load();
     });
-    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed conversations'); });
+    channel.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, () => {
+      console.log('[Chat] New message, reloading...');
+      load();
+    });
+    channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed to matches'); });
 
     return () => { try { channel.unsubscribe(); } catch {} };
   }, [userId]);
 
-  return { items, loading, error };
+  return { items, loading, error, reload: () => {} };
 }

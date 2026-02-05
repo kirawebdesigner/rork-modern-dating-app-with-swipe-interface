@@ -734,12 +734,15 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               .maybeSingle();
             
             if (!existingMatch) {
-              // Create match
+              // Create match with LEAST/GREATEST ordering to match database trigger
+              const user1 = myId < userId ? myId : userId;
+              const user2 = myId < userId ? userId : myId;
+              
               const { data: newMatch, error: matchInsertErr } = await supabase
                 .from('matches')
                 .insert({
-                  user1_id: myId,
-                  user2_id: userId,
+                  user1_id: user1,
+                  user2_id: user2,
                   matched_at: new Date().toISOString(),
                 })
                 .select('id')
@@ -747,6 +750,31 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               
               if (matchInsertErr) {
                 console.log('[App] Failed to create match:', matchInsertErr.message);
+                // Check if match was created by database trigger
+                const { data: triggerMatch } = await supabase
+                  .from('matches')
+                  .select('id')
+                  .or(`and(user1_id.eq.${user1},user2_id.eq.${user2}),and(user1_id.eq.${user2},user2_id.eq.${user1})`)
+                  .maybeSingle();
+                
+                if (triggerMatch) {
+                  console.log('[App] Match exists from trigger:', triggerMatch.id);
+                  // Create conversation for existing match
+                  const { data: existingConv } = await supabase
+                    .from('conversations')
+                    .select('id')
+                    .eq('id', triggerMatch.id)
+                    .maybeSingle();
+                  
+                  if (!existingConv) {
+                    await supabase.from('conversations').insert({ id: triggerMatch.id, created_by: myId });
+                    await supabase.from('conversation_participants').insert([
+                      { conversation_id: triggerMatch.id, user_id: myId },
+                      { conversation_id: triggerMatch.id, user_id: userId },
+                    ]);
+                    console.log('[App] Conversation created for trigger match:', triggerMatch.id);
+                  }
+                }
               } else {
                 console.log('[App] Match created successfully:', newMatch?.id);
                 
@@ -768,6 +796,21 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               }
             } else {
               console.log('[App] Match already exists:', existingMatch.id);
+              // Ensure conversation exists for the match
+              const { data: existingConv } = await supabase
+                .from('conversations')
+                .select('id')
+                .eq('id', existingMatch.id)
+                .maybeSingle();
+              
+              if (!existingConv) {
+                await supabase.from('conversations').insert({ id: existingMatch.id, created_by: myId });
+                await supabase.from('conversation_participants').insert([
+                  { conversation_id: existingMatch.id, user_id: myId },
+                  { conversation_id: existingMatch.id, user_id: userId },
+                ]);
+                console.log('[App] Conversation created for existing match:', existingMatch.id);
+              }
             }
           } else {
             console.log('[App] No mutual like yet');
