@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, StatusBar, TextInput } from 'react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, StatusBar, TextInput, ScrollView } from 'react-native';
 import { MessageCircle, Crown, ChevronRight, Search, SlidersHorizontal } from 'lucide-react-native';
 
 import { useMembership } from '@/hooks/membership-context';
@@ -63,6 +63,12 @@ export default function MessagesScreen() {
 
   const renderActivityItem = ({ item, index }: { item: MatchListItem; index: number }) => {
     const isFirst = index === 0;
+    const gradientColors: [string, string, string] = isFirst 
+      ? ['#FF6B6B', '#FF8E53', '#FFA726'] 
+      : index % 3 === 1 
+        ? ['#FF4D67', '#FF6B8A', '#FF8E9E']
+        : ['#9CA3AF', '#B0B7C3', '#C4CAD4'];
+    
     return (
       <TouchableOpacity 
         style={styles.activityItem} 
@@ -71,7 +77,7 @@ export default function MessagesScreen() {
       >
         <View style={styles.activityAvatarWrapper}>
           <LinearGradient
-            colors={['#FF6B6B', '#FF8E53', '#FFA726']}
+            colors={gradientColors}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
             style={styles.activityGradientBorder}
@@ -96,11 +102,15 @@ export default function MessagesScreen() {
     );
   };
 
-  const renderConversation = ({ item }: { item: MatchListItem }) => {
+  const renderConversation = ({ item, index }: { item: MatchListItem; index: number }) => {
     const lastMessage = item.lastMessage;
     const timeSince = lastMessage ? getTimeSince(new Date(lastMessage.timestamp)) : '';
     const isMine = lastMessage?.senderId === uid;
-    const unreadCount = Math.floor(Math.random() * 3);
+    const unreadCount = 0;
+    const hasGradient = index % 3 !== 2;
+    const gradientColors: [string, string, string] = index % 2 === 0 
+      ? ['#FF6B6B', '#FF8E53', '#FFA726'] 
+      : ['#FF4D67', '#FF6B8A', '#FF8E9E'];
 
     return (
       <TouchableOpacity 
@@ -109,24 +119,38 @@ export default function MessagesScreen() {
         activeOpacity={0.7}
       >
         <View style={styles.avatarWrapper}>
-          <LinearGradient
-            colors={['#FF6B6B', '#FF8E53', '#FFA726']}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.avatarGradientBorder}
-          >
-            <View style={styles.avatarInner}>
+          {hasGradient ? (
+            <LinearGradient
+              colors={gradientColors}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.avatarGradientBorder}
+            >
+              <View style={styles.avatarInner}>
+                {item.otherUserAvatar ? (
+                  <Image source={{ uri: item.otherUserAvatar }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.placeholderAvatar]}>
+                    <Text style={styles.placeholderInitials}>
+                      {item.otherUserName.substring(0, 1).toUpperCase()}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            </LinearGradient>
+          ) : (
+            <View style={styles.avatarNoBorder}>
               {item.otherUserAvatar ? (
-                <Image source={{ uri: item.otherUserAvatar }} style={styles.avatar} />
+                <Image source={{ uri: item.otherUserAvatar }} style={styles.avatarSimple} />
               ) : (
-                <View style={[styles.avatar, styles.placeholderAvatar]}>
+                <View style={[styles.avatarSimple, styles.placeholderAvatar]}>
                   <Text style={styles.placeholderInitials}>
                     {item.otherUserName.substring(0, 1).toUpperCase()}
                   </Text>
                 </View>
               )}
             </View>
-          </LinearGradient>
+          )}
         </View>
 
         <View style={styles.conversationContent}>
@@ -155,7 +179,7 @@ export default function MessagesScreen() {
     <View>
       <View style={styles.searchContainer}>
         <View style={styles.searchBar}>
-          <Search size={20} color="#9CA3AF" />
+          <Search size={18} color="#9CA3AF" />
           <TextInput
             style={styles.searchInput}
             placeholder="Search"
@@ -169,14 +193,17 @@ export default function MessagesScreen() {
       {newMatches.length > 0 && (
         <View style={styles.activitiesSection}>
           <Text style={styles.sectionTitle}>Activities</Text>
-          <FlatList
+          <ScrollView
             horizontal
-            data={newMatches}
-            renderItem={renderActivityItem}
-            keyExtractor={(item) => item.id}
-            contentContainerStyle={styles.activitiesList}
             showsHorizontalScrollIndicator={false}
-          />
+            contentContainerStyle={styles.activitiesList}
+          >
+            {newMatches.map((item, index) => (
+              <View key={item.id}>
+                {renderActivityItem({ item, index })}
+              </View>
+            ))}
+          </ScrollView>
         </View>
       )}
       
@@ -266,30 +293,30 @@ const styles = StyleSheet.create({
   header: {
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 12,
+    paddingBottom: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     backgroundColor: '#FFFFFF',
   },
   headerTitle: {
-    fontSize: 34,
+    fontSize: 32,
     fontWeight: '800',
     color: '#1A1A1A',
     letterSpacing: -0.5,
   },
   filterBtn: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#F0F0F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
@@ -317,16 +344,18 @@ const styles = StyleSheet.create({
   },
   searchContainer: {
     paddingHorizontal: 20,
-    marginBottom: 20,
+    marginBottom: 24,
   },
   searchBar: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    gap: 10,
+    backgroundColor: '#F7F7F7',
+    borderRadius: 28,
+    paddingHorizontal: 18,
+    paddingVertical: 14,
+    gap: 12,
+    borderWidth: 1,
+    borderColor: '#EFEFEF',
   },
   searchInput: {
     flex: 1,
@@ -334,7 +363,7 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
   },
   activitiesSection: {
-    marginBottom: 24,
+    marginBottom: 28,
   },
   sectionTitle: {
     fontSize: 18,
@@ -345,31 +374,32 @@ const styles = StyleSheet.create({
   },
   activitiesList: {
     paddingHorizontal: 20,
-    gap: 16,
+    gap: 20,
+    flexDirection: 'row',
   },
   activityItem: {
     alignItems: 'center',
-    width: 72,
+    width: 70,
   },
   activityAvatarWrapper: {
     marginBottom: 8,
   },
   activityGradientBorder: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     padding: 3,
   },
   activityAvatarInner: {
     flex: 1,
-    borderRadius: 33,
+    borderRadius: 31,
     backgroundColor: '#FFFFFF',
     padding: 2,
   },
   activityAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 31,
+    borderRadius: 29,
     backgroundColor: '#F0F0F0',
   },
   activityName: {
@@ -384,28 +414,38 @@ const styles = StyleSheet.create({
   conversationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 20,
   },
   avatarWrapper: {
     marginRight: 14,
   },
   avatarGradientBorder: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     padding: 2.5,
   },
   avatarInner: {
     flex: 1,
-    borderRadius: 28,
+    borderRadius: 26,
     backgroundColor: '#FFFFFF',
     padding: 2,
   },
   avatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 26,
+    borderRadius: 24,
+    backgroundColor: '#F0F0F0',
+  },
+  avatarNoBorder: {
+    width: 58,
+    height: 58,
+  },
+  avatarSimple: {
+    width: 58,
+    height: 58,
+    borderRadius: 29,
     backgroundColor: '#F0F0F0',
   },
   placeholderAvatar: {
@@ -471,8 +511,8 @@ const styles = StyleSheet.create({
   },
   separator: {
     height: 1,
-    backgroundColor: '#F5F5F5',
-    marginLeft: 94,
+    backgroundColor: '#F2F2F2',
+    marginLeft: 92,
     marginRight: 20,
   },
   centerContainer: {

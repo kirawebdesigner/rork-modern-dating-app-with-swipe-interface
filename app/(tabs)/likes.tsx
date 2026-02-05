@@ -9,15 +9,21 @@ import { useApp } from '@/hooks/app-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
+const PADDING = 20;
 const GAP = 12;
 const NUM_COLUMNS = 2 as const;
-const CARD_WIDTH = Math.floor((width - 20 * 2 - GAP) / NUM_COLUMNS);
-const CARD_HEIGHT = CARD_WIDTH * 1.35;
+const CARD_WIDTH = Math.floor((width - PADDING * 2 - GAP) / NUM_COLUMNS);
+const CARD_HEIGHT = CARD_WIDTH * 1.4;
+
+interface MatchItem extends User {
+  matchId?: string;
+  likedAt?: Date;
+}
 
 export default function MatchesScreen() {
   const router = useRouter();
   const { matches: contextMatches } = useApp();
-  const [likesData, setLikesData] = useState<User[]>([]);
+  const [likesData, setLikesData] = useState<MatchItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
 
   useEffect(() => {
@@ -37,9 +43,10 @@ export default function MatchesScreen() {
 
       const { data: swipes, error } = await supabase
         .from('swipes')
-        .select('swiper_id')
+        .select('swiper_id, created_at')
         .eq('swiped_id', myId)
-        .in('action', ['like', 'superlike']);
+        .in('action', ['like', 'superlike'])
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.log('[Likes] error loading swipes:', error.message);
@@ -67,7 +74,9 @@ export default function MatchesScreen() {
         return;
       }
 
-      const mapped: User[] = (profiles as any[]).map((p) => ({
+      const swipeMap = new Map(swipes.map((s: any) => [s.swiper_id, new Date(s.created_at)]));
+      
+      const mapped: MatchItem[] = (profiles as any[]).map((p) => ({
         id: String(p.id),
         name: String(p.name ?? 'User'),
         age: Number(p.age ?? 0),
@@ -76,7 +85,14 @@ export default function MatchesScreen() {
         photos: Array.isArray(p.photos) && p.photos.length > 0 ? (p.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
         interests: Array.isArray(p.interests) ? (p.interests as string[]) : [],
         location: { city: String(p.city ?? '') },
-      } as User));
+        likedAt: swipeMap.get(p.id),
+      } as MatchItem));
+
+      mapped.sort((a, b) => {
+        const dateA = a.likedAt?.getTime() ?? 0;
+        const dateB = b.likedAt?.getTime() ?? 0;
+        return dateB - dateA;
+      });
 
       console.log('[Likes] loaded', mapped.length, 'profiles');
       setLikesData(mapped);
@@ -96,7 +112,27 @@ export default function MatchesScreen() {
     router.push(`/(tabs)/profile-details/${userId}` as any);
   }, [router]);
 
-  const allItems = [...likesData, ...contextMatches.map(m => ({ ...m.user, matchId: m.id }))];
+  const isToday = (date?: Date) => {
+    if (!date) return true;
+    const today = new Date();
+    return date.toDateString() === today.toDateString();
+  };
+
+  const isYesterday = (date?: Date) => {
+    if (!date) return false;
+    const yesterday = new Date();
+    yesterday.setDate(yesterday.getDate() - 1);
+    return date.toDateString() === yesterday.toDateString();
+  };
+
+  const allItems: MatchItem[] = [
+    ...likesData, 
+    ...contextMatches.map(m => ({ ...m.user, matchId: m.id } as MatchItem))
+  ];
+
+  const todayItems = allItems.filter(item => isToday(item.likedAt));
+  const yesterdayItems = allItems.filter(item => isYesterday(item.likedAt));
+  const olderItems = allItems.filter(item => !isToday(item.likedAt) && !isYesterday(item.likedAt));
 
   const renderDateSeparator = (title: string) => (
     <View style={styles.dateSeparator}>
@@ -106,70 +142,122 @@ export default function MatchesScreen() {
     </View>
   );
 
-  const renderCard = ({ item, index }: { item: any; index: number }) => {
-    const isMatch = 'matchId' in item;
-    const showTodayHeader = index === 0;
-    const showYesterdayHeader = index === Math.min(4, Math.floor(allItems.length / 2));
+  const renderCard = (item: MatchItem) => {
+    const isMatch = 'matchId' in item && item.matchId;
     
     return (
-      <View>
-        {showTodayHeader && index % 2 === 0 && (
-          <View style={styles.fullWidthHeader}>
-            {renderDateSeparator('Today')}
+      <TouchableOpacity
+        key={item.id}
+        style={styles.card}
+        onPress={() => isMatch ? onOpenMatchChat(item.matchId!) : onViewProfile(item.id)}
+        activeOpacity={0.9}
+        testID={`match-card-${item.id}`}
+      >
+        <Image
+          source={{ uri: item.photos?.[0] || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
+          style={styles.cardImage}
+        />
+        <LinearGradient
+          colors={['transparent', 'rgba(0,0,0,0.6)']}
+          style={styles.cardGradient}
+        />
+        
+        <View style={styles.cardInfo}>
+          <Text style={styles.cardName}>{item.name}, {item.age}</Text>
+        </View>
+
+        <View style={styles.cardActions}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
+            <X size={18} color="#FFFFFF" strokeWidth={2.5} />
+          </TouchableOpacity>
+          <View style={styles.actionDivider} />
+          <TouchableOpacity style={styles.actionBtn} onPress={() => isMatch ? onOpenMatchChat(item.matchId!) : onViewProfile(item.id)}>
+            <Heart size={18} color="#FFFFFF" fill="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+
+        {!isMatch && (
+          <View style={styles.likeBadge}>
+            <Heart size={12} color="#FFFFFF" fill="#FFFFFF" />
           </View>
         )}
-        {showYesterdayHeader && index % 2 === 0 && allItems.length > 4 && (
-          <View style={styles.fullWidthHeader}>
-            {renderDateSeparator('Yesterday')}
-          </View>
-        )}
-        <TouchableOpacity
-          style={styles.card}
-          onPress={() => isMatch ? onOpenMatchChat(item.matchId) : onViewProfile(item.id)}
-          activeOpacity={0.9}
-          testID={`match-card-${item.id}`}
-        >
-          <Image
-            source={{ uri: item.photos?.[0] || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
-            style={styles.cardImage}
-          />
-          <LinearGradient
-            colors={['transparent', 'rgba(0,0,0,0.7)']}
-            style={styles.cardGradient}
-          />
-          
-          <View style={styles.cardInfo}>
-            <Text style={styles.cardName}>{item.name}, {item.age}</Text>
-          </View>
-
-          <View style={styles.cardActions}>
-            <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
-              <X size={20} color="#FFFFFF" strokeWidth={2.5} />
-            </TouchableOpacity>
-            <View style={styles.actionDivider} />
-            <TouchableOpacity style={styles.actionBtn} onPress={() => isMatch ? onOpenMatchChat(item.matchId) : onViewProfile(item.id)}>
-              <Heart size={20} color="#FFFFFF" fill="#FFFFFF" />
-            </TouchableOpacity>
-          </View>
-
-          {!isMatch && (
-            <View style={styles.likeBadge}>
-              <Heart size={14} color="#FFFFFF" fill="#FFFFFF" />
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
+      </TouchableOpacity>
     );
   };
 
-  const renderItem = ({ item, index }: { item: any; index: number }) => {
-    return renderCard({ item, index });
+  const renderGrid = (items: MatchItem[]) => {
+    const rows: MatchItem[][] = [];
+    for (let i = 0; i < items.length; i += 2) {
+      rows.push(items.slice(i, i + 2));
+    }
+    
+    return rows.map((row, rowIndex) => (
+      <View key={rowIndex} style={styles.row}>
+        {row.map(item => renderCard(item))}
+        {row.length === 1 && <View style={styles.cardPlaceholder} />}
+      </View>
+    ));
+  };
+
+  const renderContent = () => {
+    if (loading) {
+      return (
+        <View style={styles.emptyContainer}>
+          <Text style={styles.loadingText}>Loading...</Text>
+        </View>
+      );
+    }
+
+    if (allItems.length === 0) {
+      return (
+        <View style={styles.emptyContainer}>
+          <View style={styles.emptyIconCircle}>
+            <Heart size={32} color="#FF4D67" />
+          </View>
+          <Text style={styles.emptyTitle}>No matches yet</Text>
+          <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
+        </View>
+      );
+    }
+
+    return (
+      <FlatList
+        data={[1]}
+        keyExtractor={() => 'content'}
+        renderItem={() => (
+          <View style={styles.contentWrapper}>
+            {todayItems.length > 0 && (
+              <>
+                {renderDateSeparator('Today')}
+                {renderGrid(todayItems)}
+              </>
+            )}
+            
+            {yesterdayItems.length > 0 && (
+              <>
+                {renderDateSeparator('Yesterday')}
+                {renderGrid(yesterdayItems)}
+              </>
+            )}
+            
+            {olderItems.length > 0 && (
+              <>
+                {renderDateSeparator('Earlier')}
+                {renderGrid(olderItems)}
+              </>
+            )}
+          </View>
+        )}
+        contentContainerStyle={styles.list}
+        showsVerticalScrollIndicator={false}
+      />
+    );
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <View>
+        <View style={styles.headerContent}>
           <Text style={styles.title}>Matches</Text>
           <Text style={styles.subtitle}>
             This is a list of people who have liked you{'\n'}and your matches.
@@ -180,30 +268,7 @@ export default function MatchesScreen() {
         </TouchableOpacity>
       </View>
 
-      {loading ? (
-        <View style={styles.emptyContainer}>
-          <Text style={styles.loadingText}>Loading...</Text>
-        </View>
-      ) : allItems.length > 0 ? (
-        <FlatList
-          data={allItems}
-          keyExtractor={(item, index) => item.id + '-' + index}
-          numColumns={NUM_COLUMNS}
-          columnWrapperStyle={styles.row}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-          showsVerticalScrollIndicator={false}
-          ListHeaderComponent={<View style={styles.listHeader}>{renderDateSeparator('Today')}</View>}
-        />
-      ) : (
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconCircle}>
-            <Heart size={32} color="#FF4D67" />
-          </View>
-          <Text style={styles.emptyTitle}>No matches yet</Text>
-          <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
-        </View>
-      )}
+      {renderContent()}
     </SafeAreaView>
   );
 }
@@ -214,15 +279,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
   },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: PADDING,
     paddingTop: 8,
     paddingBottom: 16,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
+  headerContent: {
+    flex: 1,
+    marginRight: 12,
+  },
   title: { 
-    fontSize: 34, 
+    fontSize: 32, 
     fontWeight: '800', 
     color: '#1A1A1A',
     letterSpacing: -0.5,
@@ -234,36 +303,33 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   sortBtn: {
-    width: 48,
-    height: 48,
+    width: 50,
+    height: 50,
     borderRadius: 14,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#F0F0F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
-  listHeader: {
-    marginBottom: 8,
-  },
-  fullWidthHeader: {
-    width: width - 40,
-    marginBottom: 12,
+  contentWrapper: {
+    paddingHorizontal: PADDING,
   },
   dateSeparator: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
+    paddingVertical: 12,
+    marginBottom: 4,
   },
   dateLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E5E5E5',
+    backgroundColor: '#E8E8E8',
   },
   dateText: {
     fontSize: 13,
@@ -272,10 +338,10 @@ const styles = StyleSheet.create({
     marginHorizontal: 16,
   },
   list: { 
-    paddingHorizontal: 20, 
     paddingBottom: 24,
   },
   row: { 
+    flexDirection: 'row',
     gap: GAP, 
     marginBottom: GAP,
   },
@@ -286,6 +352,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#F0F0F0',
   },
+  cardPlaceholder: {
+    width: CARD_WIDTH,
+    height: CARD_HEIGHT,
+  },
   cardImage: { 
     width: '100%', 
     height: '100%',
@@ -295,18 +365,18 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: '50%',
+    height: '55%',
   },
   cardInfo: {
     position: 'absolute',
-    left: 12,
-    right: 12,
-    bottom: 52,
+    left: 14,
+    right: 14,
+    bottom: 54,
   },
   cardName: { 
     color: '#FFFFFF', 
-    fontWeight: '700', 
-    fontSize: 16,
+    fontWeight: '600', 
+    fontSize: 15,
     textShadowColor: 'rgba(0,0,0,0.3)',
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 2,
@@ -318,7 +388,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 44,
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.35)',
   },
   actionBtn: {
     flex: 1,
@@ -327,16 +397,16 @@ const styles = StyleSheet.create({
   },
   actionDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    marginVertical: 10,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    marginVertical: 12,
   },
   likeBadge: {
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
     backgroundColor: '#FF4D67',
     alignItems: 'center',
     justifyContent: 'center',
