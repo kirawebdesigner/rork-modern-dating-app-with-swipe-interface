@@ -1,7 +1,7 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, Dimensions } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions } from 'react-native';
 import { useRouter } from 'expo-router';
-
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User } from '@/types';
 import { ArrowUpDown, X, Heart } from 'lucide-react-native';
 import { supabase } from '@/lib/supabase';
@@ -9,11 +9,10 @@ import { useApp } from '@/hooks/app-context';
 import { LinearGradient } from 'expo-linear-gradient';
 
 const { width } = Dimensions.get('window');
-const PADDING = 20;
+const PADDING = 16;
 const GAP = 12;
-const NUM_COLUMNS = 2 as const;
-const CARD_WIDTH = Math.floor((width - PADDING * 2 - GAP) / NUM_COLUMNS);
-const CARD_HEIGHT = CARD_WIDTH * 1.4;
+const CARD_WIDTH = Math.floor((width - PADDING * 2 - GAP) / 2);
+const CARD_HEIGHT = CARD_WIDTH * 1.35;
 
 interface MatchItem extends User {
   matchId?: string;
@@ -22,6 +21,7 @@ interface MatchItem extends User {
 
 export default function MatchesScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { matches: contextMatches } = useApp();
   const [likesData, setLikesData] = useState<MatchItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
@@ -150,15 +150,16 @@ export default function MatchesScreen() {
         key={item.id}
         style={styles.card}
         onPress={() => isMatch ? onOpenMatchChat(item.matchId!) : onViewProfile(item.id)}
-        activeOpacity={0.9}
+        activeOpacity={0.95}
         testID={`match-card-${item.id}`}
       >
         <Image
           source={{ uri: item.photos?.[0] || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
           style={styles.cardImage}
         />
+        
         <LinearGradient
-          colors={['transparent', 'rgba(0,0,0,0.6)']}
+          colors={['transparent', 'rgba(0,0,0,0.7)']}
           style={styles.cardGradient}
         />
         
@@ -168,17 +169,17 @@ export default function MatchesScreen() {
 
         <View style={styles.cardActions}>
           <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
-            <X size={18} color="#FFFFFF" strokeWidth={2.5} />
+            <X size={20} color="#FFFFFF" strokeWidth={2.5} />
           </TouchableOpacity>
           <View style={styles.actionDivider} />
           <TouchableOpacity style={styles.actionBtn} onPress={() => isMatch ? onOpenMatchChat(item.matchId!) : onViewProfile(item.id)}>
-            <Heart size={18} color="#FFFFFF" fill="#FFFFFF" />
+            <Heart size={20} color="#FFFFFF" fill="#FFFFFF" />
           </TouchableOpacity>
         </View>
 
         {!isMatch && (
           <View style={styles.likeBadge}>
-            <Heart size={12} color="#FFFFFF" fill="#FFFFFF" />
+            <Heart size={14} color="#FFFFFF" fill="#FFFFFF" />
           </View>
         )}
       </TouchableOpacity>
@@ -212,7 +213,7 @@ export default function MatchesScreen() {
       return (
         <View style={styles.emptyContainer}>
           <View style={styles.emptyIconCircle}>
-            <Heart size={32} color="#FF4D67" />
+            <Heart size={36} color="#FF4D67" />
           </View>
           <Text style={styles.emptyTitle}>No matches yet</Text>
           <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
@@ -221,55 +222,51 @@ export default function MatchesScreen() {
     }
 
     return (
-      <FlatList
-        data={[1]}
-        keyExtractor={() => 'content'}
-        renderItem={() => (
-          <View style={styles.contentWrapper}>
-            {todayItems.length > 0 && (
-              <>
-                {renderDateSeparator('Today')}
-                {renderGrid(todayItems)}
-              </>
-            )}
-            
-            {yesterdayItems.length > 0 && (
-              <>
-                {renderDateSeparator('Yesterday')}
-                {renderGrid(yesterdayItems)}
-              </>
-            )}
-            
-            {olderItems.length > 0 && (
-              <>
-                {renderDateSeparator('Earlier')}
-                {renderGrid(olderItems)}
-              </>
-            )}
-          </View>
-        )}
-        contentContainerStyle={styles.list}
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
-      />
+      >
+        {todayItems.length > 0 && (
+          <>
+            {renderDateSeparator('Today')}
+            {renderGrid(todayItems)}
+          </>
+        )}
+        
+        {yesterdayItems.length > 0 && (
+          <>
+            {renderDateSeparator('Yesterday')}
+            {renderGrid(yesterdayItems)}
+          </>
+        )}
+        
+        {olderItems.length > 0 && (
+          <>
+            {renderDateSeparator('Earlier')}
+            {renderGrid(olderItems)}
+          </>
+        )}
+      </ScrollView>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.header}>
-        <View style={styles.headerContent}>
+        <View style={styles.headerLeft}>
           <Text style={styles.title}>Matches</Text>
           <Text style={styles.subtitle}>
-            This is a list of people who have liked you{'\n'}and your matches.
+            This is a list of people who have liked you and your matches.
           </Text>
         </View>
-        <TouchableOpacity style={styles.sortBtn}>
-          <ArrowUpDown size={20} color="#FF4D67" />
+        <TouchableOpacity style={styles.sortBtn} activeOpacity={0.7}>
+          <ArrowUpDown size={22} color="#FF4D67" strokeWidth={2} />
         </TouchableOpacity>
       </View>
 
       {renderContent()}
-    </SafeAreaView>
+    </View>
   );
 }
 
@@ -280,32 +277,32 @@ const styles = StyleSheet.create({
   },
   header: {
     paddingHorizontal: PADDING,
-    paddingTop: 8,
-    paddingBottom: 16,
+    paddingTop: 16,
+    paddingBottom: 8,
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
   },
-  headerContent: {
+  headerLeft: {
     flex: 1,
-    marginRight: 12,
+    marginRight: 16,
   },
   title: { 
-    fontSize: 32, 
-    fontWeight: '800', 
+    fontSize: 34, 
+    fontWeight: '800' as const, 
     color: '#1A1A1A',
     letterSpacing: -0.5,
-    marginBottom: 8,
+    marginBottom: 10,
   },
   subtitle: { 
-    fontSize: 14, 
-    color: '#6B7280',
-    lineHeight: 20,
+    fontSize: 15, 
+    color: '#8E8E93',
+    lineHeight: 21,
   },
   sortBtn: {
-    width: 50,
-    height: 50,
-    borderRadius: 14,
+    width: 52,
+    height: 52,
+    borderRadius: 16,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -313,32 +310,32 @@ const styles = StyleSheet.create({
     borderColor: '#F0F0F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 2,
+    elevation: 3,
   },
-  contentWrapper: {
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
     paddingHorizontal: PADDING,
+    paddingBottom: 100,
   },
   dateSeparator: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    marginBottom: 4,
+    paddingVertical: 16,
   },
   dateLine: {
     flex: 1,
     height: 1,
-    backgroundColor: '#E8E8E8',
+    backgroundColor: '#E5E5EA',
   },
   dateText: {
-    fontSize: 13,
-    color: '#9CA3AF',
-    fontWeight: '500',
+    fontSize: 14,
+    color: '#8E8E93',
+    fontWeight: '500' as const,
     marginHorizontal: 16,
-  },
-  list: { 
-    paddingBottom: 24,
   },
   row: { 
     flexDirection: 'row',
@@ -350,7 +347,7 @@ const styles = StyleSheet.create({
     height: CARD_HEIGHT,
     borderRadius: 16,
     overflow: 'hidden',
-    backgroundColor: '#F0F0F0',
+    backgroundColor: '#F2F2F7',
   },
   cardPlaceholder: {
     width: CARD_WIDTH,
@@ -359,27 +356,28 @@ const styles = StyleSheet.create({
   cardImage: { 
     width: '100%', 
     height: '100%',
+    resizeMode: 'cover',
   },
   cardGradient: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    height: '55%',
+    height: '50%',
   },
   cardInfo: {
     position: 'absolute',
-    left: 14,
-    right: 14,
-    bottom: 54,
+    left: 12,
+    right: 12,
+    bottom: 52,
   },
   cardName: { 
     color: '#FFFFFF', 
-    fontWeight: '600', 
-    fontSize: 15,
-    textShadowColor: 'rgba(0,0,0,0.3)',
+    fontWeight: '600' as const, 
+    fontSize: 16,
+    textShadowColor: 'rgba(0,0,0,0.4)',
     textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 2,
+    textShadowRadius: 3,
   },
   cardActions: {
     position: 'absolute',
@@ -388,7 +386,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     height: 44,
     flexDirection: 'row',
-    backgroundColor: 'rgba(0,0,0,0.35)',
+    backgroundColor: 'rgba(0,0,0,0.4)',
   },
   actionBtn: {
     flex: 1,
@@ -397,24 +395,24 @@ const styles = StyleSheet.create({
   },
   actionDivider: {
     width: 1,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    marginVertical: 12,
+    backgroundColor: 'rgba(255,255,255,0.3)',
+    marginVertical: 10,
   },
   likeBadge: {
     position: 'absolute',
     top: 10,
     right: 10,
-    width: 28,
-    height: 28,
-    borderRadius: 14,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     backgroundColor: '#FF4D67',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#FF4D67',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.5,
+    shadowRadius: 6,
+    elevation: 5,
   },
   emptyContainer: { 
     flex: 1, 
@@ -423,28 +421,28 @@ const styles = StyleSheet.create({
     paddingHorizontal: 40,
   },
   emptyIconCircle: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
+    width: 88,
+    height: 88,
+    borderRadius: 44,
     backgroundColor: '#FFE5E9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
+    marginBottom: 24,
   },
   emptyTitle: { 
-    fontSize: 20, 
-    fontWeight: '700', 
+    fontSize: 22, 
+    fontWeight: '700' as const, 
     color: '#1A1A1A', 
-    marginBottom: 8,
+    marginBottom: 10,
   },
   emptyText: { 
-    fontSize: 14, 
-    color: '#6B7280', 
+    fontSize: 15, 
+    color: '#8E8E93', 
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
   },
   loadingText: {
-    fontSize: 15,
-    color: '#6B7280',
+    fontSize: 16,
+    color: '#8E8E93',
   },
 });
