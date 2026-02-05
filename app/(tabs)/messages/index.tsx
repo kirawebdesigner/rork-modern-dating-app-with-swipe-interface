@@ -1,11 +1,12 @@
 import React, { useCallback, useMemo } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, SafeAreaView } from 'react-native';
-import { MessageCircle, Crown, Send } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, Alert, SafeAreaView, Platform, StatusBar, ScrollView } from 'react-native';
+import { MessageCircle, Crown, ChevronRight, Search } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useMembership } from '@/hooks/membership-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-context';
 import { useUserMatches, MatchListItem } from '@/hooks/use-chat';
+import { LinearGradient } from 'expo-linear-gradient';
 
 export default function MessagesScreen() {
   const router = useRouter();
@@ -15,7 +16,6 @@ export default function MessagesScreen() {
   const { tier, remainingDailyMessages, useDaily: consumeDailyLimit } = useMembership();
 
   const handleConversationPress = useCallback(async (item: MatchListItem) => {
-    console.log('[Messages] Open conversation', { id: item.id });
     const canMessage = await consumeDailyLimit('messages');
     if (!canMessage && tier === 'free') {
       Alert.alert(
@@ -32,214 +32,403 @@ export default function MessagesScreen() {
   }, [router, tier, consumeDailyLimit]);
 
   const getTimeSince = useCallback((date: Date) => {
-    const seconds = Math.floor((new Date().getTime() - date.getTime()) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    const hours = Math.floor(minutes / 60);
-    const days = Math.floor(hours / 24);
-    if (days > 0) return `${days}d`;
-    if (hours > 0) return `${hours}h`;
-    if (minutes > 0) return `${minutes}m`;
-    return 'now';
+    const now = new Date();
+    const diff = now.getTime() - date.getTime();
+    
+    const isToday = now.getDate() === date.getDate() && 
+                    now.getMonth() === date.getMonth() && 
+                    now.getFullYear() === date.getFullYear();
+
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    const yesterday = new Date(now);
+    yesterday.setDate(yesterday.getDate() - 1);
+    const isYesterday = yesterday.getDate() === date.getDate() &&
+                        yesterday.getMonth() === date.getMonth() &&
+                        yesterday.getFullYear() === date.getFullYear();
+    
+    if (isYesterday) return 'Yesterday';
+
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    if (days < 7) return `${days}d ago`;
+    return date.toLocaleDateString();
   }, []);
 
-  const data = useMemo(() => items, [items]);
+  const { newMatches, conversations } = useMemo(() => {
+    const newMatchesList: MatchListItem[] = [];
+    const conversationsList: MatchListItem[] = [];
+
+    items.forEach(item => {
+      if (!item.lastMessage) {
+        newMatchesList.push(item);
+      } else {
+        conversationsList.push(item);
+      }
+    });
+
+    return { newMatches: newMatchesList, conversations: conversationsList };
+  }, [items]);
+
+  const renderNewMatch = ({ item }: { item: MatchListItem }) => (
+    <TouchableOpacity 
+      style={styles.newMatchItem} 
+      onPress={() => handleConversationPress(item)}
+      activeOpacity={0.8}
+    >
+      <View style={styles.newMatchAvatarContainer}>
+        {item.otherUserAvatar ? (
+          <Image source={{ uri: item.otherUserAvatar }} style={styles.newMatchAvatar} />
+        ) : (
+          <View style={[styles.newMatchAvatar, styles.placeholderAvatar]}>
+            <Text style={styles.placeholderInitials}>
+              {item.otherUserName.substring(0, 1).toUpperCase()}
+            </Text>
+          </View>
+        )}
+        <View style={styles.onlineIndicator} />
+      </View>
+      <Text style={styles.newMatchName} numberOfLines={1}>{item.otherUserName}</Text>
+    </TouchableOpacity>
+  );
 
   const renderConversation = ({ item }: { item: MatchListItem }) => {
     const lastMessage = item.lastMessage;
     const timeSince = lastMessage ? getTimeSince(new Date(lastMessage.timestamp)) : '';
+    const isMine = lastMessage?.senderId === uid;
+
     return (
-      <TouchableOpacity style={styles.conversationCard} onPress={() => handleConversationPress(item)}>
-        {item.otherUserAvatar ? (
-          <Image source={{ uri: item.otherUserAvatar }} style={styles.avatar} />
-        ) : (
-          <View style={[styles.avatar, styles.placeholderAvatar]} />
-        )}
-        <View style={styles.conversationInfo}>
-          <View style={styles.conversationHeader}>
-            <Text style={styles.userName}>{item.otherUserName}</Text>
-            <Text style={styles.timestamp}>{timeSince}</Text>
-          </View>
-          {lastMessage && (
-            <Text style={[styles.lastMessage]} numberOfLines={1}>
-              {lastMessage.senderId === uid ? 'You: ' : ''}
-              {lastMessage.text}
-            </Text>
+      <TouchableOpacity 
+        style={styles.conversationCard} 
+        onPress={() => handleConversationPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.avatarContainer}>
+          {item.otherUserAvatar ? (
+            <Image source={{ uri: item.otherUserAvatar }} style={styles.avatar} />
+          ) : (
+            <View style={[styles.avatar, styles.placeholderAvatar]}>
+              <Text style={styles.placeholderInitials}>
+                {item.otherUserName.substring(0, 1).toUpperCase()}
+              </Text>
+            </View>
           )}
         </View>
-        <View style={styles.messageActions}>
-          {tier === 'free' && remainingDailyMessages <= 3 && (
-            <Crown size={16} color={Colors.primary} />
-          )}
-          <Send size={16} color={Colors.text.light} />
+
+        <View style={styles.conversationContent}>
+          <View style={styles.rowTop}>
+            <Text style={styles.userName} numberOfLines={1}>{item.otherUserName}</Text>
+            <Text style={styles.timestamp}>{timeSince}</Text>
+          </View>
+          
+          <View style={styles.rowBottom}>
+            <Text style={styles.lastMessage} numberOfLines={1}>
+              {isMine && <Text style={styles.youPrefix}>You: </Text>}
+              {lastMessage?.text}
+            </Text>
+          </View>
         </View>
       </TouchableOpacity>
     );
   };
 
-  return (
-    <SafeAreaView style={styles.container} testID="messages-screen">
-      <View style={styles.header} testID="messages-header">
-        <View style={styles.headerContent}>
-          <Text style={styles.title}>Messages</Text>
-          <MessageCircle size={24} color={Colors.primary} />
+  const renderHeader = () => (
+    <View>
+      {newMatches.length > 0 && (
+        <View style={styles.section}>
+          <Text style={styles.sectionTitle}>New Matches</Text>
+          <FlatList
+            horizontal
+            data={newMatches}
+            renderItem={renderNewMatch}
+            keyExtractor={(item) => item.id}
+            contentContainerStyle={styles.newMatchesList}
+            showsHorizontalScrollIndicator={false}
+          />
         </View>
+      )}
+      {newMatches.length > 0 && conversations.length > 0 && (
+        <Text style={[styles.sectionTitle, { marginTop: 8 }]}>Conversations</Text>
+      )}
+    </View>
+  );
+
+  return (
+    <View style={styles.container} testID="messages-screen">
+      <StatusBar barStyle="dark-content" />
+      <SafeAreaView style={styles.safeArea}>
+        <View style={styles.header}>
+          <Text style={styles.headerTitle}>Messages</Text>
+          <TouchableOpacity style={styles.headerIconBtn}>
+            <Search size={22} color={Colors.text.primary} />
+          </TouchableOpacity>
+        </View>
+
         {tier === 'free' && (
-          <TouchableOpacity style={styles.limitsBanner} onPress={() => router.push('/premium' as any)}>
-            <Text style={styles.limitsText}>{remainingDailyMessages} messages left today</Text>
-            <Crown size={16} color={Colors.text.white} />
+          <TouchableOpacity 
+            activeOpacity={0.9} 
+            onPress={() => router.push('/premium' as any)}
+            style={styles.bannerWrapper}
+          >
+            <LinearGradient
+              colors={[Colors.gradient.start, Colors.gradient.end]}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.limitsBanner}
+            >
+              <View style={styles.limitContent}>
+                <Crown size={16} color="#FFF" fill="#FFF" />
+                <Text style={styles.limitsText}>
+                  {remainingDailyMessages} free messages left today
+                </Text>
+              </View>
+              <ChevronRight size={16} color="#FFF" />
+            </LinearGradient>
           </TouchableOpacity>
         )}
-      </View>
 
-      {loading ? (
-        <View style={styles.emptyContainer} testID="messages-loading"><Text style={styles.emptySubtext}>Loading…</Text></View>
-      ) : data.length === 0 ? (
-        <View style={styles.emptyContainer} testID="messages-empty">
-          <Text style={styles.emptyText}>No messages yet</Text>
-          <Text style={styles.emptySubtext}>Start a conversation with your matches!</Text>
-        </View>
-      ) : (
-        <FlatList
-          testID="messages-list"
-          data={data}
-          renderItem={renderConversation}
-          keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={() => <View style={styles.separator} />}
-          ListFooterComponent={() => (tier === 'free' ? <View style={styles.footerAdWrap}><View style={styles.adBanner}><Text style={styles.adText}>Ad Placeholder</Text></View></View> : null)}
-        />
-      )}
-    </SafeAreaView>
+        {loading ? (
+          <View style={styles.centerContainer} testID="messages-loading">
+            <Text style={styles.loadingText}>Loading conversations...</Text>
+          </View>
+        ) : items.length === 0 ? (
+          <View style={styles.emptyContainer} testID="messages-empty">
+            <View style={styles.emptyIconCircle}>
+              <MessageCircle size={32} color={Colors.primary} />
+            </View>
+            <Text style={styles.emptyTitle}>No Matches Yet</Text>
+            <Text style={styles.emptySubtext}>
+              Start swiping to find your match!
+            </Text>
+          </View>
+        ) : (
+          <FlatList
+            data={conversations}
+            renderItem={renderConversation}
+            keyExtractor={(item) => item.id}
+            ListHeaderComponent={renderHeader}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+            ListEmptyComponent={
+              newMatches.length > 0 ? (
+                <View style={styles.emptyConversationsContainer}>
+                   <Text style={styles.emptySubtext}>No active conversations.</Text>
+                </View>
+              ) : null
+            }
+          />
+        )}
+      </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#FFFFFF',
+  },
+  safeArea: {
+    flex: 1,
   },
   header: {
-    paddingHorizontal: 20,
+    paddingHorizontal: 24,
     paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  headerContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
+  headerTitle: {
+    fontSize: 32,
+    fontWeight: '800',
     color: Colors.text.primary,
+    letterSpacing: -0.5,
+  },
+  headerIconBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: Colors.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  bannerWrapper: {
+    paddingHorizontal: 24,
+    marginBottom: 12,
   },
   limitsBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: Colors.primary,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 12,
+    paddingVertical: 12,
+    borderRadius: 16,
+    shadowColor: Colors.primary,
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 4,
+  },
+  limitContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
   limitsText: {
-    color: Colors.text.white,
+    color: '#FFF',
     fontSize: 14,
+    fontWeight: '700',
+  },
+  listContent: {
+    paddingBottom: 24,
+  },
+  section: {
+    marginBottom: 24,
+  },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text.primary,
+    marginBottom: 16,
+    paddingHorizontal: 24,
+  },
+  newMatchesList: {
+    paddingHorizontal: 24,
+    gap: 16,
+  },
+  newMatchItem: {
+    alignItems: 'center',
+    width: 72,
+  },
+  newMatchAvatarContainer: {
+    position: 'relative',
+    marginBottom: 8,
+  },
+  newMatchAvatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.backgroundSecondary,
+    borderWidth: 2,
+    borderColor: Colors.primary,
+  },
+  onlineIndicator: {
+    position: 'absolute',
+    bottom: 4,
+    right: 4,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    backgroundColor: Colors.success,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  newMatchName: {
+    fontSize: 13,
     fontWeight: '600',
+    color: Colors.text.primary,
+    textAlign: 'center',
   },
-  list: {
-    paddingVertical: 8,
-  },
-  separator: { height: 6 },
   conversationCard: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    backgroundColor: Colors.background,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+  },
+  avatarContainer: {
+    marginRight: 16,
   },
   avatar: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    marginRight: 12,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: '#F0F0F0',
   },
   placeholderAvatar: {
+    alignItems: 'center',
+    justifyContent: 'center',
     backgroundColor: Colors.backgroundSecondary,
   },
-  unreadDot: {
-    position: 'absolute',
-    left: 64,
-    top: 12,
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: Colors.primary,
-    borderWidth: 2,
-    borderColor: Colors.background,
+  placeholderInitials: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.primary,
   },
-  conversationInfo: {
+  conversationContent: {
     flex: 1,
+    justifyContent: 'center',
   },
-  messageActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  conversationHeader: {
+  rowTop: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 4,
   },
+  rowBottom: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
   userName: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 17,
+    fontWeight: '700',
     color: Colors.text.primary,
   },
   timestamp: {
     fontSize: 12,
     color: Colors.text.light,
+    fontWeight: '500',
   },
   lastMessage: {
     fontSize: 14,
     color: Colors.text.secondary,
+    flex: 1,
+    lineHeight: 20,
   },
-  unreadMessage: {
+  youPrefix: {
     color: Colors.text.primary,
     fontWeight: '500',
   },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  centerContainer: {
+    paddingVertical: 40,
     alignItems: 'center',
+  },
+  loadingText: {
+    color: Colors.text.secondary,
+    marginTop: 12,
+    fontSize: 15,
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
     paddingHorizontal: 40,
   },
-  emptyText: {
+  emptyConversationsContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+  },
+  emptyIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.backgroundSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+  },
+  emptyTitle: {
     fontSize: 20,
-    fontWeight: '600',
+    fontWeight: '800',
     color: Colors.text.primary,
     marginBottom: 8,
   },
   emptySubtext: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.text.secondary,
     textAlign: 'center',
+    lineHeight: 22,
   },
-  adBanner: {
-    marginHorizontal: 20,
-    marginVertical: 8,
-    height: 52,
-    borderRadius: 12,
-    backgroundColor: '#E9ECF2',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  adText: { color: Colors.text.secondary, fontWeight: '600' },
-  footerAdWrap: { paddingVertical: 8 },
 });

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert } from 'react-native';
-import { ArrowLeft, Send, ShieldAlert, Crown, MoreVertical } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert, StatusBar } from 'react-native';
+import { ArrowLeft, Send, ShieldAlert, Crown, MoreVertical, Phone, Video } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types';
@@ -172,16 +172,21 @@ export default function ChatScreen() {
     }
   }, [input, router, consumeDailyLimit, sendMessage]);
 
-  const renderItem = useCallback(({ item }: { item: Message }) => {
+  const renderItem = useCallback(({ item, index }: { item: Message, index: number }) => {
     const isMine = uid != null && item.senderId === uid;
+    
+    // Check if next message is from same sender to group them visually (reduce border radius, margin)
+    const nextMessage = messages[index + 1];
+    const isNextMine = nextMessage && nextMessage.senderId === item.senderId;
+    
     return (
-      <View style={[styles.messageWrapper, isMine ? styles.messageWrapperMine : styles.messageWrapperTheirs]}>
+      <View style={[styles.messageWrapper, isMine ? styles.messageWrapperMine : styles.messageWrapperTheirs, isNextMine ? styles.groupedMessage : styles.lastInGroup]}>
         {isMine ? (
           <LinearGradient
-            colors={['#667eea', '#764ba2']}
+            colors={[Colors.gradient.start, Colors.gradient.end]}
             start={{ x: 0, y: 0 }}
             end={{ x: 1, y: 1 }}
-            style={styles.bubbleMine}
+            style={[styles.bubbleMine, isNextMine && styles.bubbleMineGrouped]}
           >
             <Text style={styles.bubbleTextMine}>{item.text}</Text>
             <Text style={styles.timeMine}>
@@ -189,7 +194,7 @@ export default function ChatScreen() {
             </Text>
           </LinearGradient>
         ) : (
-          <View style={styles.bubbleTheirs} testID="message-bubble-theirs">
+          <View style={[styles.bubbleTheirs, isNextMine && styles.bubbleTheirsGrouped]} testID="message-bubble-theirs">
             <Text style={styles.bubbleTextTheirs}>{item.text}</Text>
             <Text style={styles.timeTheirs}>
               {new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
@@ -198,103 +203,118 @@ export default function ChatScreen() {
         )}
       </View>
     );
-  }, [uid]);
+  }, [uid, messages]);
 
   if (initLoading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <View style={styles.container}>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color={Colors.primary} />
-          <Text style={styles.loadingText}>Opening chat…</Text>
+          <ActivityIndicator color={Colors.primary} size="large" />
+          <Text style={styles.loadingText}>Connecting...</Text>
         </View>
-      </SafeAreaView>
+      </View>
     );
   }
 
   return (
     <Boundary>
-      <SafeAreaView style={styles.container}>
-        <LinearGradient
-          colors={[Colors.background, Colors.background]}
-          style={styles.header}
-        >
-          <TouchableOpacity onPress={handleBack} style={styles.backBtn} testID="chat-back">
-            <ArrowLeft size={24} color={Colors.text.primary} strokeWidth={2.5} />
-          </TouchableOpacity>
-          <View style={styles.headerCenter}>
-            <Text style={styles.title} numberOfLines={1} testID="chat-title">{otherName}</Text>
-            <Text style={styles.subtitle}>Active now</Text>
-          </View>
-          {tier === 'free' ? (
-            <View style={styles.headerRight}>
-              <View style={styles.badge}>
-                <Crown size={14} color={Colors.primary} />
-                <Text style={styles.badgeText}>{remainingDailyMessages}</Text>
+      <View style={styles.container}>
+        <StatusBar barStyle="dark-content" />
+        <SafeAreaView style={styles.safeArea}>
+          <View style={styles.header}>
+            <View style={styles.headerLeft}>
+              <TouchableOpacity onPress={handleBack} style={styles.backBtn} testID="chat-back">
+                <ArrowLeft size={24} color={Colors.text.primary} strokeWidth={2.5} />
+              </TouchableOpacity>
+              <View style={styles.headerInfo}>
+                <Text style={styles.title} numberOfLines={1} testID="chat-title">{otherName}</Text>
+                <Text style={styles.subtitle}>Active now</Text>
               </View>
             </View>
-          ) : (
-            <TouchableOpacity style={styles.headerRight}>
-              <MoreVertical size={20} color={Colors.text.secondary} />
-            </TouchableOpacity>
-          )}
-        </LinearGradient>
-
-        <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-          style={styles.flex}
-          keyboardVerticalOffset={80}
-        >
-          {loading ? (
-            <View style={styles.loadingWrap}><ActivityIndicator color={Colors.primary} /><Text style={styles.loadingText}>Loading messages…</Text></View>
-          ) : error ? (
-            <View style={styles.errorWrap}><ShieldAlert size={28} color={Colors.error} /><Text style={styles.errorTitle}>Failed to load</Text><Text style={styles.errorText}>{error}</Text></View>
-          ) : (
-            <FlatList
-              ref={listRef}
-              data={messages}
-              keyExtractor={(m) => m.id}
-              renderItem={renderItem}
-              contentContainerStyle={styles.listContent}
-              testID="chat-list"
-            />
-          )}
-
-          <View style={styles.composerWrapper}>
-            <View style={styles.composer}>
-              <TextInput
-                style={styles.input}
-                value={input}
-                onChangeText={setInput}
-                placeholder="Type a message..."
-                placeholderTextColor={Colors.text.light}
-                editable={!sending}
-                testID="chat-input"
-                multiline
-                maxLength={500}
-              />
-              <TouchableOpacity
-                onPress={onSend}
-                style={[styles.sendBtn, (!input.trim() || sending) && styles.sendBtnDisabled]}
-                disabled={!input.trim() || sending}
-                testID="chat-send"
-              >
-                {(!input.trim() || sending) ? (
-                  <Send size={20} color={Colors.text.light} />
-                ) : (
-                  <LinearGradient
-                    colors={['#667eea', '#764ba2']}
-                    start={{ x: 0, y: 0 }}
-                    end={{ x: 1, y: 1 }}
-                    style={styles.sendBtnGradient}
-                  >
-                    <Send size={20} color={Colors.text.white} fill={Colors.text.white} />
-                  </LinearGradient>
-                )}
+            
+            <View style={styles.headerRightActions}>
+              {/* Fake call buttons for sleek look */}
+              <TouchableOpacity style={styles.iconBtn}>
+                <Phone size={20} color={Colors.text.primary} />
               </TouchableOpacity>
+              <TouchableOpacity style={styles.iconBtn}>
+                <Video size={22} color={Colors.text.primary} />
+              </TouchableOpacity>
+
+              {tier === 'free' ? (
+                <View style={styles.limitBadge}>
+                  <Text style={styles.limitText}>{remainingDailyMessages}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
-        </KeyboardAvoidingView>
-      </SafeAreaView>
+
+          <KeyboardAvoidingView
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            style={styles.flex}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+          >
+            {loading ? (
+              <View style={styles.loadingWrap}>
+                <ActivityIndicator color={Colors.primary} />
+                <Text style={styles.loadingText}>Loading history...</Text>
+              </View>
+            ) : error ? (
+              <View style={styles.errorWrap}>
+                <ShieldAlert size={28} color={Colors.error} />
+                <Text style={styles.errorText}>{error}</Text>
+              </View>
+            ) : (
+              <FlatList
+                ref={listRef}
+                data={messages}
+                keyExtractor={(m) => m.id}
+                renderItem={renderItem}
+                contentContainerStyle={styles.listContent}
+                testID="chat-list"
+                showsVerticalScrollIndicator={false}
+              />
+            )}
+
+            <View style={styles.composerContainer}>
+              <View style={styles.composerShadow}>
+                <TextInput
+                  style={styles.input}
+                  value={input}
+                  onChangeText={setInput}
+                  placeholder="Type a message..."
+                  placeholderTextColor={Colors.text.light}
+                  editable={!sending}
+                  testID="chat-input"
+                  multiline
+                  maxLength={1000}
+                />
+                <TouchableOpacity
+                  onPress={onSend}
+                  disabled={!input.trim() || sending}
+                  testID="chat-send"
+                  activeOpacity={0.8}
+                >
+                  {(!input.trim() || sending) ? (
+                    <View style={styles.sendBtnDisabled}>
+                      <Send size={20} color={Colors.text.light} />
+                    </View>
+                  ) : (
+                    <LinearGradient
+                      colors={[Colors.gradient.start, Colors.gradient.end]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 1 }}
+                      style={styles.sendBtn}
+                    >
+                      <Send size={18} color="#FFF" fill="#FFF" style={{ marginLeft: 2 }} />
+                    </LinearGradient>
+                  )}
+                </TouchableOpacity>
+              </View>
+            </View>
+          </KeyboardAvoidingView>
+        </SafeAreaView>
+      </View>
     </Boundary>
   );
 }
@@ -302,21 +322,33 @@ export default function ChatScreen() {
 const styles = StyleSheet.create({
   container: { 
     flex: 1, 
-    backgroundColor: Colors.background,
+    backgroundColor: '#FFFFFF',
+  },
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
   },
   flex: { flex: 1 },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: Colors.background,
-    shadowColor: '#000',
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 2,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F5F5F5',
+    backgroundColor: '#FFFFFF',
+    zIndex: 10,
+  },
+  headerLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flex: 1,
+  },
+  headerRightActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
   },
   backBtn: { 
     width: 40,
@@ -324,49 +356,45 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
+    marginRight: 8,
   },
-  headerCenter: {
+  headerInfo: {
     flex: 1,
-    marginHorizontal: 16,
-    alignItems: 'center',
   },
   title: { 
-    fontSize: 18, 
-    fontWeight: '800', 
+    fontSize: 17, 
+    fontWeight: '700', 
     color: Colors.text.primary,
-    letterSpacing: 0.3,
   },
   subtitle: {
     fontSize: 12,
-    color: '#4CD964',
-    fontWeight: '600',
-    marginTop: 2,
+    color: Colors.success,
+    fontWeight: '500',
   },
-  headerRight: { 
-    flexDirection: 'row', 
-    alignItems: 'center',
+  iconBtn: {
+    padding: 4,
   },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 16,
+  limitBadge: {
     backgroundColor: Colors.backgroundSecondary,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    minWidth: 28,
+    alignItems: 'center',
   },
-  badgeText: { 
-    color: Colors.primary, 
-    fontWeight: '800',
-    fontSize: 13,
+  limitText: {
+    color: Colors.primary,
+    fontSize: 12,
+    fontWeight: '700',
   },
   listContent: { 
-    padding: 16, 
-    gap: 12,
+    paddingHorizontal: 16, 
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   messageWrapper: {
-    marginBottom: 4,
+    marginBottom: 2,
+    width: '100%',
   },
   messageWrapperMine: {
     alignItems: 'flex-end',
@@ -374,99 +402,94 @@ const styles = StyleSheet.create({
   messageWrapperTheirs: {
     alignItems: 'flex-start',
   },
+  groupedMessage: {
+    marginBottom: 2,
+  },
+  lastInGroup: {
+    marginBottom: 12,
+  },
   bubbleMine: { 
     maxWidth: '75%',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 20,
     borderBottomRightRadius: 4,
-    shadowColor: '#667eea',
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    shadowOffset: { width: 0, height: 2 },
-    elevation: 3,
+  },
+  bubbleMineGrouped: {
+    borderBottomRightRadius: 4,
+    borderTopRightRadius: 4,
   },
   bubbleTheirs: { 
     maxWidth: '75%',
     paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderRadius: 20,
     borderBottomLeftRadius: 4,
-    backgroundColor: Colors.backgroundSecondary,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 1 },
-    elevation: 1,
+    backgroundColor: '#F3F4F6',
+  },
+  bubbleTheirsGrouped: {
+    borderBottomLeftRadius: 4,
+    borderTopLeftRadius: 4,
   },
   bubbleTextMine: { 
     fontSize: 16, 
-    color: Colors.text.white,
+    color: '#FFFFFF',
     lineHeight: 22,
-    fontWeight: '500',
   },
   bubbleTextTheirs: { 
     fontSize: 16, 
     color: Colors.text.primary,
     lineHeight: 22,
-    fontWeight: '500',
   },
   timeMine: { 
-    fontSize: 11, 
-    marginTop: 6,
-    color: 'rgba(255, 255, 255, 0.75)',
-    fontWeight: '600',
+    fontSize: 10, 
+    marginTop: 4,
+    color: 'rgba(255, 255, 255, 0.7)',
+    alignSelf: 'flex-end',
   },
   timeTheirs: { 
-    fontSize: 11, 
-    marginTop: 6,
+    fontSize: 10, 
+    marginTop: 4,
     color: Colors.text.light,
-    fontWeight: '600',
+    alignSelf: 'flex-start',
   },
-  composerWrapper: {
-    backgroundColor: Colors.background,
+  composerContainer: {
     paddingHorizontal: 16,
     paddingVertical: 12,
-    shadowColor: '#000',
-    shadowOpacity: 0.05,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 8,
+    backgroundColor: '#FFFFFF',
   },
-  composer: {
+  composerShadow: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    gap: 10,
+    backgroundColor: '#F8F9FA',
+    borderRadius: 28,
+    padding: 6,
+    borderWidth: 1,
+    borderColor: '#EEEEEE',
   },
   input: {
     flex: 1,
-    minHeight: 44,
-    maxHeight: 100,
-    borderRadius: 24,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    backgroundColor: Colors.backgroundSecondary,
+    minHeight: 40,
+    maxHeight: 120,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
     color: Colors.text.primary,
     fontSize: 16,
-    fontWeight: '500',
   },
   sendBtn: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    justifyContent: 'center',
-    alignItems: 'center',
-    overflow: 'hidden',
-  },
-  sendBtnGradient: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     justifyContent: 'center',
     alignItems: 'center',
   },
-  sendBtnDisabled: { 
-    backgroundColor: Colors.backgroundSecondary,
+  sendBtnDisabled: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#F0F0F0',
   },
   loadingWrap: { 
     flex: 1, 
@@ -477,7 +500,7 @@ const styles = StyleSheet.create({
   loadingText: { 
     color: Colors.text.secondary,
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: '500',
   },
   errorWrap: { 
     flex: 1, 
@@ -487,7 +510,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32,
   },
   errorTitle: { 
-    fontWeight: '800', 
+    fontWeight: '700', 
     color: Colors.error, 
     fontSize: 18,
   },
