@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "Modern Dating App with Swipe Interface",
-    "slug": "modern-dating-app-swipe",
+    "name": "Zewijuna",
+    "slug": "zewijuna-halal-muslim-dating-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
@@ -14,7 +14,7 @@
     },
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "app.rork.modern-dating-app-swipe",
+      "bundleIdentifier": "app.rork.zewijuna",
       "infoPlist": {
         "NSPhotoLibraryUsageDescription": "Allow $(PRODUCT_NAME) to access your photos",
         "NSCameraUsageDescription": "Allow $(PRODUCT_NAME) to access your camera",
