@@ -12,16 +12,13 @@ import {
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Phone, Shield, CreditCard, Calendar } from 'lucide-react-native';
+import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Shield, Calendar, Phone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
 import { useAuth } from '@/hooks/auth-context';
 import { MembershipTier } from '@/types';
-import * as WebBrowser from 'expo-web-browser';
-import { trpc } from '@/lib/trpc';
-import { supabase } from '@/lib/supabase';
 
 interface TierFeature {
   icon: any;
@@ -111,61 +108,80 @@ export default function PremiumScreen() {
   const [billingPeriod] = useState<'monthly' | 'yearly'>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState(false);
-  const [paymentMethod, setPaymentMethod] = useState<string>('CBE');
-  const [phoneNumber, setPhoneNumber] = useState<string>('');
-  const [showPhoneModal, setShowPhoneModal] = useState(false);
 
-  const createPaymentDirectly = async (userId: string, tierName: string, amount: number, phone: string, method: string) => {
-    console.log('[Premium] Creating payment directly via ArifPay...');
-    
-    const sessionId = `pay_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const baseUrl = 'https://01sqivqojn0aq61khqyvn.rork.app';
-    
-    // Normalize phone number
-    let normalizedPhone = phone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
-    if (normalizedPhone.startsWith('0')) {
-      normalizedPhone = '251' + normalizedPhone.substring(1);
-    } else if (normalizedPhone.startsWith('+251')) {
-      normalizedPhone = normalizedPhone.substring(1);
-    } else if (!normalizedPhone.startsWith('251') && normalizedPhone.length === 9) {
-      normalizedPhone = '251' + normalizedPhone;
+  // Phone number modal state
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [phoneNumber, setPhoneNumber] = useState('');
+  const [phoneError, setPhoneError] = useState('');
+
+  // Normalize phone to 251 format
+  const normalizePhone = (phone: string): string => {
+    let normalized = phone.replace(/\s+/g, '').replace(/[^0-9+]/g, '');
+
+    if (normalized.startsWith('+')) {
+      normalized = normalized.substring(1);
     }
-    
+
+    if (normalized.startsWith('0')) {
+      normalized = '251' + normalized.substring(1);
+    } else if (normalized.startsWith('251')) {
+      // Already correct
+    } else if (normalized.length === 9) {
+      normalized = '251' + normalized;
+    }
+
+    return normalized;
+  };
+
+  // Validate phone number
+  const validatePhone = (phone: string): boolean => {
+    const normalized = normalizePhone(phone);
+    // Must be exactly 12 digits starting with 251
+    return normalized.length === 12 && normalized.startsWith('251');
+  };
+
+  const createArifPayPayment = async (userId: string, tierName: string, amount: number, userPhone: string) => {
+    console.log('[Premium] Creating ArifPay payment directly...');
+
+    // Normalize the phone number to 251 format
+    const normalizedPhone = normalizePhone(userPhone);
+    console.log('[Premium] Using phone:', normalizedPhone);
+
+    const sessionId = `pay_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const expireDate = new Date();
     expireDate.setHours(expireDate.getHours() + 24);
-    const expireDateStr = expireDate.toISOString().split('.')[0];
-    
+    const expireDateStr = expireDate.toISOString().replace('.000Z', 'Z');
+
     const payload = {
+      cancelUrl: 'https://zewijuna.app/payment-cancel',
       phone: normalizedPhone,
       email: `${userId}@app.com`,
       nonce: sessionId,
-      cancelUrl: `${baseUrl}/payment-cancel`,
-      errorUrl: `${baseUrl}/payment-error`,
-      notifyUrl: `${baseUrl}/api/webhooks/arifpay`,
-      successUrl: `${baseUrl}/payment-success?tier=${tierName}&session=${sessionId}`,
-      paymentMethods: ['CBE'],
+      successUrl: `https://zewijuna.app/payment-success?tier=${tierName}&session=${sessionId}`,
+      errorUrl: 'https://zewijuna.app/payment-error',
+      notifyUrl: 'https://01sqivqojn0aq61khqyvn.rork.app/api/webhooks/arifpay',
+      paymentMethods: ['TELEBIRR', 'CBE', 'AWAASH'],
       expireDate: expireDateStr,
       items: [
         {
           name: `${tierName.charAt(0).toUpperCase() + tierName.slice(1)} Membership`,
           quantity: 1,
           price: amount,
-          description: `Premium ${tierName} membership subscription`,
-          image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
+          description: `Premium ${tierName} membership subscription`
         },
       ],
       beneficiaries: [
         {
-          accountNumber: "1000000000000",
+          accountNumber: "01320811436100",
           bank: "AWINETAA",
           amount: amount
         },
       ],
       lang: "EN"
     };
-    
-    console.log('[Premium] Direct payment payload:', JSON.stringify(payload, null, 2));
-    
+
+    console.log('[Premium] ArifPay payload:', JSON.stringify(payload, null, 2));
+
     try {
       const response = await fetch('https://gateway.arifpay.net/api/checkout/session', {
         method: 'POST',
@@ -175,29 +191,17 @@ export default function PremiumScreen() {
         },
         body: JSON.stringify(payload),
       });
-      
+
       const responseText = await response.text();
       console.log('[Premium] ArifPay response:', responseText.substring(0, 500));
-      
+
       if (responseText.startsWith('<')) {
         throw new Error('Payment service returned an unexpected response. Please try again.');
       }
-      
+
       const result = JSON.parse(responseText);
-      
+
       if (result.error === false && result.data?.paymentUrl) {
-        // Store transaction in database
-        await supabase
-          .from('payment_transactions')
-          .insert({
-            user_id: userId,
-            session_id: result.data.sessionId || sessionId,
-            amount,
-            tier: tierName,
-            payment_method: method,
-            status: 'pending',
-          });
-        
         return {
           paymentUrl: result.data.paymentUrl,
           sessionId: result.data.sessionId || sessionId,
@@ -206,102 +210,12 @@ export default function PremiumScreen() {
         throw new Error(result.msg || 'Failed to create payment session');
       }
     } catch (err: any) {
-      console.error('[Premium] Direct payment error:', err);
+      console.error('[Premium] ArifPay error:', err);
       throw new Error(err.message || 'Payment service unavailable');
     }
   };
 
-  const upgradeMutation = trpc.membership.upgrade.useMutation({
-    retry: 1,
-    retryDelay: 500,
-    onSuccess: async (data) => {
-      console.log('[Premium] Upgrade mutation success:', data);
-      
-      if (data.requiresPayment && data.paymentUrl) {
-        console.log('[Premium] Opening payment URL:', data.paymentUrl);
-        setIsProcessing(false);
-        
-        try {
-          const result = await WebBrowser.openBrowserAsync(data.paymentUrl, {
-            dismissButtonStyle: 'close',
-            presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-          });
-          console.log('[Premium] Browser result:', result);
-        } catch (err) {
-          console.error('[Premium] Failed to open browser:', err);
-          Linking.openURL(data.paymentUrl);
-        }
-      } else if (!data.requiresPayment) {
-        await upgradeTier(selectedTier);
-        Alert.alert(
-          'Success!',
-          `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
-          [{ text: 'OK', onPress: () => router.back() }]
-        );
-        setIsProcessing(false);
-      }
-    },
-    onError: async (error) => {
-      console.error('[Premium] Upgrade mutation error:', error);
-      
-      if (error.message?.includes('Failed to fetch') || error.message?.includes('Network')) {
-        console.log('[Premium] Network error, trying direct upgrade...');
-        
-        try {
-          const amount = tierData[selectedTier].priceMonthly;
-          
-          if (amount === 0) {
-            await upgradeTier(selectedTier);
-            setIsProcessing(false);
-            Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`, 
-              [{ text: 'OK', onPress: () => router.back() }]);
-            return;
-          }
-          
-          const payment = await createPaymentDirectly(
-            user!.id,
-            selectedTier,
-            amount,
-            phoneNumber,
-            paymentMethod
-          );
-          
-          setIsProcessing(false);
-          
-          try {
-            await WebBrowser.openBrowserAsync(payment.paymentUrl, {
-              dismissButtonStyle: 'close',
-              presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-            });
-          } catch {
-            Linking.openURL(payment.paymentUrl);
-          }
-          return;
-        } catch (fallbackErr) {
-          console.error('[Premium] Fallback also failed:', fallbackErr);
-        }
-      }
-      
-      setIsProcessing(false);
-      
-      let errorMessage = 'Failed to process upgrade. Please try again.';
-      
-      if (error.message) {
-        if (error.message.includes('<!DOCTYPE') || error.message.includes('<html')) {
-          errorMessage = 'Server error. Please try again later.';
-        } else if (!error.message.includes('Failed to fetch')) {
-          errorMessage = error.message;
-        }
-      }
-      
-      Alert.alert('Upgrade Failed', errorMessage);
-    },
-  });
-
-  const paymentMethods = [
-    { id: 'CBE', name: 'CBE Birr', icon: CreditCard, description: 'Direct bank payment' },
-  ] as const;
-
+  // Show phone modal when upgrade button is pressed
   const handleUpgrade = async () => {
     if (!user?.id) {
       Alert.alert('Authentication Required', 'Please log in to upgrade your membership.');
@@ -318,62 +232,52 @@ export default function PremiumScreen() {
       return;
     }
 
-    setShowPhoneModal(true);
-  };
-
-  const handleConfirmPayment = async () => {
-    if (!phoneNumber.trim()) {
-      Alert.alert('Phone Required', 'Please enter your phone number to proceed with payment.');
-      return;
-    }
-
-    setShowPhoneModal(false);
-    setIsProcessing(true);
-    console.log('[Premium] Upgrading to:', selectedTier);
-    console.log('[Premium] Phone:', phoneNumber);
-    console.log('[Premium] Payment method:', paymentMethod);
-
     const amount = tierData[selectedTier].priceMonthly;
-    
+
     if (amount === 0) {
       await upgradeTier(selectedTier);
-      setIsProcessing(false);
       Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
         [{ text: 'OK', onPress: () => router.back() }]);
       return;
     }
 
-    // Try direct payment first for reliability
+    // Show phone modal to collect phone number
+    setPhoneNumber('');
+    setPhoneError('');
+    setShowPhoneModal(true);
+  };
+
+  // Process payment after phone is entered
+  const handleConfirmPayment = async () => {
+    if (!validatePhone(phoneNumber)) {
+      setPhoneError('Please enter a valid Ethiopian phone number (e.g., 09xxxxxxxx)');
+      return;
+    }
+
+    setPhoneError('');
+    setShowPhoneModal(false);
+    setIsProcessing(true);
+
+    const amount = tierData[selectedTier].priceMonthly;
+
     try {
-      console.log('[Premium] Using direct payment method...');
-      const payment = await createPaymentDirectly(
-        user!.id,
-        selectedTier,
-        amount,
-        phoneNumber,
-        paymentMethod
-      );
-      
+      // Create payment with user's phone number
+      const payment = await createArifPayPayment(user!.id, selectedTier, amount, phoneNumber);
+
       setIsProcessing(false);
-      
-      try {
-        await WebBrowser.openBrowserAsync(payment.paymentUrl, {
-          dismissButtonStyle: 'close',
-          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FULL_SCREEN,
-        });
-      } catch {
-        Linking.openURL(payment.paymentUrl);
-      }
-    } catch (directErr: any) {
-      console.error('[Premium] Direct payment failed, trying tRPC...', directErr);
-      
-      // Fallback to tRPC
-      upgradeMutation.mutate({
-        userId: user!.id,
-        tier: selectedTier,
-        paymentMethod,
-        phone: phoneNumber,
-      });
+
+      // Open payment URL
+      Linking.openURL(payment.paymentUrl);
+
+      Alert.alert(
+        'Payment',
+        'Redirecting to payment page. You will receive a confirmation on your phone.',
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      setIsProcessing(false);
+      console.error('[Premium] Payment error:', error);
+      Alert.alert('Payment Failed', error.message || 'Failed to create payment. Please try again.');
     }
   };
 
@@ -422,7 +326,7 @@ export default function PremiumScreen() {
                 ? `${formatDual(tierInfo.priceMonthly)}/mo`
                 : `${formatDual(Math.round(tierInfo.priceMonthly * 6 * 0.5))}/yr`)
               : 'Free';
-            
+
             return (
               <TouchableOpacity
                 key={tierKey}
@@ -439,7 +343,7 @@ export default function PremiumScreen() {
                     <Text style={styles.popularText}>MOST POPULAR</Text>
                   </View>
                 ) : null}
-                
+
                 {isCurrent ? (
                   <View style={styles.currentBadge}>
                     <Text style={styles.currentText}>CURRENT</Text>
@@ -465,9 +369,9 @@ export default function PremiumScreen() {
                     const IconComponent = feature.icon;
                     return (
                       <View key={index} style={styles.featureRow}>
-                        <IconComponent 
-                          size={16} 
-                          color={feature.included ? Colors.success : Colors.text.light} 
+                        <IconComponent
+                          size={16}
+                          color={feature.included ? Colors.success : Colors.text.light}
                         />
                         <Text style={[
                           styles.featureText,
@@ -489,49 +393,12 @@ export default function PremiumScreen() {
           })}
         </View>
 
-        <View style={styles.paymentMethodSection}>
-          <Text style={styles.sectionTitle}>Select Payment Method</Text>
-          {paymentMethods.map((method) => {
-            const IconComponent = method.icon;
-            const isSelected = paymentMethod === method.id;
-            return (
-              <TouchableOpacity
-                key={method.id}
-                style={[
-                  styles.paymentCard,
-                  isSelected && styles.selectedPaymentCard,
-                ]}
-                onPress={() => setPaymentMethod(method.id)}
-                testID={`payment-${method.id}`}
-              >
-                <View style={styles.paymentRow}>
-                  <View style={styles.paymentIconBox}>
-                    <IconComponent size={24} color={isSelected ? Colors.primary : Colors.text.secondary} />
-                  </View>
-                  <View style={styles.paymentTexts}>
-                    <Text style={styles.paymentTitle}>{method.name}</Text>
-                    <Text style={styles.paymentSubtitle}>{method.description}</Text>
-                  </View>
-                  {isSelected ? (
-                    <View style={styles.checkmarkBox}>
-                      <Check size={20} color={Colors.primary} />
-                    </View>
-                  ) : null}
-                </View>
-              </TouchableOpacity>
-            );
-          })}
-          <View style={styles.securityNote}>
-            <Shield size={14} color={Colors.text.secondary} />
-            <Text style={styles.securityNoteText}>All payments are secured by ArifPay</Text>
-          </View>
-        </View>
 
         <View style={styles.footer}>
           <GradientButton
             title={isProcessing ? 'Processing...' : `Upgrade to ${tierData[selectedTier].name}`}
             onPress={handleUpgrade}
-            style={[styles.button, isProcessing && styles.disabledButton]}
+            style={StyleSheet.flatten([styles.button, isProcessing && styles.disabledButton])}
             testID="upgrade-btn"
             disabled={isProcessing}
           />
@@ -541,7 +408,7 @@ export default function PremiumScreen() {
               <Text style={styles.securityText}>Encrypted & Secure</Text>
             </View>
             <View style={styles.securityBadge}>
-              <CreditCard size={14} color={Colors.text.secondary} />
+              <Shield size={14} color={Colors.text.secondary} />
               <Text style={styles.securityText}>Powered by ArifPay</Text>
             </View>
           </View>
@@ -563,59 +430,63 @@ export default function PremiumScreen() {
         </View>
       </Modal>
 
+      {/* Phone Number Modal */}
       <Modal visible={showPhoneModal} transparent animationType="slide" onRequestClose={() => setShowPhoneModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.phoneModalCard}>
             <View style={styles.phoneModalHeader}>
-              <Text style={styles.phoneModalTitle}>Enter Phone Number</Text>
+              <Text style={styles.phoneModalTitle}>Enter Your Phone Number</Text>
               <TouchableOpacity onPress={() => setShowPhoneModal(false)} style={styles.phoneModalClose}>
                 <X size={24} color={Colors.text.secondary} />
               </TouchableOpacity>
             </View>
-            
+
             <Text style={styles.phoneModalSubtitle}>
-              Enter your phone number to proceed with {paymentMethod} payment for {tierData[selectedTier].name} membership.
+              Your phone number is required to receive payment confirmation. We'll send an OTP to verify your transaction.
             </Text>
-            
+
             <View style={styles.phoneInputContainer}>
               <Text style={styles.phonePrefix}>+251</Text>
               <TextInput
                 style={styles.phoneInput}
-                placeholder="9XXXXXXXX"
+                placeholder="9xxxxxxxx"
                 placeholderTextColor={Colors.text.light}
                 keyboardType="phone-pad"
                 value={phoneNumber}
-                onChangeText={setPhoneNumber}
+                onChangeText={(text) => {
+                  setPhoneNumber(text.replace(/[^0-9]/g, ''));
+                  setPhoneError('');
+                }}
                 maxLength={10}
               />
             </View>
-            
+
+            {phoneError ? (
+              <Text style={{ color: Colors.primary, fontSize: 12, marginBottom: 16 }}>{phoneError}</Text>
+            ) : null}
+
             <View style={styles.paymentSummary}>
-              <Text style={styles.summaryLabel}>Plan:</Text>
+              <Text style={styles.summaryLabel}>Plan</Text>
               <Text style={styles.summaryValue}>{tierData[selectedTier].name}</Text>
             </View>
             <View style={styles.paymentSummary}>
-              <Text style={styles.summaryLabel}>Amount:</Text>
-              <Text style={styles.summaryValue}>{formatETB(tierData[selectedTier].priceMonthly)}</Text>
+              <Text style={styles.summaryLabel}>Amount</Text>
+              <Text style={styles.summaryValue}>{tierData[selectedTier].priceMonthly.toLocaleString()} ETB</Text>
             </View>
-            <View style={styles.paymentSummary}>
-              <Text style={styles.summaryLabel}>Payment:</Text>
-              <Text style={styles.summaryValue}>{paymentMethod}</Text>
-            </View>
-            
+
             <GradientButton
-              title={isProcessing ? 'Processing...' : 'Proceed to Payment'}
+              title="Continue to Payment"
               onPress={handleConfirmPayment}
               style={styles.confirmButton}
-              disabled={isProcessing}
             />
-            
+
             <TouchableOpacity onPress={() => setShowPhoneModal(false)} style={styles.cancelButton}>
               <Text style={styles.cancelButtonText}>Cancel</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
     </SafeAreaView>
   );
 }
@@ -669,24 +540,24 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 4,
   },
-  featuresBadges: { 
-    flexDirection: 'row', 
-    gap: 12, 
-    marginTop: 20 
+  featuresBadges: {
+    flexDirection: 'row',
+    gap: 12,
+    marginTop: 20
   },
-  featureBadge: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 6, 
-    backgroundColor: 'rgba(255,255,255,0.15)', 
-    paddingHorizontal: 12, 
-    paddingVertical: 8, 
-    borderRadius: 999 
+  featureBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 999
   },
-  featureBadgeText: { 
-    color: Colors.text.white, 
-    fontWeight: '600', 
-    fontSize: 12 
+  featureBadgeText: {
+    color: Colors.text.white,
+    fontWeight: '600',
+    fontSize: 12
   },
   tiersSection: {
     paddingHorizontal: 20,
@@ -751,16 +622,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  offPill: { 
-    backgroundColor: '#FFE8E8', 
-    paddingHorizontal: 8, 
-    paddingVertical: 2, 
-    borderRadius: 8 
+  offPill: {
+    backgroundColor: '#FFE8E8',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8
   },
-  offPillText: { 
-    color: Colors.primary, 
-    fontWeight: '700', 
-    fontSize: 12 
+  offPillText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 12
   },
   tierPrice: {
     fontSize: 20,
@@ -824,10 +695,10 @@ const styles = StyleSheet.create({
     borderColor: Colors.primary,
     backgroundColor: Colors.background,
   },
-  paymentRow: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 12 
+  paymentRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12
   },
   paymentIconBox: {
     width: 48,
@@ -837,18 +708,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  paymentTexts: { 
-    flex: 1 
+  paymentTexts: {
+    flex: 1
   },
-  paymentTitle: { 
-    fontSize: 16, 
-    fontWeight: '700', 
+  paymentTitle: {
+    fontSize: 16,
+    fontWeight: '700',
     color: Colors.text.primary,
     marginBottom: 2,
   },
-  paymentSubtitle: { 
-    fontSize: 13, 
-    color: Colors.text.secondary 
+  paymentSubtitle: {
+    fontSize: 13,
+    color: Colors.text.secondary
   },
   checkmarkBox: {
     width: 28,
@@ -886,33 +757,33 @@ const styles = StyleSheet.create({
     color: Colors.text.secondary,
     fontWeight: '500',
   },
-  modalOverlay: { 
-    flex: 1, 
-    backgroundColor: 'rgba(0,0,0,0.4)', 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    padding: 24 
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24
   },
-  modalCard: { 
-    width: '100%', 
-    maxWidth: 420, 
-    backgroundColor: Colors.background, 
-    borderRadius: 16, 
-    padding: 16, 
-    gap: 10 
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: Colors.background,
+    borderRadius: 16,
+    padding: 16,
+    gap: 10
   },
-  modalHeader: { 
-    flexDirection: 'row', 
-    gap: 8, 
-    alignItems: 'center' 
+  modalHeader: {
+    flexDirection: 'row',
+    gap: 8,
+    alignItems: 'center'
   },
-  modalTitle: { 
-    color: Colors.text.primary, 
-    fontWeight: '700', 
-    fontSize: 16 
+  modalTitle: {
+    color: Colors.text.primary,
+    fontWeight: '700',
+    fontSize: 16
   },
-  modalBody: { 
-    color: Colors.text.secondary 
+  modalBody: {
+    color: Colors.text.secondary
   },
   phoneModalCard: {
     width: '100%',

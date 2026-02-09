@@ -1,11 +1,18 @@
 import { v4 as uuidv4 } from "uuid";
 
-const ARIFPAY_API_KEY = "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
-const ARIFPAY_BASE_URL = "https://gateway.arifpay.net";
-const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "1000000000000";
+const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
+const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.net";
+const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "01320811436100";
 
-// API Key is hardcoded for production - CBE Birr only
+// Supported payment methods from Arifpay API documentation
+const SUPPORTED_PAYMENT_METHODS = [
+  "TELEBIRR", "AWAASH", "AWAASH_WALLET", "PSS", "CBE",
+  "AMOLE", "BOA", "KACHA", "HELLOCASH", "MPESSA"
+];
+
+// API Key and Base URL initialization
 console.log("[Arifpay] Initializing with account:", ARIFPAY_ACCOUNT_NUMBER);
+console.log("[Arifpay] Base URL:", ARIFPAY_BASE_URL);
 
 export interface ArifpayPaymentOptions {
   amount: number;
@@ -52,9 +59,7 @@ export class ArifpayClient {
   constructor() {
     this.apiKey = ARIFPAY_API_KEY;
     this.baseUrl = ARIFPAY_BASE_URL;
-    console.log("[Arifpay] Client initialized with API key:", this.apiKey.substring(0, 10) + "...");
-    console.log("[Arifpay] Base URL:", this.baseUrl);
-    console.log("[Arifpay] Account Number:", ARIFPAY_ACCOUNT_NUMBER);
+    console.log("[Arifpay] Client initialized");
   }
 
   private parseJsonResponse<T>(responseText: string, context: string): T {
@@ -73,6 +78,60 @@ export class ArifpayClient {
     }
   }
 
+  private normalizePhone(phone: string): string {
+    // Strictly follow: "Only 251... not +251 or 09"
+    let normalized = phone.replace(/\s+/g, '').replace(/[^0-9+]/g, '');
+
+    if (normalized.startsWith('+')) {
+      normalized = normalized.substring(1);
+    }
+
+    if (normalized.startsWith('0')) {
+      normalized = '251' + normalized.substring(1);
+    } else if (normalized.startsWith('251')) {
+      // Correct format
+    } else if (normalized.length === 9) {
+      normalized = '251' + normalized;
+    } else {
+      // Fallback - prepend 251
+      normalized = '251' + normalized;
+    }
+
+    // Ensure it's exactly 12 digits (251XXXXXXXXX)
+    if (normalized.length !== 12) {
+      console.warn(`[Arifpay] Phone normalization resulted in odd length: ${normalized}. Using fallback.`);
+      return '251911111111';
+    }
+
+    return normalized;
+  }
+
+  private normalizePaymentMethod(method: string): string[] {
+    // Map common names to Arifpay API format
+    const methodMap: Record<string, string> = {
+      'telebirr': 'TELEBIRR',
+      'cbe': 'CBE',
+      'awash': 'AWAASH',
+      'awaash': 'AWAASH',
+      'amole': 'AMOLE',
+      'boa': 'BOA',
+      'kacha': 'KACHA',
+      'hellocash': 'HELLOCASH',
+      'mpesa': 'MPESSA',
+      'mpessa': 'MPESSA',
+    };
+
+    const normalized = methodMap[method.toLowerCase()] || method.toUpperCase();
+
+    // Validate against supported methods
+    if (SUPPORTED_PAYMENT_METHODS.includes(normalized)) {
+      return [normalized];
+    }
+
+    // Default to showing all major payment options
+    return ["TELEBIRR", "CBE", "AWAASH"];
+  }
+
   async createPayment(
     options: ArifpayPaymentOptions
   ): Promise<ArifpayPaymentResponse> {
@@ -80,190 +139,54 @@ export class ArifpayClient {
       throw new Error("ArifPay API key not configured");
     }
 
-    // Normalize phone number to ArifPay format (251XXXXXXXXX)
-    let phone = options.phone;
-    let email = options.phone;
-    let isEmail = phone.includes('@');
-    
-    // Normalize phone if it's not an email
-    if (!isEmail) {
-      // Remove all non-numeric characters
-      phone = phone.replace(/\s+/g, '').replace(/[^0-9]/g, '');
-      
-      // Convert to 251 format (MUST be 251, not +251)
-      if (phone.startsWith('0')) {
-        phone = '251' + phone.substring(1);
-      } else if (phone.startsWith('+251')) {
-        phone = phone.substring(1);
-      } else if (phone.startsWith('251')) {
-        // Already correct format
-      } else if (phone.length === 9) {
-        // Ethiopian number without prefix
-        phone = '251' + phone;
-      } else {
-        // Assume it needs 251 prefix
-        phone = '251' + phone;
-      }
-      
-      // Create a default email if we have phone
-      email = `${options.userId}@app.com`;
-    } else {
-      // If email provided, use test phone for CBE
-      email = phone;
-      phone = '251911111111'; // Test phone as per documentation
-    }
-
-    // Validate phone format (must be 251XXXXXXXXX, 12 digits total)
-    if (phone.length < 12) {
-      console.warn(`[Arifpay] Phone number too short: ${phone}. Using test number.`);
-      phone = '251911111111';
-    }
-
-    console.log('[Arifpay] Processing payment');
-    console.log('[Arifpay] Phone (normalized):', phone);
-    console.log('[Arifpay] Email:', email);
-    console.log('[Arifpay] Payment method:', options.paymentMethod);
-    
+    const phone = this.normalizePhone(options.phone);
+    const email = options.phone.includes('@') ? options.phone : `${options.userId}@app.com`;
     const nonce = `${options.userId}-${uuidv4()}`;
+
+    // Expire date in future (24 hours) - format: 2023-12-31T23:59:59Z
     const expireDate = new Date();
     expireDate.setHours(expireDate.getHours() + 24);
-    const expireDateStr = expireDate.toISOString().split('.')[0];
+    const expireDateStr = expireDate.toISOString().replace('.000Z', 'Z');
 
     const totalAmount = options.amount;
-    
-    // CBE Direct Integration
-    if (options.paymentMethod === 'CBE') {
-      console.log('[Arifpay] Using CBE Direct Payment (V2)');
-      
-      // CBE Direct Payment Payload - Strictly following ArifPay documentation
-      const payload = {
-        phone: phone,
-        email: email,
-        nonce: nonce,
-        cancelUrl: options.cancelUrl,
-        errorUrl: options.errorUrl,
-        notifyUrl: options.notifyUrl,
-        successUrl: options.successUrl,
-        paymentMethods: ['CBE'],
-        expireDate: expireDateStr,
-        items: [
-          {
-            name: `${options.tier.charAt(0).toUpperCase() + options.tier.slice(1)} Membership`,
-            quantity: 1,
-            price: totalAmount,
-            description: `Premium ${options.tier} membership subscription`,
-            image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
-          },
-        ],
-        beneficiaries: [
-          {
-            accountNumber: ARIFPAY_ACCOUNT_NUMBER,
-            bank: "AWINETAA",
-            amount: totalAmount
-          },
-        ],
-        lang: "EN"
-      };
 
-      console.log("[Arifpay] Creating CBE direct payment with payload:", JSON.stringify(payload, null, 2));
+    // Use the normalizePaymentMethod helper to get valid payment methods
+    const paymentMethods = this.normalizePaymentMethod(options.paymentMethod || 'TELEBIRR');
 
-      try {
-        const url = `${this.baseUrl}/api/checkout/session`;
-        console.log("[Arifpay] Making request to:", url);
-        
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-arifpay-key": this.apiKey,
-          },
-          body: JSON.stringify(payload),
-        });
-
-        const responseText = await response.text();
-        console.log("[Arifpay] CBE Response status:", response.status);
-
-        const result = this.parseJsonResponse<Record<string, any>>(responseText, "CBE checkout");
-
-        console.log("[Arifpay] CBE Parsed response:", JSON.stringify(result, null, 2));
-
-        if (!response.ok) {
-           console.error('[Arifpay] CBE Payment failed with status:', response.status);
-           console.error('[Arifpay] Error response:', result);
-           
-           // Handle specific errors
-           if (result.msg) {
-             if (result.msg.includes("Phone") || result.msg.includes("phone")) {
-               throw new Error("Invalid phone number format. Must be 251XXXXXXXXX.");
-             }
-             if (result.msg.includes("nonce")) {
-               throw new Error("Payment session error. Please try again.");
-             }
-             throw new Error(result.msg);
-           }
-           
-           throw new Error(result.message || `Payment failed with status ${response.status}`);
-        }
-
-        // Success response validation
-        if (result.error === false && result.data && result.data.paymentUrl) {
-          console.log('[Arifpay] CBE Payment created successfully');
-          console.log('[Arifpay] Session ID:', result.data.sessionId);
-          console.log('[Arifpay] Payment URL:', result.data.paymentUrl);
-          
-          return {
-            sessionId: result.data.sessionId,
-            paymentUrl: result.data.paymentUrl,
-            status: "PENDING",
-            totalAmount: result.data.totalAmount || options.amount,
-          };
-        } else {
-          console.error('[Arifpay] Invalid response structure:', result);
-          throw new Error(result.msg || "Payment creation failed - invalid response format");
-        }
-      } catch (error) {
-        console.error("[Arifpay] CBE Payment error:", error);
-        throw error;
-      }
-    }
-
-    // Generic Checkout - CBE Birr only
-
-    // Generic checkout payload for other payment methods
+    // Build payload exactly matching API documentation
     const payload = {
+      cancelUrl: options.cancelUrl,
       phone: phone,
       email: email,
       nonce: nonce,
-      cancelUrl: options.cancelUrl,
+      successUrl: options.successUrl,
       errorUrl: options.errorUrl,
       notifyUrl: options.notifyUrl,
-      successUrl: options.successUrl,
-      paymentMethods: ['CBE'], // CBE Birr only
+      paymentMethods: paymentMethods,
       expireDate: expireDateStr,
       items: [
         {
           name: `${options.tier.charAt(0).toUpperCase() + options.tier.slice(1)} Membership`,
           quantity: 1,
           price: totalAmount,
-          description: `Premium ${options.tier} membership subscription`,
-          image: "https://images.unsplash.com/photo-1522075469751-3a6694fb2f61?w=300"
+          description: `Premium ${options.tier} membership subscription`
         },
       ],
       beneficiaries: [
         {
           accountNumber: ARIFPAY_ACCOUNT_NUMBER,
           bank: "AWINETAA",
-          amount: totalAmount,
+          amount: totalAmount
         },
       ],
       lang: "EN"
     };
 
-    console.log("[Arifpay] Creating checkout session with payload:", JSON.stringify(payload, null, 2));
+    const methodName = paymentMethods[0] || 'TELEBIRR';
+    console.log(`[Arifpay] Creating ${methodName} payment payload:`, JSON.stringify(payload, null, 2));
 
     try {
       const url = `${this.baseUrl}/api/checkout/session`;
-      
       const response = await fetch(url, {
         method: "POST",
         headers: {
@@ -274,93 +197,87 @@ export class ArifpayClient {
       });
 
       const responseText = await response.text();
-      console.log("[Arifpay] Raw response:", responseText);
-
-      const result = this.parseJsonResponse<Record<string, any>>(responseText, "Checkout session");
+      const result = this.parseJsonResponse<Record<string, any>>(responseText, `${methodName} checkout`);
 
       if (!response.ok) {
-        throw new Error(result.msg || result.message || `Payment creation failed: ${response.status}`);
+        console.error(`[Arifpay] ${methodName} payment failed:`, response.status, result);
+        throw new Error(result.msg || result.message || `Payment creation failed with status ${response.status}`);
       }
 
-      if (!result.error && result.data && result.data.paymentUrl) {
+      if (result.error === false && result.data && result.data.paymentUrl) {
         return {
           sessionId: result.data.sessionId,
           paymentUrl: result.data.paymentUrl,
-          status: result.data.status || "PENDING",
+          status: "PENDING",
           totalAmount: result.data.totalAmount || options.amount,
         };
       } else {
-        throw new Error(result.msg || "Payment creation failed - invalid response");
+        throw new Error(result.msg || "Payment creation failed - invalid response structure");
       }
     } catch (error) {
-      console.error("[Arifpay] Payment error:", error);
+      console.error("[Arifpay] Payment Error:", error);
       throw error;
     }
   }
 
-  // Added createCheckout for compatibility with buy/route.ts
+  // Compatibility method for credits
   async createCheckout(options: ArifpayCheckoutOptions): Promise<{ checkoutUrl: string; sessionId: string; transactionId: string }> {
-      // Logic to map generic checkout options to createPayment or similar
-      // Since createPayment is tailored for membership, we'll create a generic session here
-      // reusing similar logic but adapted for generic items/credits
-      
-      const nonce = `${uuidv4()}`; 
-      const expireDate = new Date();
-      expireDate.setHours(expireDate.getHours() + 24);
-      const expireDateStr = expireDate.toISOString().split('.')[0];
-      
-      let phone = options.phone || '251900000000'; // Default if missing for credits
-      
-      const payload = {
-        cancelUrl: options.cancelUrl,
-        phone: phone,
-        email: options.email || "user@app.com",
-        nonce: nonce,
-        errorUrl: options.errorUrl,
-        notifyUrl: options.notifyUrl,
-        successUrl: options.successUrl,
-        expireDate: expireDateStr,
-        paymentMethods: ["CBE"], // CBE Birr only
-        lang: "EN",
-        items: [
-           {
-               name: "In-App Credits",
-               quantity: 1,
-               price: options.amount,
-               image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300"
-           }
-        ],
-        beneficiaries: options.beneficiaries || [
-          {
-            accountNumber: ARIFPAY_ACCOUNT_NUMBER,
-            bank: "AWINETAA",
-            amount: options.amount,
-          },
-        ],
-      };
-      
-      const url = `${this.baseUrl}/api/checkout/session`;
-      const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            "x-arifpay-key": this.apiKey,
-          },
-          body: JSON.stringify(payload),
-      });
-      
-      const responseText = await response.text();
-      const result = this.parseJsonResponse<Record<string, any>>(responseText, "Generic checkout session");
-      
-      if (!response.ok || result.error) {
-          throw new Error(result.msg || "Checkout creation failed");
-      }
-      
-      return {
-          checkoutUrl: result.data.paymentUrl,
-          sessionId: result.data.sessionId,
-          transactionId: result.data.transactionId || nonce // Fallback
-      };
+    const phone = this.normalizePhone(options.phone || '251911111111');
+    const nonce = uuidv4();
+    const expireDate = new Date();
+    expireDate.setHours(expireDate.getHours() + 24);
+    const expireDateStr = expireDate.toISOString().split('.')[0];
+
+    const payload = {
+      phone: phone,
+      email: options.email || "user@app.com",
+      nonce: nonce,
+      cancelUrl: options.cancelUrl,
+      errorUrl: options.errorUrl,
+      notifyUrl: options.notifyUrl,
+      successUrl: options.successUrl,
+      paymentMethods: ["CBE"], // Default to CBE
+      expireDate: expireDateStr,
+      items: [
+        {
+          name: "In-App Credits",
+          quantity: 1,
+          price: options.amount,
+          image: "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?w=300"
+        }
+      ],
+      beneficiaries: options.beneficiaries || [
+        {
+          accountNumber: ARIFPAY_ACCOUNT_NUMBER,
+          bank: "AWINETAA",
+          amount: options.amount,
+        },
+      ],
+      lang: "EN"
+    };
+
+    const url = `${this.baseUrl}/api/checkout/session`;
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-arifpay-key": this.apiKey,
+      },
+      body: JSON.stringify(payload),
+    });
+
+    const responseText = await response.text();
+    const result = this.parseJsonResponse<Record<string, any>>(responseText, "Credits checkout");
+
+    if (!response.ok || result.error) {
+      throw new Error(result.msg || "Checkout creation failed");
+    }
+
+    return {
+      checkoutUrl: result.data.paymentUrl,
+      sessionId: result.data.sessionId,
+      transactionId: result.data.transactionId || nonce
+    };
   }
 
   async verifyPayment(sessionId: string): Promise<ArifpayVerificationResponse> {
@@ -372,7 +289,7 @@ export class ArifpayClient {
 
     try {
       const url = `${this.baseUrl}/api/ms/transaction/status/${sessionId}`;
-      
+
       const response = await fetch(url, {
         method: "GET",
         headers: {
@@ -381,7 +298,6 @@ export class ArifpayClient {
       });
 
       const responseText = await response.text();
-      
       const result = this.parseJsonResponse<Record<string, any>>(responseText, "Verification");
 
       console.log("[Arifpay] Verification parsed response:", JSON.stringify(result, null, 2));

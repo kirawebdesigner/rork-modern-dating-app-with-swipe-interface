@@ -30,7 +30,7 @@ interface ProfileData {
   phone?: string;
 }
 
-const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'] as const;
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'] as const;
 
 export default function ProfileSetup() {
   const insets = useSafeAreaInsets();
@@ -40,6 +40,7 @@ export default function ProfileSetup() {
   const [selectedMonth, setSelectedMonth] = useState<number>(6);
   const [selectedDay, setSelectedDay] = useState<number | null>(null);
   const [typedYear, setTypedYear] = useState<string>('1995');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
   const [profileData, setProfileData] = useState<ProfileData>({
     firstName: '',
     lastName: '',
@@ -59,13 +60,13 @@ export default function ProfileSetup() {
     (async () => {
       try {
         if (!isAuthenticated || !user?.id) {
-            console.log('[ProfileSetup] Waiting for auth...', { isAuthenticated, hasUser: !!user?.id });
-            return;
+          console.log('[ProfileSetup] Waiting for auth...', { isAuthenticated, hasUser: !!user?.id });
+          return;
         }
 
         const id = user.id;
         console.log('[ProfileSetup] Checking profile for user:', id);
-        
+
         const saved = await AsyncStorage.getItem('profile_setup_state');
         if (saved) {
           const parsed = JSON.parse(saved) as { step: ProfileStep; data: ProfileData };
@@ -106,8 +107,8 @@ export default function ProfileSetup() {
         t('Save Progress?'),
         t('Do you want to save your progress and continue later?'),
         [
-          { 
-            text: t('Discard'), 
+          {
+            text: t('Discard'),
             style: 'destructive',
             onPress: async () => {
               await AsyncStorage.removeItem('profile_setup_state');
@@ -119,8 +120,8 @@ export default function ProfileSetup() {
               }
             }
           },
-          { 
-            text: t('Save & Exit'), 
+          {
+            text: t('Save & Exit'),
             style: 'default',
             onPress: async () => {
               await saveProgress();
@@ -160,217 +161,232 @@ export default function ProfileSetup() {
   };
 
   const handleContinue = async () => {
-    if (currentStep === 'details') {
-      if (!profileData.firstName.trim()) {
-        Alert.alert(t('Error'), t('Please enter your first name'));
-        return;
-      }
-      if (!profileData.photoUri) {
-        Alert.alert(t('Photo Required'), t('Please add at least one photo to continue'));
-        return;
-      }
-      if (!profileData.birthday) {
-        Alert.alert(t('Age restriction'), t('Choose birthday date'));
-        return;
-      }
-      const ageNow = calculateAge(profileData.birthday);
-      if (ageNow < 18) {
-        Alert.alert(t('Age restriction'), t('You must be at least 18 years old.'));
-        return;
-      }
-      setCurrentStep('gender');
-    } else if (currentStep === 'gender') {
-      if (!profileData.gender) {
-        Alert.alert(t('Error'), t('Please select your gender'));
-        return;
-      }
-      try {
-        const nextFilters = { ...filters, interestedIn: profileData.interestedIn } as any;
-        await setFilters(nextFilters);
-        console.log('[ProfileSetup] Set interestedIn to', profileData.interestedIn);
-      } catch (e) {
-        console.log('[ProfileSetup] setFilters failed', e);
-      }
-      setCurrentStep('extras');
-    } else if (currentStep === 'extras') {
-      if (profileData.phone && profileData.phone.length > 0 && profileData.phone.length < 10) {
-        Alert.alert(t('Error'), t('Please enter a valid phone number (min 10 digits)'));
-        return;
-      }
-      try {
-        if (!user || !user.id) {
-             Alert.alert(t('Error'), t('User session not found. Please login again.'));
-             return;
-        }
-        const storedId = user.id;
+    if (isLoading) return;
+    setIsLoading(true);
 
-        if (!TEST_MODE) {
-          const { data: dbProfile, error: fetchErr } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', storedId)
-            .maybeSingle();
-          if (fetchErr || !dbProfile) {
-            const { error: createErr } = await supabase.from('profiles').upsert({
+    try {
+      if (currentStep === 'details') {
+        if (!profileData.firstName.trim()) {
+          Alert.alert(t('Error'), t('Please enter your first name'));
+          return;
+        }
+        if (!profileData.photoUri) {
+          Alert.alert(t('Photo Required'), t('Please add at least one photo to continue'));
+          return;
+        }
+        if (!profileData.birthday) {
+          Alert.alert(t('Age restriction'), t('Choose birthday date'));
+          return;
+        }
+        const ageNow = calculateAge(profileData.birthday);
+        if (ageNow < 18) {
+          Alert.alert(t('Age restriction'), t('You must be at least 18 years old.'));
+          return;
+        }
+        setCurrentStep('gender');
+      } else if (currentStep === 'gender') {
+        if (!profileData.gender) {
+          Alert.alert(t('Error'), t('Please select your gender'));
+          return;
+        }
+        try {
+          const nextFilters = { ...filters, interestedIn: profileData.interestedIn } as any;
+          await setFilters(nextFilters);
+          console.log('[ProfileSetup] Set interestedIn to', profileData.interestedIn);
+        } catch (e) {
+          console.log('[ProfileSetup] setFilters failed', e);
+        }
+        setCurrentStep('extras');
+      } else if (currentStep === 'extras') {
+        if (profileData.phone && profileData.phone.length > 0 && profileData.phone.length < 10) {
+          Alert.alert(t('Error'), t('Please enter a valid phone number (min 10 digits)'));
+          return;
+        }
+        try {
+          if (!user || !user.id) {
+            Alert.alert(t('Error'), t('User session not found. Please login again.'));
+            return;
+          }
+          const storedId = user.id;
+
+          if (!TEST_MODE) {
+            const { data: dbProfile, error: fetchErr } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('id', storedId)
+              .maybeSingle();
+            if (fetchErr || !dbProfile) {
+              const { error: createErr } = await supabase.from('profiles').upsert({
                 id: storedId,
                 email: user.email,
                 name: `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim()
-            }, { onConflict: 'id' });
-            
-            if (createErr) {
-               console.log('[ProfileSetup] Profile creation failed:', createErr.message);
+              }, { onConflict: 'id' });
+
+              if (createErr) {
+                console.log('[ProfileSetup] Profile creation failed:', createErr.message);
+              }
             }
           }
+
+          const authId = storedId;
+          const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
+          const birthday = profileData.birthday ?? new Date(1995, 0, 1);
+          const age = calculateAge(birthday);
+          const newProfile: User = {
+            id: authId,
+            name: name || 'New User',
+            age,
+            birthday,
+            gender: (profileData.gender ?? 'girl'),
+            interestedIn: profileData.interestedIn ?? undefined,
+            bio: 'Hey there! I am new here.',
+            photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+            interests: profileData.interests,
+            location: { city: profileData.city ?? '' },
+            heightCm: profileData.heightCm ? Number(profileData.heightCm) : undefined,
+            education: profileData.education ?? undefined,
+            verified: false,
+            isPremium: false,
+            lastActive: new Date(),
+          } as User;
+
+          if (!TEST_MODE) {
+            try {
+              const { error: upErr } = await supabase
+                .from('profiles')
+                .update({
+                  name: newProfile.name,
+                  age: newProfile.age,
+                  birthday: birthday.toISOString().slice(0, 10),
+                  gender: newProfile.gender,
+                  interested_in: newProfile.interestedIn ?? null,
+                  bio: newProfile.bio,
+                  photos: newProfile.photos,
+                  interests: newProfile.interests,
+                  city: newProfile.location?.city ?? null,
+                  height_cm: newProfile.heightCm ?? null,
+                  education: newProfile.education ?? null,
+                  phone: profileData.phone || null,
+                  completed: false,
+                })
+                .eq('id', authId);
+              if (upErr) {
+                console.log('[ProfileSetup] profiles update (extras) error', upErr.message);
+              }
+            } catch (dbErr) {
+              console.log('[ProfileSetup] Supabase update (extras) exception', dbErr);
+            }
+          }
+
+          if (profileData.phone) {
+            await AsyncStorage.setItem('user_phone', profileData.phone);
+          }
+          await setCurrentProfile(newProfile);
+          console.log('[ProfileSetup] Saved partial profile (extras)');
+        } catch (e) {
+          console.log('[ProfileSetup] Save profile error', e);
         }
-        
-        const authId = storedId;
-        const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
-        const birthday = profileData.birthday ?? new Date(1995, 0, 1);
-        const age = calculateAge(birthday);
-        const newProfile: User = {
-          id: authId,
-          name: name || 'New User',
-          age,
-          birthday,
-          gender: (profileData.gender ?? 'girl'),
-          interestedIn: profileData.interestedIn ?? undefined,
-          bio: 'Hey there! I am new here.',
-          photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
-          interests: profileData.interests,
-          location: { city: profileData.city ?? '' },
-          heightCm: profileData.heightCm ? Number(profileData.heightCm) : undefined,
-          education: profileData.education ?? undefined,
-          verified: false,
-          isPremium: false,
-          lastActive: new Date(),
-        } as User;
-        
-        if (!TEST_MODE) {
-          try {
-            const { error: upErr } = await supabase
+        setCurrentStep('interests');
+      } else if (currentStep === 'interests') {
+        try {
+          if (!user || !user.id) {
+            Alert.alert(t('Error'), t('User session not found. Please login again.'));
+            return;
+          }
+          const storedId = user.id;
+
+          if (!TEST_MODE) {
+            const { data: dbProfile, error: fetchErr } = await supabase
               .from('profiles')
-              .update({
-                name: newProfile.name,
-                age: newProfile.age,
-                birthday: birthday.toISOString().slice(0,10),
-                gender: newProfile.gender,
-                interested_in: newProfile.interestedIn ?? null,
-                bio: newProfile.bio,
-                photos: newProfile.photos,
-                interests: newProfile.interests,
-                city: newProfile.location?.city ?? null,
-                height_cm: newProfile.heightCm ?? null,
-                education: newProfile.education ?? null,
-                phone: profileData.phone || null,
-                completed: false,
-              })
-              .eq('id', authId);
-            if (upErr) {
-              console.log('[ProfileSetup] profiles update (extras) error', upErr.message);
+              .select('id')
+              .eq('id', storedId)
+              .maybeSingle();
+            if (fetchErr || !dbProfile) {
+              console.log('[ProfileSetup] Profile verification failed:', fetchErr?.message);
             }
-          } catch (dbErr) {
-            console.log('[ProfileSetup] Supabase update (extras) exception', dbErr);
           }
-        }
-        
-        if (profileData.phone) {
-          await AsyncStorage.setItem('user_phone', profileData.phone);
-        }
-        await setCurrentProfile(newProfile);
-        console.log('[ProfileSetup] Saved partial profile (extras)');
-      } catch (e) {
-        console.log('[ProfileSetup] Save profile error', e);
-      }
-      setCurrentStep('interests');
-    } else if (currentStep === 'interests') {
-      try {
-        if (!user || !user.id) {
-             Alert.alert(t('Error'), t('User session not found. Please login again.'));
-             return;
-        }
-        const storedId = user.id;
-        
-        if (!TEST_MODE) {
-          const { data: dbProfile, error: fetchErr } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('id', storedId)
-            .maybeSingle();
-          if (fetchErr || !dbProfile) {
-             console.log('[ProfileSetup] Profile verification failed:', fetchErr?.message);
-          }
-        }
-        const authId = storedId;
-        const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
-        const birthday = profileData.birthday ?? new Date(1995, 0, 1);
-        const age = calculateAge(birthday);
-        const newProfile: User = {
-          id: authId,
-          name: name || 'New User',
-          age,
-          birthday,
-          gender: (profileData.gender ?? 'girl'),
-          interestedIn: profileData.interestedIn ?? undefined,
-          bio: 'Hey there! I am new here.',
-          photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
-          interests: profileData.interests,
-          location: { city: profileData.city ?? '' },
-          heightCm: profileData.heightCm ? Number(profileData.heightCm) : undefined,
-          education: profileData.education ?? undefined,
-          verified: false,
-          isPremium: false,
-          lastActive: new Date(),
-          completed: true,
-        } as User;
-        
-        if (!TEST_MODE) {
-          try {
-            const { error: upErr } = await supabase
-              .from('profiles')
-              .update({
-                name: newProfile.name,
-                age: newProfile.age,
-                birthday: birthday.toISOString().slice(0,10),
-                gender: newProfile.gender,
-                interested_in: newProfile.interestedIn ?? null,
-                bio: newProfile.bio,
-                photos: newProfile.photos,
-                interests: newProfile.interests,
-                city: newProfile.location?.city ?? null,
-                height_cm: newProfile.heightCm ?? null,
-                education: newProfile.education ?? null,
-                completed: true,
-              })
-              .eq('id', authId);
-            if (upErr) {
-              console.log('[ProfileSetup] profiles update (final) error', upErr.message);
+          const authId = storedId;
+          const name = `${profileData.firstName.trim()} ${profileData.lastName.trim()}`.trim();
+          const birthday = profileData.birthday ?? new Date(1995, 0, 1);
+          const age = calculateAge(birthday);
+          const newProfile: User = {
+            id: authId,
+            name: name || 'New User',
+            age,
+            birthday,
+            gender: (profileData.gender ?? 'girl'),
+            interestedIn: profileData.interestedIn ?? undefined,
+            bio: 'Hey there! I am new here.',
+            photos: [profileData.photoUri ?? 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+            interests: profileData.interests,
+            location: { city: profileData.city ?? '' },
+            heightCm: profileData.heightCm ? Number(profileData.heightCm) : undefined,
+            education: profileData.education ?? undefined,
+            verified: false,
+            isPremium: false,
+            lastActive: new Date(),
+            completed: true,
+          } as User;
+
+          if (!TEST_MODE) {
+            try {
+              const { error: upErr } = await supabase
+                .from('profiles')
+                .update({
+                  name: newProfile.name,
+                  age: newProfile.age,
+                  birthday: birthday.toISOString().slice(0, 10),
+                  gender: newProfile.gender,
+                  interested_in: newProfile.interestedIn ?? null,
+                  bio: newProfile.bio,
+                  photos: newProfile.photos,
+                  interests: newProfile.interests,
+                  city: newProfile.location?.city ?? null,
+                  height_cm: newProfile.heightCm ?? null,
+                  education: newProfile.education ?? null,
+                  completed: true,
+                })
+                .eq('id', authId);
+              if (upErr) {
+                console.log('[ProfileSetup] profiles update (final) error', upErr.message);
+              }
+            } catch (dbErr) {
+              console.log('[ProfileSetup] Supabase update (final) exception', dbErr);
             }
-          } catch (dbErr) {
-            console.log('[ProfileSetup] Supabase update (final) exception', dbErr);
           }
+          await setCurrentProfile(newProfile);
+          console.log('[ProfileSetup] Saved profile on interests');
+        } catch (e) {
+          console.log('[ProfileSetup] Final save error', e);
         }
-        await setCurrentProfile(newProfile);
-        console.log('[ProfileSetup] Saved profile on interests');
-      } catch (e) {
-        console.log('[ProfileSetup] Final save error', e);
+        try {
+          await AsyncStorage.removeItem('profile_setup_state');
+          console.log('[ProfileSetup] Setup completed successfully');
+          setIsLoading(false);
+
+          Alert.alert(
+            t('Welcome!'),
+            t('Your profile has been created successfully. Start discovering matches now!'),
+            [{
+              text: t('Start Exploring'),
+              onPress: () => router.replace('/(tabs)' as any)
+            }]
+          );
+        } catch (e) {
+          console.log('[ProfileSetup] Cleanup error', e);
+          router.replace('/(tabs)' as any);
+        }
       }
-      try {
-        await AsyncStorage.removeItem('profile_setup_state');
-        console.log('[ProfileSetup] Setup completed successfully');
-        
-        Alert.alert(
-          t('Welcome!'),
-          t('Your profile has been created successfully. Start discovering matches now!'),
-          [{ 
-            text: t('Start Exploring'), 
-            onPress: () => router.replace('/(tabs)' as any)
-          }]
-        );
-      } catch (e) {
-        console.log('[ProfileSetup] Cleanup error', e);
-        router.replace('/(tabs)' as any);
-      }
+    } finally {
+      setIsLoading(false);
     }
+  };
+
+  const onContinuePress = () => {
+    handleContinue().catch((err) => {
+      console.log('[ProfileSetup] handleContinue error:', err);
+      setIsLoading(false);
+    });
   };
 
   const formatDate = (date: Date) => {
@@ -394,7 +410,7 @@ export default function ProfileSetup() {
         Alert.alert(t('Permission required'), t('We need access to your photos to set a profile picture.'));
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1,1], quality: 0.9 });
+      const result = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ImagePicker.MediaTypeOptions.Images, allowsEditing: true, aspect: [1, 1], quality: 0.9 });
       if (!result.canceled) {
         const uri = result.assets?.[0]?.uri ?? null;
         setProfileData(prev => ({ ...prev, photoUri: uri }));
@@ -464,7 +480,7 @@ export default function ProfileSetup() {
       </TouchableOpacity>
 
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-        <GradientButton title={t('Confirm')} onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Confirm')} onPress={onContinuePress} loading={isLoading} disabled={isLoading} style={styles.confirmButton} testID="continue-details" />
       </View>
     </View>
   );
@@ -495,7 +511,7 @@ export default function ProfileSetup() {
 
 
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-        <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Continue')} onPress={onContinuePress} loading={isLoading} disabled={isLoading} style={styles.confirmButton} testID="continue-gender" />
       </View>
     </View>
   );
@@ -556,7 +572,7 @@ export default function ProfileSetup() {
           <TextInput
             style={styles.textInput}
             value={profileData.heightCm ?? ''}
-            onChangeText={(text) => setProfileData(prev => ({ ...prev, heightCm: text.replace(/[^0-9]/g,'') }))}
+            onChangeText={(text) => setProfileData(prev => ({ ...prev, heightCm: text.replace(/[^0-9]/g, '') }))}
             placeholder={t('Height (cm) placeholder')}
             placeholderTextColor={colors.text.light}
             inputMode="numeric"
@@ -573,12 +589,12 @@ export default function ProfileSetup() {
             testID="education-input"
           />
           <View style={styles.quickRow}>
-            {['High school','Bachelor','Master','PhD'].map((level) => (
+            {['High school', 'Bachelor', 'Master', 'PhD'].map((level) => (
               <TouchableOpacity
                 key={level}
                 onPress={() => setProfileData(prev => ({ ...prev, education: level }))}
                 style={[styles.chip, (profileData.education ?? '') === level && styles.chipActive]}
-                testID={`edu-${level.toLowerCase().replace(/\s+/g,'-')}`}
+                testID={`edu-${level.toLowerCase().replace(/\s+/g, '-')}`}
               >
                 <Text style={[styles.chipText, (profileData.education ?? '') === level && styles.chipTextActive]}>{t(level)}</Text>
               </TouchableOpacity>
@@ -595,7 +611,7 @@ export default function ProfileSetup() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-        <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Continue')} onPress={onContinuePress} loading={isLoading} disabled={isLoading} style={styles.confirmButton} testID="continue-extras" />
       </View>
     </View>
   );
@@ -617,7 +633,7 @@ export default function ProfileSetup() {
         <View style={styles.bottomSpacing} />
       </ScrollView>
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-        <GradientButton title={t('Continue')} onPress={handleContinue} style={styles.confirmButton} />
+        <GradientButton title={t('Continue')} onPress={onContinuePress} loading={isLoading} disabled={isLoading} style={styles.confirmButton} testID="continue-interests" />
       </View>
     </View>
   );
@@ -708,21 +724,21 @@ export default function ProfileSetup() {
 
   const renderDatePickerModal = () => (
     <Modal visible={showDatePicker} transparent animationType="slide" onRequestClose={() => setShowDatePicker(false)}>
-      <KeyboardAvoidingView 
-        style={styles.modalOverlay} 
+      <KeyboardAvoidingView
+        style={styles.modalOverlay}
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         keyboardVerticalOffset={0}
       >
-        <TouchableOpacity 
-          activeOpacity={1} 
-          style={styles.modalOverlayPressable} 
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.modalOverlayPressable}
           onPress={() => setShowDatePicker(false)}
         />
         <View style={[styles.datePickerContainer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
           <View style={styles.datePickerHandle}>
             <View style={styles.datePickerHandleBar} />
           </View>
-          <ScrollView 
+          <ScrollView
             showsVerticalScrollIndicator={false}
             keyboardShouldPersistTaps="handled"
             contentContainerStyle={styles.datePickerScrollContent}
@@ -793,17 +809,17 @@ export default function ProfileSetup() {
             <View style={styles.monthsGrid}>
               {MONTHS.map((m: string, idx: number) => (
                 <TouchableOpacity key={m} testID={`month-${idx}`} onPress={() => setSelectedMonth(idx)} style={[styles.monthChip, selectedMonth === idx && styles.monthChipActive]}>
-                  <Text style={[styles.monthChipText, selectedMonth === idx && styles.monthChipTextActive]}>{m.slice(0,3)}</Text>
+                  <Text style={[styles.monthChipText, selectedMonth === idx && styles.monthChipTextActive]}>{m.slice(0, 3)}</Text>
                 </TouchableOpacity>
               ))}
             </View>
             <View style={styles.weekDaysContainer}>
-              {['S','M','T','W','T','F','S'].map((d, i) => (
+              {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d, i) => (
                 <Text key={i} style={styles.weekDayText}>{d}</Text>
               ))}
             </View>
             <CalendarGrid />
-            </ScrollView>
+          </ScrollView>
           <View style={styles.datePickerFooter}>
             <GradientButton title={t('Save')} onPress={handleSaveDate} style={[styles.saveButton, !selectedDay && styles.saveButtonDisabled]} disabled={!selectedDay} testID="save-date" />
           </View>
@@ -847,26 +863,26 @@ const styles = StyleSheet.create({
   genderOptionText: { fontSize: 18, fontWeight: '600', color: colors.text.primary },
   genderOptionTextSelected: { color: colors.text.white },
   categoryContainer: { marginBottom: 32 },
-  categoryTitle: { 
-    fontSize: 20, 
-    fontWeight: '700', 
-    color: colors.text.primary, 
+  categoryTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: colors.text.primary,
     marginBottom: 16,
     letterSpacing: 0.3,
   },
-  interestsGrid: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
+  interestsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
     gap: 10,
   },
-  interestTag: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    paddingHorizontal: 18, 
-    paddingVertical: 12, 
-    borderRadius: 30, 
-    borderWidth: 2, 
-    borderColor: colors.border, 
+  interestTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 30,
+    borderWidth: 2,
+    borderColor: colors.border,
     backgroundColor: colors.backgroundSecondary,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -874,23 +890,23 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     elevation: 2,
   },
-  interestTagSelected: { 
-    backgroundColor: colors.primary, 
+  interestTagSelected: {
+    backgroundColor: colors.primary,
     borderColor: colors.primary,
     shadowOpacity: 0.15,
     elevation: 4,
   },
-  interestIcon: { 
-    fontSize: 18, 
+  interestIcon: {
+    fontSize: 18,
     marginRight: 8,
   },
-  interestText: { 
-    fontSize: 15, 
-    fontWeight: '600', 
+  interestText: {
+    fontSize: 15,
+    fontWeight: '600',
     color: colors.text.primary,
     letterSpacing: 0.2,
   },
-  interestTextSelected: { 
+  interestTextSelected: {
     color: colors.text.white,
     fontWeight: '700',
   },
@@ -919,13 +935,13 @@ const styles = StyleSheet.create({
   chipTextActive: { color: colors.text.white },
   modalOverlay: { flex: 1, justifyContent: 'flex-end' },
   modalOverlayPressable: { flex: 1, backgroundColor: colors.overlay },
-  datePickerContainer: { 
-    backgroundColor: colors.background, 
-    borderTopLeftRadius: 32, 
-    borderTopRightRadius: 32, 
-    paddingHorizontal: 24, 
+  datePickerContainer: {
+    backgroundColor: colors.background,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    paddingHorizontal: 24,
     paddingTop: 8,
-    paddingBottom: 16, 
+    paddingBottom: 16,
     maxHeight: '85%',
     shadowColor: '#000',
     shadowOpacity: 0.25,
@@ -946,10 +962,10 @@ const styles = StyleSheet.create({
   datePickerScrollContent: {
     paddingBottom: 20,
   },
-  datePickerHeader: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
+  datePickerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
     marginBottom: 24,
   },
   closeButton: {
@@ -963,39 +979,39 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: colors.primary,
   },
-  datePickerTitle: { 
-    fontSize: 26, 
-    fontWeight: '800', 
+  datePickerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
     color: colors.text.primary,
     letterSpacing: 0.3,
   },
-  monthYearContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    alignItems: 'center', 
-    marginBottom: 20, 
+  monthYearContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
     paddingHorizontal: 12,
     backgroundColor: colors.backgroundSecondary,
     borderRadius: 20,
     paddingVertical: 16,
   },
-  monthNavButton: { 
-    width: 36, 
-    height: 36, 
-    justifyContent: 'center', 
+  monthNavButton: {
+    width: 36,
+    height: 36,
+    justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 18,
     backgroundColor: colors.background,
   },
   monthYearDisplay: { alignItems: 'center', flex: 1 },
   yearRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 8 },
-  yearMiniBtn: { 
-    flexDirection: 'row', 
-    alignItems: 'center', 
-    gap: 3, 
-    paddingHorizontal: 8, 
-    paddingVertical: 5, 
-    borderRadius: 10, 
+  yearMiniBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 3,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    borderRadius: 10,
     backgroundColor: colors.background,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -1004,15 +1020,15 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   yearMiniBtnText: { color: colors.primary, fontWeight: '700', fontSize: 11 },
-  yearInput: { 
-    fontSize: 24, 
-    fontWeight: '800', 
-    color: colors.primary, 
-    textAlign: 'center', 
-    borderRadius: 12, 
-    paddingHorizontal: 12, 
-    paddingVertical: 8, 
-    minWidth: 100, 
+  yearInput: {
+    fontSize: 24,
+    fontWeight: '800',
+    color: colors.primary,
+    textAlign: 'center',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minWidth: 100,
     backgroundColor: colors.background,
     shadowColor: '#000',
     shadowOpacity: 0.05,
@@ -1021,20 +1037,20 @@ const styles = StyleSheet.create({
     elevation: 1,
   },
   monthText: { fontSize: 16, fontWeight: '700', color: colors.text.primary, letterSpacing: 0.5 },
-  monthsGrid: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    gap: 6, 
-    justifyContent: 'center', 
+  monthsGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 6,
+    justifyContent: 'center',
     marginBottom: 16,
     paddingHorizontal: 4,
   },
-  monthChip: { 
-    paddingHorizontal: 12, 
-    paddingVertical: 10, 
-    borderRadius: 14, 
+  monthChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 14,
     backgroundColor: colors.backgroundSecondary,
-    minWidth: 52, 
+    minWidth: 52,
     alignItems: 'center',
     shadowColor: '#000',
     shadowOpacity: 0.04,
@@ -1042,7 +1058,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 1 },
     elevation: 1,
   },
-  monthChipActive: { 
+  monthChipActive: {
     backgroundColor: colors.primary,
     shadowOpacity: 0.15,
     shadowRadius: 6,
@@ -1050,37 +1066,37 @@ const styles = StyleSheet.create({
   },
   monthChipText: { color: colors.text.primary, fontWeight: '600', fontSize: 13 },
   monthChipTextActive: { color: colors.text.white, fontWeight: '800' },
-  weekDaysContainer: { 
-    flexDirection: 'row', 
-    justifyContent: 'space-between', 
-    marginBottom: 12, 
+  weekDaysContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
     paddingHorizontal: 8,
   },
-  weekDayText: { 
-    fontSize: 12, 
-    fontWeight: '700', 
-    color: colors.text.secondary, 
-    width: '14.2857%', 
+  weekDayText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: colors.text.secondary,
+    width: '14.2857%',
     textAlign: 'center',
     letterSpacing: 0.5,
   },
-  calendarGrid: { 
-    flexDirection: 'row', 
-    flexWrap: 'wrap', 
-    justifyContent: 'flex-start', 
-    marginBottom: 24, 
+  calendarGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'flex-start',
+    marginBottom: 24,
     paddingHorizontal: 8,
   },
   calendarDayCell: { width: '14.2857%' },
   calendarDay: { height: 40, marginBottom: 6 },
-  calendarDayButton: { 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+  calendarDayButton: {
+    justifyContent: 'center',
+    alignItems: 'center',
     borderRadius: 20,
     backgroundColor: colors.backgroundSecondary,
     marginHorizontal: 2,
   },
-  calendarDaySelected: { 
+  calendarDaySelected: {
     backgroundColor: colors.primary,
     shadowColor: colors.primary,
     shadowOpacity: 0.3,

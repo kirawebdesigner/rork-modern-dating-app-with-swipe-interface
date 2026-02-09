@@ -125,27 +125,37 @@ export default function RootLayout() {
     );
   }
 
-  return (
-    <ErrorBoundary>
-      <trpc.Provider client={trpcClient} queryClient={queryClient}>
-        <QueryClientProvider client={queryClient}>
-          <GestureHandlerRootView style={{ flex: 1 }}>
-            <AuthProvider>
-              <AppProvider>
-                <MembershipProvider>
-                  <I18nProvider>
-                    <ThemeProvider>
-                      <RootLayoutNav />
-                    </ThemeProvider>
-                  </I18nProvider>
-                </MembershipProvider>
-              </AppProvider>
-            </AuthProvider>
-          </GestureHandlerRootView>
-        </QueryClientProvider>
-      </trpc.Provider>
-    </ErrorBoundary>
-  );
+  try {
+    return (
+      <ErrorBoundary>
+        <trpc.Provider client={trpcClient} queryClient={queryClient}>
+          <QueryClientProvider client={queryClient}>
+            <GestureHandlerRootView style={{ flex: 1 }}>
+              <AuthProvider>
+                <AppProvider>
+                  <MembershipProvider>
+                    <I18nProvider>
+                      <ThemeProvider>
+                        <RootLayoutNav />
+                      </ThemeProvider>
+                    </I18nProvider>
+                  </MembershipProvider>
+                </AppProvider>
+              </AuthProvider>
+            </GestureHandlerRootView>
+          </QueryClientProvider>
+        </trpc.Provider>
+      </ErrorBoundary>
+    );
+  } catch (error) {
+    console.error('[RootLayout] Failed to render:', error);
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorTitle}>Failed to start app</Text>
+        <Text style={styles.errorText}>{error instanceof Error ? error.message : 'Unknown error'}</Text>
+      </View>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
