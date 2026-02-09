@@ -31,48 +31,48 @@ export default publicProcedure
           .single();
 
         if (transaction && transaction.status !== 'completed') {
-           console.log("[tRPC] Transaction found, upgrading user:", transaction.user_id);
-           
-           const userId = transaction.user_id;
-           const amount = verification.amount || transaction.amount;
-           let tier = transaction.tier || 'free';
+          console.log("[tRPC] Transaction found, upgrading user:", transaction.user_id);
 
-           // Fallback tier logic
-           if (tier === 'free') {
-              if (amount >= 4800) tier = 'vip';
-              else if (amount >= 3200) tier = 'gold';
-              else if (amount >= 1600) tier = 'silver';
-           }
+          const userId = transaction.user_id;
+          const amount = verification.amount || transaction.amount;
+          let tier = transaction.tier || 'free';
 
-           const now = new Date();
-           const expiresAt = new Date();
-           expiresAt.setMonth(expiresAt.getMonth() + 1);
+          // Fallback tier logic
+          if (tier === 'free') {
+            if (amount >= 2600) tier = 'vip';
+            else if (amount >= 1500) tier = 'gold';
+            else if (amount >= 500) tier = 'silver';
+          }
 
-           // Update Membership
-           await supabase
-             .from('memberships')
-             .upsert({
-               user_id: userId,
-               tier,
-               expires_at: expiresAt.toISOString(),
-               updated_at: now.toISOString(),
-             }, { onConflict: 'user_id' });
+          const now = new Date();
+          const expiresAt = new Date();
+          expiresAt.setMonth(expiresAt.getMonth() + 1);
 
-           // Update Transaction
-           await supabase
-             .from('payment_transactions')
-             .update({
-               status: 'completed',
-               completed_at: now.toISOString(),
-               arifpay_transaction_id: verification.transactionId
-             })
-             .eq('id', transaction.id);
+          // Update Membership
+          await supabase
+            .from('memberships')
+            .upsert({
+              user_id: userId,
+              tier,
+              expires_at: expiresAt.toISOString(),
+              updated_at: now.toISOString(),
+            }, { onConflict: 'user_id' });
 
-           // Update Profile
-           await supabase
-             .from('profiles')
-             .update({ is_premium: true })
-             .eq('id', userId);
+          // Update Transaction
+          await supabase
+            .from('payment_transactions')
+            .update({
+              status: 'completed',
+              completed_at: now.toISOString(),
+              arifpay_transaction_id: verification.transactionId
+            })
+            .eq('id', transaction.id);
+
+          // Update Profile
+          await supabase
+            .from('profiles')
+            .update({ is_premium: true })
+            .eq('id', userId);
         }
       }
 

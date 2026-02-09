@@ -18,6 +18,7 @@ import GradientButton from '@/components/GradientButton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
 import { useAuth } from '@/hooks/auth-context';
+import { trpc } from '@/lib/trpc';
 import { MembershipTier } from '@/types';
 
 interface TierFeature {
@@ -140,80 +141,7 @@ export default function PremiumScreen() {
     return normalized.length === 12 && normalized.startsWith('251');
   };
 
-  const createArifPayPayment = async (userId: string, tierName: string, amount: number, userPhone: string) => {
-    console.log('[Premium] Creating ArifPay payment directly...');
-
-    // Normalize the phone number to 251 format
-    const normalizedPhone = normalizePhone(userPhone);
-    console.log('[Premium] Using phone:', normalizedPhone);
-
-    const sessionId = `pay_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-    const expireDate = new Date();
-    expireDate.setHours(expireDate.getHours() + 24);
-    const expireDateStr = expireDate.toISOString().replace('.000Z', 'Z');
-
-    const payload = {
-      cancelUrl: 'https://zewijuna.app/payment-cancel',
-      phone: normalizedPhone,
-      email: `${userId}@app.com`,
-      nonce: sessionId,
-      successUrl: `https://zewijuna.app/payment-success?tier=${tierName}&session=${sessionId}`,
-      errorUrl: 'https://zewijuna.app/payment-error',
-      notifyUrl: 'https://01sqivqojn0aq61khqyvn.rork.app/api/webhooks/arifpay',
-      paymentMethods: ['TELEBIRR', 'CBE', 'AWAASH'],
-      expireDate: expireDateStr,
-      items: [
-        {
-          name: `${tierName.charAt(0).toUpperCase() + tierName.slice(1)} Membership`,
-          quantity: 1,
-          price: amount,
-          description: `Premium ${tierName} membership subscription`
-        },
-      ],
-      beneficiaries: [
-        {
-          accountNumber: "01320811436100",
-          bank: "AWINETAA",
-          amount: amount
-        },
-      ],
-      lang: "EN"
-    };
-
-    console.log('[Premium] ArifPay payload:', JSON.stringify(payload, null, 2));
-
-    try {
-      const response = await fetch('https://gateway.arifpay.net/api/checkout/session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-arifpay-key': 'hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY',
-        },
-        body: JSON.stringify(payload),
-      });
-
-      const responseText = await response.text();
-      console.log('[Premium] ArifPay response:', responseText.substring(0, 500));
-
-      if (responseText.startsWith('<')) {
-        throw new Error('Payment service returned an unexpected response. Please try again.');
-      }
-
-      const result = JSON.parse(responseText);
-
-      if (result.error === false && result.data?.paymentUrl) {
-        return {
-          paymentUrl: result.data.paymentUrl,
-          sessionId: result.data.sessionId || sessionId,
-        };
-      } else {
-        throw new Error(result.msg || 'Failed to create payment session');
-      }
-    } catch (err: any) {
-      console.error('[Premium] ArifPay error:', err);
-      throw new Error(err.message || 'Payment service unavailable');
-    }
-  };
+  const upgradeMutation = trpc.membership.upgrade.useMutation();
 
   // Show phone modal when upgrade button is pressed
   const handleUpgrade = async () => {
@@ -258,26 +186,39 @@ export default function PremiumScreen() {
     setShowPhoneModal(false);
     setIsProcessing(true);
 
-    const amount = tierData[selectedTier].priceMonthly;
-
     try {
-      // Create payment with user's phone number
-      const payment = await createArifPayPayment(user!.id, selectedTier, amount, phoneNumber);
+      console.log(`[Premium] Initiating ${selectedTier} upgrade for ${user?.id} with phone ${phoneNumber}`);
+
+      const result = await upgradeMutation.mutateAsync({
+        userId: user!.id,
+        tier: selectedTier,
+        phone: normalizePhone(phoneNumber),
+        paymentMethod: 'TELEBIRR', // Default for direct redirect
+      });
 
       setIsProcessing(false);
 
-      // Open payment URL
-      Linking.openURL(payment.paymentUrl);
+      if (result.success && result.requiresPayment && result.paymentUrl) {
+        // Open payment URL
+        console.log('[Premium] Redirecting to:', result.paymentUrl);
+        Linking.openURL(result.paymentUrl);
 
-      Alert.alert(
-        'Payment',
-        'Redirecting to payment page. You will receive a confirmation on your phone.',
-        [{ text: 'OK' }]
-      );
+        Alert.alert(
+          'Payment',
+          'Redirecting to payment page. You will receive a confirmation on your phone.',
+          [{ text: 'OK' }]
+        );
+      } else if (result.success && !result.requiresPayment) {
+        await upgradeTier(selectedTier);
+        Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
+          [{ text: 'OK', onPress: () => router.back() }]);
+      } else {
+        throw new Error('Failed to create payment session from server');
+      }
     } catch (error: any) {
       setIsProcessing(false);
-      console.error('[Premium] Payment error:', error);
-      Alert.alert('Payment Failed', error.message || 'Failed to create payment. Please try again.');
+      console.error('[Premium] Upgrade error:', error);
+      Alert.alert('Upgrade Failed', error.message || 'Failed to initiate upgrade. Please try again.');
     }
   };
 

@@ -480,7 +480,7 @@ export default function ProfileSetup() {
       </TouchableOpacity>
 
       <View style={[styles.bottomContainerFixed, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]}>
-        <GradientButton title={t('Confirm')} onPress={onContinuePress} loading={isLoading} disabled={isLoading} style={styles.confirmButton} testID="continue-details" />
+        <GradientButton title={t('Continue')} onPress={onContinuePress} loading={isLoading} disabled={isLoading} style={styles.confirmButton} testID="continue-details" />
       </View>
     </View>
   );
@@ -821,7 +821,7 @@ export default function ProfileSetup() {
             <CalendarGrid />
           </ScrollView>
           <View style={styles.datePickerFooter}>
-            <GradientButton title={t('Save')} onPress={handleSaveDate} style={[styles.saveButton, !selectedDay && styles.saveButtonDisabled]} disabled={!selectedDay} testID="save-date" />
+            <GradientButton title={t('Save')} onPress={handleSaveDate} style={StyleSheet.flatten([styles.saveButton, !selectedDay && styles.saveButtonDisabled])} disabled={!selectedDay} testID="save-date" />
           </View>
         </View>
       </KeyboardAvoidingView>
