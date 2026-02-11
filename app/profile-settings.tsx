@@ -1,6 +1,7 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, Alert, SafeAreaView, Platform, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
 import { useI18n } from '@/hooks/i18n-context';
 import { useApp } from '@/hooks/app-context';
@@ -130,7 +131,7 @@ export default function ProfileSettings() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity testID="btn-back" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); } }} style={styles.backButton}>
+        <TouchableOpacity testID="btn-back" onPress={() => safeGoBack(router, '/(tabs)/profile')} style={styles.backButton}>
           <ArrowLeft size={24} color={Colors.text.white} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>{t('Profile Settings')}</Text>
@@ -420,7 +421,7 @@ export default function ProfileSettings() {
             await updateProfile({ name, age: nextAge, photos, bio, interests, instagram: ig, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
             await setFilters({ ...filters, distanceKm: radius });
             Alert.alert(t('Applied'), t('Profile updated successfully!'));
-            if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); }
+            safeGoBack(router, '/(tabs)/profile')
           }}
           style={styles.saveButton}
         />

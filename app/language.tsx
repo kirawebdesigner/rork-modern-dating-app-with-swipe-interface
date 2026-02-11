@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import { ArrowLeft, Check } from 'lucide-react-native';
@@ -58,7 +59,7 @@ export default function LanguageScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity accessibilityLabel="Go back" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/settings' as any); } }} testID="language-back-btn" style={styles.backBtn}>
+        <TouchableOpacity accessibilityLabel="Go back" onPress={() => safeGoBack(router, '/settings')} testID="language-back-btn" style={styles.backBtn}>
           <ArrowLeft size={20} color={Colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>{t('Language')}</Text>

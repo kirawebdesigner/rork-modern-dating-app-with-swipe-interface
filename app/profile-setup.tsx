@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, TextInput, ScrollView, Modal, Alert, Platform, Image, KeyboardAvoidingView } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { router } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { ArrowLeft, Camera, Calendar, Check, ChevronLeft, ChevronRight, Minus, Plus } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
 import colors from '@/constants/colors';
@@ -112,12 +113,7 @@ export default function ProfileSetup() {
             style: 'destructive',
             onPress: async () => {
               await AsyncStorage.removeItem('profile_setup_state');
-              const canGoBack = (router as any)?.canGoBack?.() ?? false;
-              if (canGoBack) {
-                router.back();
-              } else {
-                router.replace('/(tabs)' as any);
-              }
+              safeGoBack(router, '/(tabs)')
             }
           },
           {
@@ -125,12 +121,7 @@ export default function ProfileSetup() {
             style: 'default',
             onPress: async () => {
               await saveProgress();
-              const canGoBack = (router as any)?.canGoBack?.() ?? false;
-              if (canGoBack) {
-                router.back();
-              } else {
-                router.replace('/(tabs)' as any);
-              }
+              safeGoBack(router, '/(tabs)')
             }
           },
           { text: t('Cancel'), style: 'cancel' },

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, Switch, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
 import { ArrowLeft } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
@@ -24,7 +25,7 @@ export default function PrivacySettingsScreen() {
       <View style={styles.headerWrap}>
         <View style={styles.headerBg} />
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/settings' as any); } }} style={styles.backBtn} accessibilityLabel={t('Back')} testID="privacy-back">
+          <TouchableOpacity onPress={() => safeGoBack(router, '/settings')} style={styles.backBtn} accessibilityLabel={t('Back')} testID="privacy-back">
             <ArrowLeft size={20} color={Colors.text.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('Privacy')}</Text>

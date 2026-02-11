@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
 import { ArrowLeft, Shield, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
@@ -31,13 +32,7 @@ export default function SecuritySettingsScreen() {
         <View style={styles.headerBg} />
         <View style={styles.headerRow}>
           <TouchableOpacity
-            onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/settings' as any);
-              }
-            }}
+            onPress={() => safeGoBack(router, '/settings')}
             style={styles.backBtn}
             accessibilityLabel={t('Back')}
             testID="security-back"

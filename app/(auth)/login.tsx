@@ -11,6 +11,7 @@ import {
   Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { ArrowLeft, Eye, EyeOff, Mail, Lock } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
@@ -50,13 +51,7 @@ export default function LoginScreen() {
       >
         <TouchableOpacity
           style={styles.backButton}
-          onPress={() => {
-            if (router.canGoBack()) {
-              router.back();
-            } else {
-              router.replace('/onboarding' as any);
-            }
-          }}
+          onPress={() => safeGoBack(router, '/onboarding')}
           accessibilityRole="button"
           testID="login-back"
         >

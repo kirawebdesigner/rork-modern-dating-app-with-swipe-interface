@@ -13,6 +13,7 @@ import {
   Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { ArrowLeft, CheckSquare, Square, Mail, Lock, User as UserIcon, Eye, EyeOff } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
@@ -88,13 +89,7 @@ export default function SignupScreen() {
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => {
-              if (router.canGoBack()) {
-                router.back();
-              } else {
-                router.replace('/onboarding' as any);
-              }
-            }}
+            onPress={() => safeGoBack(router, '/onboarding')}
           >
             <ArrowLeft size={24} color={Colors.text.primary} />
           </TouchableOpacity>

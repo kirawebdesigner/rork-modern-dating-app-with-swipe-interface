@@ -3,6 +3,7 @@ import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert } from 'r
 import Colors from '@/constants/colors';
 import { ArrowLeft, Gift, Link as LinkIcon, CheckCircle2, Mail } from 'lucide-react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { supabase } from '@/lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
@@ -72,7 +73,7 @@ export default function ReferralsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/settings' as any); } }} style={styles.backBtn} testID="referrals-back">
+        <TouchableOpacity onPress={() => safeGoBack(router, '/settings')} style={styles.backBtn} testID="referrals-back">
           <ArrowLeft size={20} color={Colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>Share & Get Gold</Text>

@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2, Mail, LogOut, FileText, Lock, Info } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
 import * as Linking from 'expo-linking';
@@ -19,7 +20,7 @@ export default function SettingsScreen() {
       <View style={styles.headerWrap}>
         <View style={styles.headerBg} />
         <View style={styles.headerRow}>
-          <TouchableOpacity accessibilityLabel="Go back" onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); } }} testID="settings-back-btn" style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+          <TouchableOpacity accessibilityLabel="Go back" onPress={() => safeGoBack(router, '/(tabs)/profile')} testID="settings-back-btn" style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
             <ArrowLeft size={20} color={Colors.text.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('Settings')}</Text>

@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, Switch, TouchableOpacity, Platform, Alert } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
 import { ArrowLeft } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
@@ -18,7 +19,7 @@ export default function NotificationSettingsScreen() {
       <View style={styles.headerWrap}>
         <View style={styles.headerBg} />
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/settings' as any); } }} style={styles.backBtn} accessibilityLabel={t('Back')} testID="notifications-back">
+          <TouchableOpacity onPress={() => safeGoBack(router, '/settings')} style={styles.backBtn} accessibilityLabel={t('Back')} testID="notifications-back">
             <ArrowLeft size={20} color={Colors.text.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('Notifications')}</Text>

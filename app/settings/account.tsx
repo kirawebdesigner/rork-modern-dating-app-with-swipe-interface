@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Image, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
 import { ArrowLeft, Mail, KeyRound, Trash2, FileDown } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
@@ -82,7 +83,7 @@ export default function AccountSettingsScreen() {
       <View style={styles.headerWrap}>
         <View style={styles.headerBg} />
         <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/settings' as any); } }} style={styles.backBtn} accessibilityLabel={t('Back')} testID="account-back">
+          <TouchableOpacity onPress={() => safeGoBack(router, '/settings')} style={styles.backBtn} accessibilityLabel={t('Back')} testID="account-back">
             <ArrowLeft size={20} color={Colors.text.white} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>{t('Account')}</Text>

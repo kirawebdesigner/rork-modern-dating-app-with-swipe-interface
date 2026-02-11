@@ -12,6 +12,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Shield, Calendar, Phone } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
@@ -228,7 +229,7 @@ export default function PremiumScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); } }} style={styles.closeButton}>
+        <TouchableOpacity onPress={() => safeGoBack(router, '/(tabs)/profile')} style={styles.closeButton}>
           <X size={24} color={Colors.text.primary} />
         </TouchableOpacity>
       </View>

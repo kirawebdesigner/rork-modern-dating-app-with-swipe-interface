@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { SafeAreaView, View, Text, StyleSheet, FlatList, Image, TouchableOpacity } from 'react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
+import { safeGoBack } from '@/lib/navigation';
 import { ArrowLeft } from 'lucide-react-native';
 import { mockUsers } from '@/mocks/users';
 
@@ -12,7 +13,7 @@ export default function ProfileViewsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => { if (router.canGoBack()) { router.back(); } else { router.replace('/(tabs)/profile' as any); } }} style={styles.backBtn}>
+        <TouchableOpacity onPress={() => safeGoBack(router, '/(tabs)/profile')} style={styles.backBtn}>
           <ArrowLeft size={22} color={Colors.text.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>Profile Views</Text>
