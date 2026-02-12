@@ -200,8 +200,27 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
         return;
       }
       
-      const { data } = await supabase.auth.getUser();
-      const currentUser = data?.user ?? null;
+      let currentUser = null;
+      try {
+        const { data } = await supabase.auth.getUser();
+        currentUser = data?.user ?? null;
+      } catch (fetchErr) {
+        console.log('[Auth] Network error fetching user (using cached):', fetchErr);
+        if (cachedProfile) {
+          const cachedUserId = await AsyncStorage.getItem('user_id');
+          if (cachedUserId) {
+            setUser({
+              id: cachedUserId,
+              email: cachedProfile.email ?? '',
+              name: cachedProfile.name ?? 'User',
+              profile: cachedProfile,
+            });
+            return;
+          }
+        }
+        setUser(null);
+        return;
+      }
 
       if (!currentUser) {
         setUser(null);
@@ -253,7 +272,11 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
 
     const { data: subscription } = supabase.auth.onAuthStateChange(async () => {
       if (!isMounted) return;
-      await synchronizeUser();
+      try {
+        await synchronizeUser();
+      } catch (e) {
+        console.log('[Auth] onAuthStateChange sync error:', e);
+      }
     });
 
     return () => {

@@ -17,7 +17,19 @@ import { registerForPushNotificationsAsync, setupNotificationHandlers, savePushT
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      retry: 1,
+      retryDelay: 1000,
+      networkMode: 'offlineFirst',
+    },
+    mutations: {
+      retry: 0,
+      networkMode: 'offlineFirst',
+    },
+  },
+});
 
 function RootLayoutNav() {
   return (

@@ -39,17 +39,24 @@ const createTrpcClient = () => {
           transformer: superjson,
           fetch: async (input, init) => {
             try {
+              const controller = new AbortController();
+              const timeoutId = setTimeout(() => controller.abort(), 15000);
               const response = await fetch(input, {
                 ...init,
+                signal: controller.signal,
                 headers: {
                   ...init?.headers,
                   'Content-Type': 'application/json',
                 },
               });
+              clearTimeout(timeoutId);
               return response;
             } catch (error) {
-              console.error('[tRPC] Fetch error:', error);
-              throw error;
+              console.log('[tRPC] Fetch error (network may be unavailable):', error);
+              return new Response(JSON.stringify({ error: { message: 'Network unavailable' } }), {
+                status: 503,
+                headers: { 'Content-Type': 'application/json' },
+              });
             }
           },
         }),
