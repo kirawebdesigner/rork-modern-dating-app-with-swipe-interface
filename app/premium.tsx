@@ -28,6 +28,8 @@ interface TierFeature {
   included: boolean;
 }
 
+type BillingPeriod = 'monthly' | '6month' | 'annual';
+
 interface TierInfo {
   name: string;
   priceMonthly: number;
@@ -36,6 +38,24 @@ interface TierInfo {
   popular?: boolean;
   features: TierFeature[];
 }
+
+const BILLING_OPTIONS: { key: BillingPeriod; label: string; months: number; discount: number; tag?: string }[] = [
+  { key: 'monthly', label: '1 Month', months: 1, discount: 0 },
+  { key: '6month', label: '6 Months', months: 6, discount: 0.25, tag: 'Save 25%' },
+  { key: 'annual', label: '1 Year', months: 12, discount: 0.40, tag: 'Save 40%' },
+];
+
+const getBillingPrice = (monthlyPrice: number, period: BillingPeriod): number => {
+  const option = BILLING_OPTIONS.find(o => o.key === period)!;
+  const total = monthlyPrice * option.months;
+  return Math.round(total * (1 - option.discount));
+};
+
+const getPerMonthPrice = (monthlyPrice: number, period: BillingPeriod): number => {
+  const option = BILLING_OPTIONS.find(o => o.key === period)!;
+  const total = getBillingPrice(monthlyPrice, period);
+  return Math.round(total / option.months);
+};
 
 const tierData: Record<MembershipTier, TierInfo> = {
   free: {
@@ -107,7 +127,7 @@ export default function PremiumScreen() {
   const { tier, upgradeTier } = useMembership();
   const { user } = useAuth();
   const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
-  const [billingPeriod] = useState<'monthly' | 'yearly'>('monthly');
+  const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
   const [showPromo, setShowPromo] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState(false);
 
@@ -226,6 +246,10 @@ export default function PremiumScreen() {
   const formatETB = (amount: number) => `${amount.toLocaleString()} ETB`;
   const formatDual = useCallback((etbAmount: number) => formatETB(etbAmount), []);
 
+  const selectedBillingOption = BILLING_OPTIONS.find(o => o.key === billingPeriod)!;
+  const selectedTotalPrice = selectedTier !== 'free' ? getBillingPrice(tierData[selectedTier].priceMonthly, billingPeriod) : 0;
+  const selectedPerMonth = selectedTier !== 'free' ? getPerMonthPrice(tierData[selectedTier].priceMonthly, billingPeriod) : 0;
+
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
@@ -257,17 +281,47 @@ export default function PremiumScreen() {
           </View>
         </LinearGradient>
 
+        <View style={styles.billingSection}>
+          <Text style={styles.billingSectionTitle}>Billing Period</Text>
+          <View style={styles.billingRow}>
+            {BILLING_OPTIONS.map((opt) => {
+              const isActive = billingPeriod === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.billingCard, isActive && styles.billingCardActive]}
+                  onPress={() => setBillingPeriod(opt.key)}
+                  activeOpacity={0.7}
+                  testID={`billing-${opt.key}`}
+                >
+                  {opt.tag ? (
+                    <View style={[styles.billingTag, opt.key === 'annual' && styles.billingTagBest]}>
+                      <Text style={styles.billingTagText}>{opt.tag}</Text>
+                    </View>
+                  ) : null}
+                  <Text style={[styles.billingLabel, isActive && styles.billingLabelActive]}>{opt.label}</Text>
+                  {opt.discount > 0 ? (
+                    <Text style={[styles.billingDiscount, isActive && styles.billingDiscountActive]}>
+                      {Math.round(opt.discount * 100)}% off
+                    </Text>
+                  ) : (
+                    <Text style={[styles.billingDiscount, isActive && styles.billingDiscountActive]}>Standard</Text>
+                  )}
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         <View style={styles.tiersSection}>
           {(Object.keys(tierData) as MembershipTier[]).map((tierKey) => {
             const tierInfo = tierData[tierKey];
             const isSelected = selectedTier === tierKey;
             const isCurrent = tier === tierKey;
             const showPrice = tierKey !== 'free';
-            const priceText = showPrice
-              ? (billingPeriod === 'monthly'
-                ? `${formatDual(tierInfo.priceMonthly)}/mo`
-                : `${formatDual(Math.round(tierInfo.priceMonthly * 6 * 0.5))}/yr`)
-              : 'Free';
+            const totalPrice = showPrice ? getBillingPrice(tierInfo.priceMonthly, billingPeriod) : 0;
+            const perMonth = showPrice ? getPerMonthPrice(tierInfo.priceMonthly, billingPeriod) : 0;
+            const billingOpt = BILLING_OPTIONS.find(o => o.key === billingPeriod)!;
 
             return (
               <TouchableOpacity
@@ -297,14 +351,33 @@ export default function PremiumScreen() {
                     {tierInfo.name}
                   </Text>
                   <View style={styles.tierPricing}>
-                    {tierKey !== 'free' && billingPeriod === 'yearly' ? (
+                    {showPrice && billingOpt.discount > 0 ? (
                       <View style={styles.offPill}>
-                        <Text style={styles.offPillText}>-50%</Text>
+                        <Text style={styles.offPillText}>-{Math.round(billingOpt.discount * 100)}%</Text>
                       </View>
                     ) : null}
-                    <Text style={styles.tierPrice}>{billingPeriod === 'monthly' && tierKey !== 'free' ? `${formatDual(tierInfo.priceMonthly)}/mo` : priceText}</Text>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      {showPrice ? (
+                        <>
+                          <Text style={styles.tierPrice}>{formatDual(perMonth)}/mo</Text>
+                          {billingPeriod !== 'monthly' ? (
+                            <Text style={styles.tierTotalPrice}>{formatDual(totalPrice)} total</Text>
+                          ) : null}
+                        </>
+                      ) : (
+                        <Text style={styles.tierPrice}>Free</Text>
+                      )}
+                    </View>
                   </View>
                 </View>
+
+                {showPrice && billingOpt.discount > 0 ? (
+                  <View style={styles.savingsBanner}>
+                    <Text style={styles.savingsText}>
+                      You save {formatDual(tierInfo.priceMonthly * billingOpt.months - totalPrice)} vs monthly!
+                    </Text>
+                  </View>
+                ) : null}
 
                 <View style={styles.tierFeatures}>
                   {tierInfo.features.map((feature, index) => {
@@ -338,7 +411,7 @@ export default function PremiumScreen() {
 
         <View style={styles.footer}>
           <GradientButton
-            title={isProcessing ? 'Processing...' : `Upgrade to ${tierData[selectedTier].name}`}
+            title={isProcessing ? 'Processing...' : `Upgrade to ${tierData[selectedTier].name}${selectedTier !== 'free' ? ` — ${formatDual(selectedTotalPrice)}` : ''}`}
             onPress={handleUpgrade}
             style={StyleSheet.flatten([styles.button, isProcessing && styles.disabledButton])}
             testID="upgrade-btn"
@@ -354,7 +427,9 @@ export default function PremiumScreen() {
               <Text style={styles.securityText}>Powered by ArifPay</Text>
             </View>
           </View>
-          <Text style={styles.disclaimer}>Subscription renews monthly. Cancel anytime from settings.</Text>
+          <Text style={styles.disclaimer}>
+            {billingPeriod === 'monthly' ? 'Subscription renews monthly.' : billingPeriod === '6month' ? 'Subscription renews every 6 months.' : 'Subscription renews annually.'} Cancel anytime from settings.
+          </Text>
         </View>
 
       </ScrollView>
@@ -412,8 +487,18 @@ export default function PremiumScreen() {
               <Text style={styles.summaryValue}>{tierData[selectedTier].name}</Text>
             </View>
             <View style={styles.paymentSummary}>
-              <Text style={styles.summaryLabel}>Amount</Text>
-              <Text style={styles.summaryValue}>{tierData[selectedTier].priceMonthly.toLocaleString()} ETB</Text>
+              <Text style={styles.summaryLabel}>Period</Text>
+              <Text style={styles.summaryValue}>{selectedBillingOption.label}</Text>
+            </View>
+            {selectedBillingOption.discount > 0 ? (
+              <View style={styles.paymentSummary}>
+                <Text style={styles.summaryLabel}>Discount</Text>
+                <Text style={[styles.summaryValue, { color: Colors.success }]}>-{Math.round(selectedBillingOption.discount * 100)}%</Text>
+              </View>
+            ) : null}
+            <View style={[styles.paymentSummary, { borderBottomWidth: 2, borderBottomColor: Colors.text.primary }]}>
+              <Text style={[styles.summaryLabel, { fontWeight: '700' as const }]}>Total</Text>
+              <Text style={[styles.summaryValue, { fontSize: 18 }]}>{selectedTotalPrice.toLocaleString()} ETB</Text>
             </View>
 
             <GradientButton
@@ -501,9 +586,90 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontSize: 12
   },
+  billingSection: {
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  billingSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: Colors.text.primary,
+    marginBottom: 12,
+  },
+  billingRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  billingCard: {
+    flex: 1,
+    backgroundColor: Colors.backgroundSecondary,
+    borderRadius: 14,
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+    position: 'relative',
+    overflow: 'visible',
+  },
+  billingCardActive: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.primary + '08',
+  },
+  billingTag: {
+    position: 'absolute',
+    top: -10,
+    backgroundColor: Colors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  billingTagBest: {
+    backgroundColor: '#FF6B00',
+  },
+  billingTagText: {
+    color: Colors.text.white,
+    fontSize: 9,
+    fontWeight: '800' as const,
+  },
+  billingLabel: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: Colors.text.primary,
+    marginBottom: 2,
+  },
+  billingLabelActive: {
+    color: Colors.primary,
+  },
+  billingDiscount: {
+    fontSize: 11,
+    color: Colors.text.secondary,
+    fontWeight: '500' as const,
+  },
+  billingDiscountActive: {
+    color: Colors.primary,
+  },
   tiersSection: {
     paddingHorizontal: 20,
     marginBottom: 30,
+  },
+  tierTotalPrice: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    fontWeight: '500' as const,
+  },
+  savingsBanner: {
+    backgroundColor: Colors.success + '15',
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  savingsText: {
+    color: Colors.success,
+    fontSize: 12,
+    fontWeight: '700' as const,
   },
   tierCard: {
     backgroundColor: Colors.backgroundSecondary,
