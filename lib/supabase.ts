@@ -71,6 +71,8 @@ if (TEST_MODE) {
 }
 
 let connectionTested = false;
+export let isNetworkAvailable = true;
+
 export const testConnection = async () => {
   if (TEST_MODE) {
     console.log('[Supabase] TEST MODE: Skipping connection test');
@@ -94,10 +96,27 @@ export const testConnection = async () => {
     if (error) {
       console.warn('[Supabase] Connection test failed:', error.message);
     } else {
+      isNetworkAvailable = true;
       console.log('[Supabase] ✅ Connection test successful');
     }
   } catch (err) {
+    isNetworkAvailable = false;
     console.warn('[Supabase] Connection test skipped - network unavailable');
+  }
+};
+
+export const safeFetch = async <T>(fn: () => PromiseLike<T>, fallback: T): Promise<T> => {
+  try {
+    return await fn();
+  } catch (err: any) {
+    const msg = err?.message ?? String(err);
+    if (msg.includes('Failed to fetch') || msg.includes('NetworkError') || msg.includes('Network request failed') || msg.includes('AbortError')) {
+      console.log('[Supabase] Network unavailable, using fallback');
+      isNetworkAvailable = false;
+      return fallback;
+    }
+    console.log('[Supabase] safeFetch non-network error:', msg);
+    return fallback;
   }
 };
 

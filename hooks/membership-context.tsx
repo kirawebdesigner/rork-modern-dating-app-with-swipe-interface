@@ -2,7 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { MembershipTier, MembershipFeatures, UserCredits, MonthlyAllowances } from '@/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, safeFetch } from '@/lib/supabase';
 import { useAuth } from './auth-context';
 
 const TEST_MODE = false;
@@ -166,13 +166,19 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         return;
       }
       
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('phone', storedPhone)
-        .maybeSingle();
+      let syncProfileId: string | null = null;
+      try {
+        const profileResult = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', storedPhone)
+          .maybeSingle();
+        syncProfileId = profileResult?.data?.id ?? null;
+      } catch (e: any) {
+        console.log('[Membership] Network error fetching profile for sync:', e?.message);
+      }
       
-      const userId = profile?.id ?? authUser?.id ?? null;
+      const userId = syncProfileId ?? authUser?.id ?? null;
       if (!userId) {
         console.log('[Membership] No user ID found, skipping server sync');
         return;
@@ -198,14 +204,18 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         last_allowance_grant: lastAllowanceGrantISO && lastAllowanceGrantISO.trim().length > 0 ? new Date(lastAllowanceGrantISO).toISOString() : null,
       } as const;
 
-      const { error: upsertErr } = await supabase
-        .from('memberships')
-        .upsert(payload as any, { onConflict: 'user_id' });
-      
-      if (upsertErr) {
-        console.log('[Membership] Supabase upsert failed:', upsertErr.message);
-      } else {
-        console.log('[Membership] Successfully synced to server');
+      try {
+        const { error: upsertErr } = await supabase
+          .from('memberships')
+          .upsert(payload as any, { onConflict: 'user_id' });
+        
+        if (upsertErr) {
+          console.log('[Membership] Supabase upsert failed:', upsertErr.message);
+        } else {
+          console.log('[Membership] Successfully synced to server');
+        }
+      } catch (upsertFetchErr: any) {
+        console.log('[Membership] Network error during upsert:', upsertFetchErr?.message);
       }
     } catch (e: any) {
       console.log('[Membership] syncToServer failed:', e?.message || e);
@@ -256,13 +266,19 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         return;
       }
       
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('id')
-        .eq('phone', storedPhone)
-        .maybeSingle();
+      let loadProfileId: string | null = null;
+      try {
+        const profileResult2 = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('phone', storedPhone)
+          .maybeSingle();
+        loadProfileId = profileResult2?.data?.id ?? null;
+      } catch (e: any) {
+        console.log('[Membership] Network error fetching profile for load:', e?.message);
+      }
       
-      const userId = profile?.id ?? authUser?.id ?? null;
+      const userId = loadProfileId ?? authUser?.id ?? null;
       if (!userId) {
         console.log('[Membership] No user ID, loading from local only');
         await loadFromLocalStorage();
@@ -273,11 +289,20 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       
       const checkedTier = await checkExpiration(userId);
       
-      const { data, error } = await supabase
-        .from('memberships')
-        .select('tier, message_credits, boost_credits, superlike_credits, compliment_credits, unlock_credits, remaining_daily_messages, remaining_profile_views, remaining_right_swipes, remaining_compliments, last_reset, monthly_allowances, last_allowance_grant, expires_at')
-        .eq('user_id', userId)
-        .maybeSingle();
+      let data: any = null;
+      let error: any = null;
+      try {
+        const membershipResult = await supabase
+          .from('memberships')
+          .select('tier, message_credits, boost_credits, superlike_credits, compliment_credits, unlock_credits, remaining_daily_messages, remaining_profile_views, remaining_right_swipes, remaining_compliments, last_reset, monthly_allowances, last_allowance_grant, expires_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+        data = membershipResult.data;
+        error = membershipResult.error;
+      } catch (fetchErr: any) {
+        console.log('[Membership] Network error loading membership:', fetchErr?.message);
+        error = { message: fetchErr?.message ?? 'Network unavailable' };
+      }
       if (error) {
         console.log('[Membership] Load from server error (using local fallback):', error.message);
         await loadFromLocalStorage();

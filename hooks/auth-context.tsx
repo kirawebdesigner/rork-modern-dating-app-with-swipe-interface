@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { supabase, TEST_MODE } from '@/lib/supabase';
+import { supabase, TEST_MODE, safeFetch } from '@/lib/supabase';
 import { AuthUser, User, ThemeId } from '@/types';
 import { router } from 'expo-router';
 
@@ -202,8 +202,22 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
       
       let currentUser = null;
       try {
-        const { data } = await supabase.auth.getUser();
-        currentUser = data?.user ?? null;
+        const result = await supabase.auth.getUser();
+        currentUser = result?.data?.user ?? null;
+        
+        if (!currentUser && cachedProfile) {
+          const cachedUserId = await AsyncStorage.getItem('user_id');
+          if (cachedUserId) {
+            console.log('[Auth] No auth session but have cached profile, using cache');
+            setUser({
+              id: cachedUserId,
+              email: cachedProfile.email ?? '',
+              name: cachedProfile.name ?? 'User',
+              profile: cachedProfile,
+            });
+            return;
+          }
+        }
       } catch (fetchErr) {
         console.log('[Auth] Network error fetching user (using cached):', fetchErr);
         if (cachedProfile) {

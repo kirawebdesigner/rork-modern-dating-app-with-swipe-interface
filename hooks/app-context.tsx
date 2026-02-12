@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { User, Match, SwipeAction, MembershipTier, ThemeId } from '@/types';
 import { sendPushToUser } from '@/lib/notifications';
-import { supabase, TEST_MODE } from '@/lib/supabase';
+import { supabase, TEST_MODE, safeFetch } from '@/lib/supabase';
 
 type InterestedIn = 'girl' | 'boy';
 
@@ -163,11 +163,20 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         }
       } else if (storedId || storedPhone) {
         console.log('[App] No cached profile, fetching from Supabase...');
-        const { data: freshProfile, error } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq(storedId ? 'id' : 'phone', storedId ?? storedPhone)
-          .maybeSingle();
+        let freshProfile: any = null;
+        let freshError: any = null;
+        try {
+          const result = await supabase
+            .from('profiles')
+            .select('*')
+            .eq(storedId ? 'id' : 'phone', storedId ?? storedPhone)
+            .maybeSingle();
+          freshProfile = result.data;
+          freshError = result.error;
+        } catch (fetchErr: any) {
+          console.log('[App] Network error fetching profile:', fetchErr?.message);
+        }
+        const error = freshError;
         
         if (!error && freshProfile) {
           const mappedProfile: User = {
@@ -208,10 +217,18 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (!TEST_MODE && myUserId) {
         try {
           console.log('[App] Loading swipe history from database for user:', myUserId);
-          const { data: dbSwipes, error: swipeErr } = await supabase
-            .from('swipes')
-            .select('swiped_id, action, created_at')
-            .eq('swiper_id', myUserId);
+          let dbSwipes: any[] | null = null;
+          let swipeErr: any = null;
+          try {
+            const swipeResult = await supabase
+              .from('swipes')
+              .select('swiped_id, action, created_at')
+              .eq('swiper_id', myUserId);
+            dbSwipes = swipeResult.data;
+            swipeErr = swipeResult.error;
+          } catch (fetchErr: any) {
+            console.log('[App] Network error loading swipes:', fetchErr?.message);
+          }
           
           if (!swipeErr && dbSwipes && dbSwipes.length > 0) {
             const dbHistory: SwipeAction[] = dbSwipes.map((s: any) => ({
@@ -244,8 +261,13 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       }
 
       try {
-        const { data: authUser } = await supabase.auth.getUser();
-        const uid = authUser?.user?.id ?? null;
+        let uid: string | null = null;
+        try {
+          const authResult = await supabase.auth.getUser();
+          uid = authResult?.data?.user?.id ?? null;
+        } catch (authErr: any) {
+          console.log('[App] Network error getting auth user:', authErr?.message);
+        }
         if (!profile && uid) {
           const { data: me, error: meErr } = await supabase
             .from('profiles')
@@ -401,11 +423,20 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         return;
       }
       
-      const { data: profiles, error } = await supabase
-        .from('profiles')
-        .select('id,phone,name,age,birthday,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
-        .eq('completed', true)
-        .limit(100);
+      let profiles: any[] | null = null;
+      let error: any = null;
+      try {
+        const profilesResult = await supabase
+          .from('profiles')
+          .select('id,phone,name,age,birthday,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
+          .eq('completed', true)
+          .limit(100);
+        profiles = profilesResult.data;
+        error = profilesResult.error;
+      } catch (fetchErr: any) {
+        console.log('[App] Network error loading profiles:', fetchErr?.message);
+        error = { message: fetchErr?.message ?? 'Network unavailable' };
+      }
       if (error) {
         console.log('[App] load profiles error', error.message);
         console.log('[App] Falling back to empty profile list');
@@ -529,20 +560,30 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, [loadAppData]);
 
   useEffect(() => {
+    let retryCount = 0;
+    const maxRetries = 3;
+
     const checkAndReload = async () => {
-      const storedPhone = await AsyncStorage.getItem('user_phone');
-      const storedProfile = await AsyncStorage.getItem('user_profile');
-      
-      if (storedPhone && !storedProfile) {
-        console.log('[App] User logged in but no profile in cache, reloading...');
-        await loadAppData();
-      } else if (storedPhone && (!currentProfile || currentProfile.id === '')) {
-        console.log('[App] User logged in but profile state not set, reloading...');
-        await loadAppData();
+      if (retryCount >= maxRetries) return;
+      try {
+        const storedPhone = await AsyncStorage.getItem('user_phone');
+        const storedProfile = await AsyncStorage.getItem('user_profile');
+        
+        if (storedPhone && !storedProfile) {
+          console.log('[App] User logged in but no profile in cache, reloading...');
+          retryCount++;
+          await loadAppData();
+        } else if (storedPhone && (!currentProfile || currentProfile.id === '')) {
+          console.log('[App] User logged in but profile state not set, reloading...');
+          retryCount++;
+          await loadAppData();
+        }
+      } catch (e) {
+        console.log('[App] checkAndReload failed:', e);
       }
     };
     
-    const interval = setInterval(checkAndReload, 2000);
+    const interval = setInterval(checkAndReload, 5000);
     checkAndReload();
     
     return () => clearInterval(interval);
