@@ -13,6 +13,7 @@ import * as Linking from "expo-linking";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
 import { trpc, trpcClient } from "@/lib/trpc";
+import { registerForPushNotificationsAsync, setupNotificationHandlers, savePushTokenToServer } from "@/lib/notifications";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -96,7 +97,19 @@ export default function RootLayout() {
         }
 
         await new Promise(resolve => setTimeout(resolve, 100));
-        
+
+        registerForPushNotificationsAsync().then(async (token) => {
+          console.log('[RootLayout] Push token:', token);
+          const uid = await AsyncStorage.getItem('user_id');
+          if (uid && token) {
+            await savePushTokenToServer(uid);
+          }
+        }).catch(e => console.log('[RootLayout] Push setup error', e));
+
+        setupNotificationHandlers().then(cleanup => {
+          console.log('[RootLayout] Notification handlers set up');
+        }).catch(e => console.log('[RootLayout] Notification handlers error', e));
+
         if (mounted) {
           setIsReady(true);
           await SplashScreen.hideAsync();

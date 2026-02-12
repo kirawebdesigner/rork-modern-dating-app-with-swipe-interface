@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert } from 'react-native';
+import React, { useState, useEffect, useCallback } from 'react';
+import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
-import { ArrowLeft, Shield, Eye, EyeOff, AlertCircle } from 'lucide-react-native';
+import { ArrowLeft, Shield, Eye, EyeOff, AlertCircle, Fingerprint } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/hooks/auth-context';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const BIOMETRIC_KEY = 'biometric_enabled';
+const LOGIN_ALERTS_KEY = 'login_alerts_enabled';
+const TWO_FACTOR_KEY = 'two_factor_enabled';
 
 export default function SecuritySettingsScreen() {
   const router = useRouter();
@@ -14,6 +19,8 @@ export default function SecuritySettingsScreen() {
   const { user } = useAuth();
   const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean>(false);
   const [biometricEnabled, setBiometricEnabled] = useState<boolean>(false);
+  const [biometricAvailable, setBiometricAvailable] = useState<boolean>(false);
+  const [biometricType, setBiometricType] = useState<string>('Biometric');
   const [loginAlerts, setLoginAlerts] = useState<boolean>(true);
   const [showSensitiveData, setShowSensitiveData] = useState<boolean>(false);
 
@@ -22,8 +29,97 @@ export default function SecuritySettingsScreen() {
     ? phoneNumber.slice(0, -4).replace(/\d/g, '*') + phoneNumber.slice(-4)
     : '****';
 
+  useEffect(() => {
+    const loadSettings = async () => {
+      try {
+        const [bioEnabled, alertsEnabled, tfaEnabled] = await Promise.all([
+          AsyncStorage.getItem(BIOMETRIC_KEY),
+          AsyncStorage.getItem(LOGIN_ALERTS_KEY),
+          AsyncStorage.getItem(TWO_FACTOR_KEY),
+        ]);
+        if (bioEnabled !== null) setBiometricEnabled(bioEnabled === 'true');
+        if (alertsEnabled !== null) setLoginAlerts(alertsEnabled === 'true');
+        if (tfaEnabled !== null) setTwoFactorEnabled(tfaEnabled === 'true');
+      } catch (e) {
+        console.log('[Security] load settings error', e);
+      }
+    };
+    loadSettings();
+  }, []);
+
+  useEffect(() => {
+    const checkBiometric = async () => {
+      if (Platform.OS === 'web') {
+        setBiometricAvailable(false);
+        return;
+      }
+      try {
+        const LocalAuth = await import('expo-local-authentication');
+        const compatible = await LocalAuth.hasHardwareAsync();
+        const enrolled = await LocalAuth.isEnrolledAsync();
+        setBiometricAvailable(compatible && enrolled);
+
+        if (compatible) {
+          const types = await LocalAuth.supportedAuthenticationTypesAsync();
+          const AuthenticationType = LocalAuth.AuthenticationType;
+          if (types.includes(AuthenticationType.FACIAL_RECOGNITION)) {
+            setBiometricType('Face ID');
+          } else if (types.includes(AuthenticationType.FINGERPRINT)) {
+            setBiometricType('Fingerprint');
+          } else if (types.includes(AuthenticationType.IRIS)) {
+            setBiometricType('Iris');
+          }
+        }
+        console.log('[Security] Biometric available:', compatible && enrolled, 'type:', biometricType);
+      } catch (e) {
+        console.log('[Security] biometric check error', e);
+        setBiometricAvailable(false);
+      }
+    };
+    checkBiometric();
+  }, []);
+
+  const handleBiometricToggle = useCallback(async (value: boolean) => {
+    if (value && Platform.OS !== 'web') {
+      try {
+        const LocalAuth = await import('expo-local-authentication');
+        const result = await LocalAuth.authenticateAsync({
+          promptMessage: t('Verify your identity to enable biometric login'),
+          cancelLabel: t('Cancel'),
+          fallbackLabel: t('Use passcode'),
+          disableDeviceFallback: false,
+        });
+
+        if (result.success) {
+          setBiometricEnabled(true);
+          await AsyncStorage.setItem(BIOMETRIC_KEY, 'true');
+          console.log('[Security] Biometric enabled successfully');
+        } else {
+          console.log('[Security] Biometric auth cancelled or failed');
+        }
+      } catch (e) {
+        console.log('[Security] biometric toggle error', e);
+        Alert.alert(t('Error'), t('Could not enable biometric authentication'));
+      }
+    } else {
+      setBiometricEnabled(false);
+      await AsyncStorage.setItem(BIOMETRIC_KEY, 'false');
+      console.log('[Security] Biometric disabled');
+    }
+  }, [t]);
+
   const handleSave = async () => {
-    Alert.alert(t('Success'), t('Security settings updated successfully'));
+    try {
+      await Promise.all([
+        AsyncStorage.setItem(BIOMETRIC_KEY, String(biometricEnabled)),
+        AsyncStorage.setItem(LOGIN_ALERTS_KEY, String(loginAlerts)),
+        AsyncStorage.setItem(TWO_FACTOR_KEY, String(twoFactorEnabled)),
+      ]);
+      Alert.alert(t('Success'), t('Security settings updated successfully'));
+    } catch (e) {
+      console.log('[Security] save error', e);
+      Alert.alert(t('Error'), t('Could not save settings'));
+    }
   };
 
   return (
@@ -93,14 +189,29 @@ export default function SecuritySettingsScreen() {
               onValueChange={(v) => setTwoFactorEnabled(v)}
               testID="2fa-switch"
             />
-            <Row
-              label={t('Biometric Login')}
-              description={t('Use fingerprint or face ID to login quickly')}
-              value={biometricEnabled}
-              onValueChange={(v) => setBiometricEnabled(v)}
-              testID="biometric-switch"
-              last
-            />
+            <View style={[styles.row, styles.biometricRow]}>
+              <View style={styles.biometricLeft}>
+                <View style={styles.biometricIconWrap}>
+                  <Fingerprint size={22} color={biometricAvailable ? Colors.primary : Colors.text.light} />
+                </View>
+                <View style={styles.rowContent}>
+                  <Text style={styles.rowLabel}>{biometricType} {t('Login')}</Text>
+                  <Text style={styles.rowDescription}>
+                    {biometricAvailable
+                      ? t('Use biometric authentication to unlock the app')
+                      : Platform.OS === 'web'
+                        ? t('Biometric auth is not available on web')
+                        : t('No biometric hardware detected on this device')}
+                  </Text>
+                </View>
+              </View>
+              <Switch
+                value={biometricEnabled}
+                onValueChange={handleBiometricToggle}
+                disabled={!biometricAvailable}
+                testID="biometric-switch"
+              />
+            </View>
           </View>
         </View>
 
@@ -212,7 +323,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  headerTitle: { color: Colors.text.white, fontSize: 18, fontWeight: '700' },
+  headerTitle: { color: Colors.text.white, fontSize: 18, fontWeight: '700' as const },
   backBtn: { padding: 6 },
   content: { paddingTop: 56, paddingHorizontal: 16 },
   infoCard: {
@@ -226,23 +337,23 @@ const styles = StyleSheet.create({
   },
   infoTitle: {
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     color: Colors.text.primary,
     marginTop: 16,
     marginBottom: 8,
-    textAlign: 'center',
+    textAlign: 'center' as const,
   },
   infoText: {
     fontSize: 14,
     color: Colors.text.secondary,
-    textAlign: 'center',
+    textAlign: 'center' as const,
     lineHeight: 20,
   },
   sectionTitle: {
     fontSize: 12,
     color: Colors.text.secondary,
     marginBottom: 8,
-    fontWeight: '600',
+    fontWeight: '600' as const,
   },
   card: { marginBottom: 16 },
   cardBody: {
@@ -258,9 +369,9 @@ const styles = StyleSheet.create({
   },
   row: {
     paddingVertical: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    justifyContent: 'space-between' as const,
     gap: 12,
   },
   rowBorder: {
@@ -273,13 +384,30 @@ const styles = StyleSheet.create({
   rowLabel: {
     color: Colors.text.primary,
     fontSize: 16,
-    fontWeight: '500',
+    fontWeight: '500' as const,
     marginBottom: 4,
   },
   rowDescription: {
     color: Colors.text.secondary,
     fontSize: 13,
     lineHeight: 18,
+  },
+  biometricRow: {
+    borderBottomWidth: 0,
+  },
+  biometricLeft: {
+    flex: 1,
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 12,
+  },
+  biometricIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: '#FFF1F3',
+    justifyContent: 'center' as const,
+    alignItems: 'center' as const,
   },
   infoRow: {
     paddingVertical: 16,
@@ -292,14 +420,14 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   infoValueRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
     gap: 8,
   },
   infoValue: {
     fontSize: 16,
     color: Colors.text.primary,
-    fontWeight: '500',
+    fontWeight: '500' as const,
   },
   eyeButton: {
     padding: 4,
@@ -309,7 +437,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginVertical: 24,
-    flexDirection: 'row',
+    flexDirection: 'row' as const,
     gap: 16,
     borderWidth: 1,
     borderColor: '#FEE2E2',
@@ -319,7 +447,7 @@ const styles = StyleSheet.create({
   },
   warningTitle: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     color: '#DC2626',
     marginBottom: 8,
   },
@@ -333,14 +461,14 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 24,
-    alignItems: 'center',
+    alignItems: 'center' as const,
     borderWidth: 1,
     borderColor: '#FCA5A5',
     marginBottom: 24,
   },
   dangerButtonText: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     color: '#DC2626',
   },
   bottomSpacing: {
