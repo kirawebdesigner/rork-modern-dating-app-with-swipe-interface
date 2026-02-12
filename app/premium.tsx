@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
-import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, BadgePercent, Shield, Calendar, Phone } from 'lucide-react-native';
+import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, Shield, Calendar, ChevronDown, Sparkles } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { LinearGradient } from 'expo-linear-gradient';
@@ -21,6 +21,8 @@ import { useMembership } from '@/hooks/membership-context';
 import { useAuth } from '@/hooks/auth-context';
 import { trpc } from '@/lib/trpc';
 import { MembershipTier } from '@/types';
+import { supabase } from '@/lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface TierFeature {
   icon: any;
@@ -41,8 +43,8 @@ interface TierInfo {
 
 const BILLING_OPTIONS: { key: BillingPeriod; label: string; months: number; discount: number; tag?: string }[] = [
   { key: 'monthly', label: '1 Month', months: 1, discount: 0 },
-  { key: '6month', label: '6 Months', months: 6, discount: 0.25, tag: 'Save 25%' },
-  { key: 'annual', label: '1 Year', months: 12, discount: 0.40, tag: 'Save 40%' },
+  { key: '6month', label: '6 Months', months: 6, discount: 0.25, tag: '25% OFF' },
+  { key: 'annual', label: '1 Year', months: 12, discount: 0.40, tag: '40% OFF' },
 ];
 
 const getBillingPrice = (monthlyPrice: number, period: BillingPeriod): number => {
@@ -61,8 +63,8 @@ const tierData: Record<MembershipTier, TierInfo> = {
   free: {
     name: 'Free',
     priceMonthly: 0,
-    color: Colors.text.secondary,
-    gradient: [Colors.backgroundSecondary, Colors.backgroundSecondary],
+    color: '#9CA3AF',
+    gradient: ['#F3F4F6', '#F3F4F6'],
     features: [
       { icon: MessageCircle, text: '5 messages/day', included: true },
       { icon: Heart, text: '50 right swipes/day', included: true },
@@ -77,8 +79,8 @@ const tierData: Record<MembershipTier, TierInfo> = {
   silver: {
     name: 'Silver',
     priceMonthly: 500,
-    color: '#C0C0C0',
-    gradient: ['#C0C0C0', '#9CA3AF'],
+    color: '#94A3B8',
+    gradient: ['#94A3B8', '#64748B'],
     features: [
       { icon: MessageCircle, text: '30 messages/day', included: true },
       { icon: Heart, text: '100 right swipes/day', included: true },
@@ -92,8 +94,8 @@ const tierData: Record<MembershipTier, TierInfo> = {
   gold: {
     name: 'Gold',
     priceMonthly: 1500,
-    color: '#FFD700',
-    gradient: ['#FFE55C', '#FFD700'],
+    color: '#F59E0B',
+    gradient: ['#FCD34D', '#F59E0B'],
     popular: true,
     features: [
       { icon: MessageCircle, text: '100 messages/day', included: true },
@@ -108,8 +110,8 @@ const tierData: Record<MembershipTier, TierInfo> = {
   vip: {
     name: 'VIP',
     priceMonthly: 2600,
-    color: '#8A2BE2',
-    gradient: ['#9932CC', '#8A2BE2'],
+    color: '#7C3AED',
+    gradient: ['#A78BFA', '#7C3AED'],
     features: [
       { icon: MessageCircle, text: 'Unlimited messages', included: true },
       { icon: Heart, text: 'Unlimited right swipes', included: true },
@@ -126,77 +128,58 @@ export default function PremiumScreen() {
   const router = useRouter();
   const { tier, upgradeTier } = useMembership();
   const { user } = useAuth();
-  const [selectedTier, setSelectedTier] = useState<MembershipTier>('silver');
+  const [selectedTier, setSelectedTier] = useState<MembershipTier>(tier === 'free' ? 'gold' : tier);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
-  const [showPromo, setShowPromo] = useState<boolean>(false);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [showCancelModal, setShowCancelModal] = useState(false);
+  const [isCancelling, setIsCancelling] = useState(false);
 
-  // Phone number modal state
   const [showPhoneModal, setShowPhoneModal] = useState(false);
   const [phoneNumber, setPhoneNumber] = useState('');
   const [phoneError, setPhoneError] = useState('');
 
-  // Normalize phone to 251 format
   const normalizePhone = (phone: string): string => {
     let normalized = phone.replace(/\s+/g, '').replace(/[^0-9+]/g, '');
-
-    if (normalized.startsWith('+')) {
-      normalized = normalized.substring(1);
-    }
-
-    if (normalized.startsWith('0')) {
-      normalized = '251' + normalized.substring(1);
-    } else if (normalized.startsWith('251')) {
-      // Already correct
-    } else if (normalized.length === 9) {
-      normalized = '251' + normalized;
-    }
-
+    if (normalized.startsWith('+')) normalized = normalized.substring(1);
+    if (normalized.startsWith('0')) normalized = '251' + normalized.substring(1);
+    else if (!normalized.startsWith('251') && normalized.length === 9) normalized = '251' + normalized;
     return normalized;
   };
 
-  // Validate phone number
   const validatePhone = (phone: string): boolean => {
     const normalized = normalizePhone(phone);
-    // Must be exactly 12 digits starting with 251
     return normalized.length === 12 && normalized.startsWith('251');
   };
 
   const upgradeMutation = trpc.membership.upgrade.useMutation();
 
-  // Show phone modal when upgrade button is pressed
   const handleUpgrade = async () => {
     if (!user?.id) {
       Alert.alert('Authentication Required', 'Please log in to upgrade your membership.');
       return;
     }
-
     if (selectedTier === 'free') {
       Alert.alert('Free Tier', 'You are currently on the free plan. Select a paid tier to upgrade.');
       return;
     }
-
     if (selectedTier === tier) {
       Alert.alert('Current Plan', `You are already subscribed to the ${tierData[selectedTier].name} plan.`);
       return;
     }
 
     const amount = tierData[selectedTier].priceMonthly;
-
     if (amount === 0) {
       await upgradeTier(selectedTier);
-      Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
+      Alert.alert('Success!', `Your membership has been updated to ${tierData[selectedTier].name}!`,
         [{ text: 'OK', onPress: () => router.back() }]);
       return;
     }
 
-    // Show phone modal to collect phone number
     setPhoneNumber('');
     setPhoneError('');
     setShowPhoneModal(true);
   };
 
-  // Process payment after phone is entered
   const handleConfirmPayment = async () => {
     if (!validatePhone(phoneNumber)) {
       setPhoneError('Please enter a valid Ethiopian phone number (e.g., 09xxxxxxxx)');
@@ -214,21 +197,15 @@ export default function PremiumScreen() {
         userId: user!.id,
         tier: selectedTier,
         phone: normalizePhone(phoneNumber),
-        paymentMethod: 'TELEBIRR', // Default for direct redirect
+        paymentMethod: 'TELEBIRR',
       });
 
       setIsProcessing(false);
 
       if (result.success && result.requiresPayment && result.paymentUrl) {
-        // Open payment URL
         console.log('[Premium] Redirecting to:', result.paymentUrl);
         Linking.openURL(result.paymentUrl);
-
-        Alert.alert(
-          'Payment',
-          'Redirecting to payment page. You will receive a confirmation on your phone.',
-          [{ text: 'OK' }]
-        );
+        Alert.alert('Payment', 'Redirecting to payment page. You will receive a confirmation on your phone.', [{ text: 'OK' }]);
       } else if (result.success && !result.requiresPayment) {
         await upgradeTier(selectedTier);
         Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
@@ -243,8 +220,44 @@ export default function PremiumScreen() {
     }
   };
 
+  const handleCancelSubscription = async () => {
+    setIsCancelling(true);
+    try {
+      console.log('[Premium] Cancelling subscription for user:', user?.id);
+
+      if (user?.id) {
+        const { error } = await supabase
+          .from('memberships')
+          .update({
+            tier: 'free',
+            expires_at: null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('user_id', user.id);
+
+        if (error) {
+          console.log('[Premium] Cancel error from server:', error.message);
+        }
+      }
+
+      await upgradeTier('free');
+      await AsyncStorage.setItem('membership_tier', JSON.stringify('free'));
+
+      setShowCancelModal(false);
+      Alert.alert(
+        'Subscription Cancelled',
+        'Your subscription has been cancelled. You are now on the Free plan. You can upgrade again anytime.',
+        [{ text: 'OK' }]
+      );
+    } catch (error: any) {
+      console.error('[Premium] Cancel error:', error);
+      Alert.alert('Error', 'Failed to cancel subscription. Please try again.');
+    } finally {
+      setIsCancelling(false);
+    }
+  };
+
   const formatETB = (amount: number) => `${amount.toLocaleString()} ETB`;
-  const formatDual = useCallback((etbAmount: number) => formatETB(etbAmount), []);
 
   const selectedBillingOption = BILLING_OPTIONS.find(o => o.key === billingPeriod)!;
   const selectedTotalPrice = selectedTier !== 'free' ? getBillingPrice(tierData[selectedTier].priceMonthly, billingPeriod) : 0;
@@ -254,35 +267,32 @@ export default function PremiumScreen() {
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => safeGoBack(router, '/(tabs)/profile')} style={styles.closeButton}>
-          <X size={24} color={Colors.text.primary} />
+          <X size={22} color="#1A1A1A" />
         </TouchableOpacity>
+        <Text style={styles.headerTitle}>Upgrade</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView contentContainerStyle={styles.content}>
-        <LinearGradient
-          colors={['#6366F1', '#8B5CF6']}
-          style={styles.heroSection}
-        >
-          <View style={styles.heroIcon}>
-            <Crown size={48} color={Colors.text.white} strokeWidth={2.5} />
-          </View>
-          <Text style={styles.heroTitle}>Upgrade Your Experience</Text>
-          <Text style={styles.heroSubtitle} testID="current-plan">Currently on {tierData[tier].name} plan</Text>
-
-          <View style={styles.featuresBadges}>
-            <View style={styles.featureBadge}>
-              <Shield size={14} color={Colors.text.white} />
-              <Text style={styles.featureBadgeText}>Secure Payment</Text>
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.heroSection}>
+          <LinearGradient
+            colors={['#FF2D55', '#FF6B8A']}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 1 }}
+            style={styles.heroBg}
+          >
+            <View style={styles.heroIcon}>
+              <Crown size={36} color="#FFF" strokeWidth={2.5} />
             </View>
-            <View style={styles.featureBadge}>
-              <Calendar size={14} color={Colors.text.white} />
-              <Text style={styles.featureBadgeText}>Cancel Anytime</Text>
-            </View>
-          </View>
-        </LinearGradient>
+            <Text style={styles.heroTitle}>Unlock Premium</Text>
+            <Text style={styles.heroSubtitle}>
+              {tier === 'free' ? 'Get unlimited access to all features' : `Currently on ${tierData[tier].name} plan`}
+            </Text>
+          </LinearGradient>
+        </View>
 
         <View style={styles.billingSection}>
-          <Text style={styles.billingSectionTitle}>Billing Period</Text>
+          <Text style={styles.sectionTitle}>Choose billing</Text>
           <View style={styles.billingRow}>
             {BILLING_OPTIONS.map((opt) => {
               const isActive = billingPeriod === opt.key;
@@ -302,7 +312,7 @@ export default function PremiumScreen() {
                   <Text style={[styles.billingLabel, isActive && styles.billingLabelActive]}>{opt.label}</Text>
                   {opt.discount > 0 ? (
                     <Text style={[styles.billingDiscount, isActive && styles.billingDiscountActive]}>
-                      {Math.round(opt.discount * 100)}% off
+                      Save {Math.round(opt.discount * 100)}%
                     </Text>
                   ) : (
                     <Text style={[styles.billingDiscount, isActive && styles.billingDiscountActive]}>Standard</Text>
@@ -314,152 +324,140 @@ export default function PremiumScreen() {
         </View>
 
         <View style={styles.tiersSection}>
-          {(Object.keys(tierData) as MembershipTier[]).map((tierKey) => {
+          <Text style={styles.sectionTitle}>Choose plan</Text>
+          {(Object.keys(tierData) as MembershipTier[]).filter(k => k !== 'free').map((tierKey) => {
             const tierInfo = tierData[tierKey];
             const isSelected = selectedTier === tierKey;
             const isCurrent = tier === tierKey;
-            const showPrice = tierKey !== 'free';
-            const totalPrice = showPrice ? getBillingPrice(tierInfo.priceMonthly, billingPeriod) : 0;
-            const perMonth = showPrice ? getPerMonthPrice(tierInfo.priceMonthly, billingPeriod) : 0;
+            const totalPrice = getBillingPrice(tierInfo.priceMonthly, billingPeriod);
+            const perMonth = getPerMonthPrice(tierInfo.priceMonthly, billingPeriod);
             const billingOpt = BILLING_OPTIONS.find(o => o.key === billingPeriod)!;
 
             return (
               <TouchableOpacity
                 key={tierKey}
-                style={[
-                  styles.tierCard,
-                  isSelected && styles.selectedTierCard,
-                  isCurrent && styles.currentTierCard,
-                ]}
+                style={[styles.tierCard, isSelected && styles.selectedTierCard]}
                 onPress={() => setSelectedTier(tierKey)}
                 testID={`tier-${tierKey}`}
+                activeOpacity={0.7}
               >
-                {tierInfo.popular ? (
+                {tierInfo.popular && (
                   <View style={styles.popularBadge}>
-                    <Text style={styles.popularText}>MOST POPULAR</Text>
+                    <Sparkles size={10} color="#FFF" />
+                    <Text style={styles.popularText}>POPULAR</Text>
                   </View>
-                ) : null}
+                )}
 
-                {isCurrent ? (
+                {isCurrent && (
                   <View style={styles.currentBadge}>
                     <Text style={styles.currentText}>CURRENT</Text>
                   </View>
-                ) : null}
+                )}
 
                 <View style={styles.tierHeader}>
-                  <Text style={[styles.tierName, { color: tierInfo.color }]}>
-                    {tierInfo.name}
-                  </Text>
+                  <View style={styles.tierNameRow}>
+                    <LinearGradient
+                      colors={tierInfo.gradient as [string, string]}
+                      style={styles.tierDot}
+                    />
+                    <Text style={styles.tierName}>{tierInfo.name}</Text>
+                  </View>
                   <View style={styles.tierPricing}>
-                    {showPrice && billingOpt.discount > 0 ? (
+                    {billingOpt.discount > 0 && (
                       <View style={styles.offPill}>
                         <Text style={styles.offPillText}>-{Math.round(billingOpt.discount * 100)}%</Text>
                       </View>
-                    ) : null}
+                    )}
                     <View style={{ alignItems: 'flex-end' }}>
-                      {showPrice ? (
-                        <>
-                          <Text style={styles.tierPrice}>{formatDual(perMonth)}/mo</Text>
-                          {billingPeriod !== 'monthly' ? (
-                            <Text style={styles.tierTotalPrice}>{formatDual(totalPrice)} total</Text>
-                          ) : null}
-                        </>
-                      ) : (
-                        <Text style={styles.tierPrice}>Free</Text>
+                      <Text style={styles.tierPrice}>{formatETB(perMonth)}<Text style={styles.tierPriceUnit}>/mo</Text></Text>
+                      {billingPeriod !== 'monthly' && (
+                        <Text style={styles.tierTotalPrice}>{formatETB(totalPrice)} total</Text>
                       )}
                     </View>
                   </View>
                 </View>
 
-                {showPrice && billingOpt.discount > 0 ? (
+                {billingOpt.discount > 0 && (
                   <View style={styles.savingsBanner}>
                     <Text style={styles.savingsText}>
-                      You save {formatDual(tierInfo.priceMonthly * billingOpt.months - totalPrice)} vs monthly!
+                      Save {formatETB(tierInfo.priceMonthly * billingOpt.months - totalPrice)}
                     </Text>
                   </View>
-                ) : null}
+                )}
 
-                <View style={styles.tierFeatures}>
-                  {tierInfo.features.map((feature, index) => {
-                    const IconComponent = feature.icon;
-                    return (
-                      <View key={index} style={styles.featureRow}>
-                        <IconComponent
-                          size={16}
-                          color={feature.included ? Colors.success : Colors.text.light}
-                        />
-                        <Text style={[
-                          styles.featureText,
-                          !feature.included && styles.disabledFeatureText
-                        ]}>
-                          {feature.text}
-                        </Text>
-                        {feature.included ? (
-                          <Check size={16} color={Colors.success} />
-                        ) : (
-                          <X size={16} color={Colors.text.light} />
-                        )}
-                      </View>
-                    );
-                  })}
-                </View>
+                {isSelected && (
+                  <View style={styles.tierFeatures}>
+                    {tierInfo.features.map((feature, index) => {
+                      const IconComponent = feature.icon;
+                      return (
+                        <View key={index} style={styles.featureRow}>
+                          <View style={[styles.featureCheck, feature.included ? styles.featureCheckActive : styles.featureCheckDisabled]}>
+                            {feature.included ? (
+                              <Check size={12} color="#FFF" strokeWidth={3} />
+                            ) : (
+                              <X size={12} color="#9CA3AF" strokeWidth={2} />
+                            )}
+                          </View>
+                          <Text style={[styles.featureText, !feature.included && styles.disabledFeatureText]}>
+                            {feature.text}
+                          </Text>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
               </TouchableOpacity>
             );
           })}
         </View>
 
-
         <View style={styles.footer}>
           <GradientButton
-            title={isProcessing ? 'Processing...' : `Upgrade to ${tierData[selectedTier].name}${selectedTier !== 'free' ? ` — ${formatDual(selectedTotalPrice)}` : ''}`}
+            title={isProcessing ? 'Processing...' : `Upgrade to ${tierData[selectedTier].name} — ${formatETB(selectedTotalPrice)}`}
             onPress={handleUpgrade}
             style={StyleSheet.flatten([styles.button, isProcessing && styles.disabledButton])}
             testID="upgrade-btn"
             disabled={isProcessing}
           />
+
+          {tier !== 'free' && (
+            <TouchableOpacity
+              style={styles.cancelPlanBtn}
+              onPress={() => setShowCancelModal(true)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.cancelPlanText}>Cancel current plan</Text>
+            </TouchableOpacity>
+          )}
+
           <View style={styles.securityBadges}>
             <View style={styles.securityBadge}>
-              <Shield size={14} color={Colors.text.secondary} />
+              <Shield size={13} color="#9CA3AF" />
               <Text style={styles.securityText}>Encrypted & Secure</Text>
             </View>
             <View style={styles.securityBadge}>
-              <Shield size={14} color={Colors.text.secondary} />
+              <Shield size={13} color="#9CA3AF" />
               <Text style={styles.securityText}>Powered by ArifPay</Text>
             </View>
           </View>
           <Text style={styles.disclaimer}>
-            {billingPeriod === 'monthly' ? 'Subscription renews monthly.' : billingPeriod === '6month' ? 'Subscription renews every 6 months.' : 'Subscription renews annually.'} Cancel anytime from settings.
+            {billingPeriod === 'monthly' ? 'Renews monthly.' : billingPeriod === '6month' ? 'Renews every 6 months.' : 'Renews annually.'} Cancel anytime from settings.
           </Text>
         </View>
-
       </ScrollView>
 
-      <Modal visible={showPromo} transparent animationType="fade" onRequestClose={() => setShowPromo(false)}>
-        <View style={styles.modalOverlay}>
-          <View style={styles.modalCard}>
-            <View style={styles.modalHeader}>
-              <BadgePercent size={18} color={Colors.primary} />
-              <Text style={styles.modalTitle}>Yearly Savings</Text>
-            </View>
-            <Text style={styles.modalBody}>Save 50% when you choose yearly billing. Lock in the best price and enjoy uninterrupted premium features all year long!</Text>
-            <GradientButton title="Got it" onPress={() => setShowPromo(false)} />
-          </View>
-        </View>
-      </Modal>
-
-      {/* Phone Number Modal */}
       <Modal visible={showPhoneModal} transparent animationType="slide" onRequestClose={() => setShowPhoneModal(false)}>
         <View style={styles.modalOverlay}>
           <View style={styles.phoneModalCard}>
             <View style={styles.phoneModalHeader}>
-              <Text style={styles.phoneModalTitle}>Enter Your Phone Number</Text>
+              <Text style={styles.phoneModalTitle}>Payment Details</Text>
               <TouchableOpacity onPress={() => setShowPhoneModal(false)} style={styles.phoneModalClose}>
-                <X size={24} color={Colors.text.secondary} />
+                <X size={22} color="#9CA3AF" />
               </TouchableOpacity>
             </View>
 
             <Text style={styles.phoneModalSubtitle}>
-              Your phone number is required to receive payment confirmation. We'll send an OTP to verify your transaction.
+              Enter your phone number to receive payment confirmation.
             </Text>
 
             <View style={styles.phoneInputContainer}>
@@ -467,7 +465,7 @@ export default function PremiumScreen() {
               <TextInput
                 style={styles.phoneInput}
                 placeholder="9xxxxxxxx"
-                placeholderTextColor={Colors.text.light}
+                placeholderTextColor="#9CA3AF"
                 keyboardType="phone-pad"
                 value={phoneNumber}
                 onChangeText={(text) => {
@@ -479,26 +477,28 @@ export default function PremiumScreen() {
             </View>
 
             {phoneError ? (
-              <Text style={{ color: Colors.primary, fontSize: 12, marginBottom: 16 }}>{phoneError}</Text>
+              <Text style={styles.phoneErrorText}>{phoneError}</Text>
             ) : null}
 
-            <View style={styles.paymentSummary}>
-              <Text style={styles.summaryLabel}>Plan</Text>
-              <Text style={styles.summaryValue}>{tierData[selectedTier].name}</Text>
-            </View>
-            <View style={styles.paymentSummary}>
-              <Text style={styles.summaryLabel}>Period</Text>
-              <Text style={styles.summaryValue}>{selectedBillingOption.label}</Text>
-            </View>
-            {selectedBillingOption.discount > 0 ? (
+            <View style={styles.summaryCard}>
               <View style={styles.paymentSummary}>
-                <Text style={styles.summaryLabel}>Discount</Text>
-                <Text style={[styles.summaryValue, { color: Colors.success }]}>-{Math.round(selectedBillingOption.discount * 100)}%</Text>
+                <Text style={styles.summaryLabel}>Plan</Text>
+                <Text style={styles.summaryValue}>{tierData[selectedTier].name}</Text>
               </View>
-            ) : null}
-            <View style={[styles.paymentSummary, { borderBottomWidth: 2, borderBottomColor: Colors.text.primary }]}>
-              <Text style={[styles.summaryLabel, { fontWeight: '700' as const }]}>Total</Text>
-              <Text style={[styles.summaryValue, { fontSize: 18 }]}>{selectedTotalPrice.toLocaleString()} ETB</Text>
+              <View style={styles.paymentSummary}>
+                <Text style={styles.summaryLabel}>Period</Text>
+                <Text style={styles.summaryValue}>{selectedBillingOption.label}</Text>
+              </View>
+              {selectedBillingOption.discount > 0 && (
+                <View style={styles.paymentSummary}>
+                  <Text style={styles.summaryLabel}>Discount</Text>
+                  <Text style={[styles.summaryValue, { color: '#22C55E' }]}>-{Math.round(selectedBillingOption.discount * 100)}%</Text>
+                </View>
+              )}
+              <View style={[styles.paymentSummary, styles.paymentSummaryTotal]}>
+                <Text style={styles.summaryLabelTotal}>Total</Text>
+                <Text style={styles.summaryValueTotal}>{selectedTotalPrice.toLocaleString()} ETB</Text>
+              </View>
             </View>
 
             <GradientButton
@@ -514,6 +514,42 @@ export default function PremiumScreen() {
         </View>
       </Modal>
 
+      <Modal visible={showCancelModal} transparent animationType="fade" onRequestClose={() => setShowCancelModal(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.cancelModalCard}>
+            <Text style={styles.cancelModalTitle}>Cancel Subscription?</Text>
+            <Text style={styles.cancelModalBody}>
+              You will lose access to all {tierData[tier].name} features including unlimited swipes, messages, and premium filters. Your plan will be downgraded to Free immediately.
+            </Text>
+
+            <TouchableOpacity
+              style={styles.cancelConfirmBtn}
+              onPress={handleCancelSubscription}
+              disabled={isCancelling}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.cancelConfirmText}>
+                {isCancelling ? 'Cancelling...' : 'Yes, Cancel My Plan'}
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={styles.keepPlanBtn}
+              onPress={() => setShowCancelModal(false)}
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#FF2D55', '#FF6B8A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.keepPlanGradient}
+              >
+                <Text style={styles.keepPlanText}>Keep My Plan</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -521,105 +557,94 @@ export default function PremiumScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#FAFAFA',
   },
   header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingVertical: 16,
+    paddingVertical: 12,
   },
   closeButton: {
-    alignSelf: 'flex-start',
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#F0F0F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerTitle: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: '#1A1A1A',
   },
   content: {
     paddingBottom: 40,
   },
   heroSection: {
-    alignItems: 'center',
-    paddingVertical: 40,
-    marginHorizontal: 20,
-    borderRadius: 24,
+    paddingHorizontal: 20,
     marginBottom: 24,
-    shadowColor: '#8B5CF6',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 16,
-    elevation: 8,
+  },
+  heroBg: {
+    alignItems: 'center',
+    paddingVertical: 32,
+    borderRadius: 24,
   },
   heroIcon: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'rgba(255,255,255,0.15)',
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: 'rgba(255,255,255,0.2)',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 16,
+    marginBottom: 14,
   },
   heroTitle: {
-    fontSize: 32,
-    fontWeight: '800',
-    color: Colors.text.white,
-    marginBottom: 8,
-    textAlign: 'center',
+    fontSize: 26,
+    fontWeight: '800' as const,
+    color: '#FFF',
+    marginBottom: 6,
   },
   heroSubtitle: {
-    fontSize: 15,
+    fontSize: 14,
     color: 'rgba(255,255,255,0.85)',
     textAlign: 'center',
-    marginBottom: 4,
-  },
-  featuresBadges: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 20
-  },
-  featureBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 999
-  },
-  featureBadgeText: {
-    color: Colors.text.white,
-    fontWeight: '600',
-    fontSize: 12
   },
   billingSection: {
     paddingHorizontal: 20,
     marginBottom: 20,
   },
-  billingSectionTitle: {
+  sectionTitle: {
     fontSize: 16,
     fontWeight: '700' as const,
-    color: Colors.text.primary,
+    color: '#1A1A1A',
     marginBottom: 12,
   },
   billingRow: {
     flexDirection: 'row',
-    gap: 10,
+    gap: 8,
   },
   billingCard: {
     flex: 1,
-    backgroundColor: Colors.backgroundSecondary,
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
     paddingVertical: 14,
-    paddingHorizontal: 10,
+    paddingHorizontal: 8,
     alignItems: 'center',
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: '#F0F0F0',
     position: 'relative',
     overflow: 'visible',
   },
   billingCardActive: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.primary + '08',
+    borderColor: '#FF2D55',
+    backgroundColor: '#FFF5F7',
   },
   billingTag: {
     position: 'absolute',
     top: -10,
-    backgroundColor: Colors.success,
+    backgroundColor: '#22C55E',
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 8,
@@ -628,102 +653,100 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF6B00',
   },
   billingTagText: {
-    color: Colors.text.white,
+    color: '#FFF',
     fontSize: 9,
     fontWeight: '800' as const,
   },
   billingLabel: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: '700' as const,
-    color: Colors.text.primary,
+    color: '#1A1A1A',
     marginBottom: 2,
   },
   billingLabelActive: {
-    color: Colors.primary,
+    color: '#FF2D55',
   },
   billingDiscount: {
     fontSize: 11,
-    color: Colors.text.secondary,
+    color: '#9CA3AF',
     fontWeight: '500' as const,
   },
   billingDiscountActive: {
-    color: Colors.primary,
+    color: '#FF2D55',
   },
   tiersSection: {
     paddingHorizontal: 20,
-    marginBottom: 30,
-  },
-  tierTotalPrice: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    fontWeight: '500' as const,
-  },
-  savingsBanner: {
-    backgroundColor: Colors.success + '15',
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    marginBottom: 12,
-    alignSelf: 'flex-start',
-  },
-  savingsText: {
-    color: Colors.success,
-    fontSize: 12,
-    fontWeight: '700' as const,
+    marginBottom: 24,
   },
   tierCard: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 12,
     borderWidth: 2,
-    borderColor: 'transparent',
+    borderColor: '#F0F0F0',
     position: 'relative',
   },
   selectedTierCard: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.background,
-  },
-  currentTierCard: {
-    borderColor: Colors.success,
+    borderColor: '#FF2D55',
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#FF2D55',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 4,
   },
   popularBadge: {
     position: 'absolute',
-    top: -12,
-    left: 20,
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 12,
+    top: -10,
+    left: 18,
+    backgroundColor: '#FF2D55',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   popularText: {
-    color: Colors.text.white,
+    color: '#FFF',
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '800' as const,
   },
   currentBadge: {
     position: 'absolute',
-    top: -12,
-    right: 20,
-    backgroundColor: Colors.success,
-    paddingHorizontal: 12,
+    top: -10,
+    right: 18,
+    backgroundColor: '#22C55E',
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 10,
   },
   currentText: {
-    color: Colors.text.white,
+    color: '#FFF',
     fontSize: 10,
-    fontWeight: 'bold',
+    fontWeight: '800' as const,
   },
   tierHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 16,
+    marginBottom: 8,
+  },
+  tierNameRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tierDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   tierName: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 20,
+    fontWeight: '800' as const,
+    color: '#1A1A1A',
   },
   tierPricing: {
     flexDirection: 'row',
@@ -731,36 +754,74 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   offPill: {
-    backgroundColor: '#FFE8E8',
+    backgroundColor: '#FFE5EA',
     paddingHorizontal: 8,
     paddingVertical: 2,
-    borderRadius: 8
+    borderRadius: 8,
   },
   offPillText: {
-    color: Colors.primary,
-    fontWeight: '700',
-    fontSize: 12
+    color: '#FF2D55',
+    fontWeight: '700' as const,
+    fontSize: 11,
   },
   tierPrice: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: Colors.text.primary,
+    fontSize: 18,
+    fontWeight: '800' as const,
+    color: '#1A1A1A',
+  },
+  tierPriceUnit: {
+    fontSize: 13,
+    fontWeight: '500' as const,
+    color: '#9CA3AF',
+  },
+  tierTotalPrice: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500' as const,
+  },
+  savingsBanner: {
+    backgroundColor: '#ECFDF5',
+    borderRadius: 8,
+    paddingVertical: 5,
+    paddingHorizontal: 10,
+    marginBottom: 12,
+    alignSelf: 'flex-start',
+  },
+  savingsText: {
+    color: '#22C55E',
+    fontSize: 12,
+    fontWeight: '700' as const,
   },
   tierFeatures: {
     gap: 8,
+    marginTop: 4,
   },
   featureRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 10,
+  },
+  featureCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  featureCheckActive: {
+    backgroundColor: '#22C55E',
+  },
+  featureCheckDisabled: {
+    backgroundColor: '#F0F0F0',
   },
   featureText: {
     flex: 1,
     fontSize: 14,
-    color: Colors.text.primary,
+    color: '#1A1A1A',
+    fontWeight: '500' as const,
   },
   disabledFeatureText: {
-    color: Colors.text.light,
+    color: '#9CA3AF',
     textDecorationLine: 'line-through',
   },
   footer: {
@@ -774,129 +835,50 @@ const styles = StyleSheet.create({
   disabledButton: {
     opacity: 0.6,
   },
-  disclaimer: {
-    fontSize: 11,
-    color: Colors.text.secondary,
-    textAlign: 'center',
-    marginTop: 12,
-    paddingHorizontal: 8,
+  cancelPlanBtn: {
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    marginBottom: 8,
   },
-  paymentMethodSection: {
-    paddingHorizontal: 20,
-    marginBottom: 24,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginBottom: 16,
-  },
-  paymentCard: {
-    backgroundColor: Colors.backgroundSecondary,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-  },
-  selectedPaymentCard: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.background,
-  },
-  paymentRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12
-  },
-  paymentIconBox: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: Colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paymentTexts: {
-    flex: 1
-  },
-  paymentTitle: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.text.primary,
-    marginBottom: 2,
-  },
-  paymentSubtitle: {
-    fontSize: 13,
-    color: Colors.text.secondary
-  },
-  checkmarkBox: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: Colors.primary + '20',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  securityNote: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    paddingTop: 12,
-    paddingHorizontal: 4,
-  },
-  securityNoteText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    fontWeight: '500',
+  cancelPlanText: {
+    color: '#EF4444',
+    fontSize: 14,
+    fontWeight: '600' as const,
   },
   securityBadges: {
     flexDirection: 'row',
     justifyContent: 'center',
     gap: 16,
-    marginTop: 12,
+    marginTop: 8,
   },
   securityBadge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 6,
+    gap: 5,
   },
   securityText: {
     fontSize: 11,
-    color: Colors.text.secondary,
-    fontWeight: '500',
+    color: '#9CA3AF',
+    fontWeight: '500' as const,
+  },
+  disclaimer: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    textAlign: 'center',
+    marginTop: 10,
+    paddingHorizontal: 8,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.4)',
+    backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 24
-  },
-  modalCard: {
-    width: '100%',
-    maxWidth: 420,
-    backgroundColor: Colors.background,
-    borderRadius: 16,
-    padding: 16,
-    gap: 10
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    gap: 8,
-    alignItems: 'center'
-  },
-  modalTitle: {
-    color: Colors.text.primary,
-    fontWeight: '700',
-    fontSize: 16
-  },
-  modalBody: {
-    color: Colors.text.secondary
+    padding: 24,
   },
   phoneModalCard: {
     width: '100%',
     maxWidth: 420,
-    backgroundColor: Colors.background,
+    backgroundColor: '#FFF',
     borderRadius: 24,
     padding: 24,
   },
@@ -908,34 +890,34 @@ const styles = StyleSheet.create({
   },
   phoneModalTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text.primary,
+    fontWeight: '700' as const,
+    color: '#1A1A1A',
   },
   phoneModalClose: {
     padding: 4,
   },
   phoneModalSubtitle: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: '#6B7280',
     marginBottom: 20,
     lineHeight: 20,
   },
   phoneInputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
+    backgroundColor: '#F5F5F5',
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    marginBottom: 20,
+    borderColor: '#F0F0F0',
+    marginBottom: 16,
   },
   phonePrefix: {
     paddingHorizontal: 16,
     fontSize: 16,
-    fontWeight: '600',
-    color: Colors.text.primary,
+    fontWeight: '600' as const,
+    color: '#1A1A1A',
     borderRightWidth: 1,
-    borderRightColor: Colors.border,
+    borderRightColor: '#F0F0F0',
     paddingVertical: 14,
   },
   phoneInput: {
@@ -943,26 +925,51 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 14,
     fontSize: 16,
-    color: Colors.text.primary,
+    color: '#1A1A1A',
+  },
+  phoneErrorText: {
+    color: '#EF4444',
+    fontSize: 12,
+    marginBottom: 16,
+  },
+  summaryCard: {
+    backgroundColor: '#FAFAFA',
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
   },
   paymentSummary: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    paddingVertical: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+    paddingVertical: 6,
+  },
+  paymentSummaryTotal: {
+    borderTopWidth: 1,
+    borderTopColor: '#E5E5E5',
+    marginTop: 8,
+    paddingTop: 12,
   },
   summaryLabel: {
     fontSize: 14,
-    color: Colors.text.secondary,
+    color: '#6B7280',
   },
   summaryValue: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.text.primary,
+    fontWeight: '600' as const,
+    color: '#1A1A1A',
+  },
+  summaryLabelTotal: {
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#1A1A1A',
+  },
+  summaryValueTotal: {
+    fontSize: 18,
+    fontWeight: '800' as const,
+    color: '#1A1A1A',
   },
   confirmButton: {
-    marginTop: 20,
+    marginTop: 4,
   },
   cancelButton: {
     marginTop: 12,
@@ -971,7 +978,55 @@ const styles = StyleSheet.create({
   },
   cancelButtonText: {
     fontSize: 14,
-    color: Colors.text.secondary,
-    fontWeight: '500',
+    color: '#9CA3AF',
+    fontWeight: '500' as const,
+  },
+  cancelModalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: '#FFF',
+    borderRadius: 24,
+    padding: 24,
+    alignItems: 'center',
+  },
+  cancelModalTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: '#1A1A1A',
+    marginBottom: 12,
+  },
+  cancelModalBody: {
+    fontSize: 14,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 22,
+    marginBottom: 24,
+  },
+  cancelConfirmBtn: {
+    width: '100%',
+    paddingVertical: 16,
+    borderRadius: 14,
+    backgroundColor: '#FEF2F2',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  cancelConfirmText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#EF4444',
+  },
+  keepPlanBtn: {
+    width: '100%',
+    borderRadius: 14,
+    overflow: 'hidden',
+  },
+  keepPlanGradient: {
+    paddingVertical: 16,
+    alignItems: 'center',
+  },
+  keepPlanText: {
+    fontSize: 15,
+    fontWeight: '700' as const,
+    color: '#FFF',
   },
 });

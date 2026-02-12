@@ -1,7 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, StatusBar, TextInput, ScrollView } from 'react-native';
-import { MessageCircle, Crown, ChevronRight, Search, SlidersHorizontal } from 'lucide-react-native';
-
+import { MessageCircle, Crown, ChevronRight, Search, SlidersHorizontal, Sparkles } from 'lucide-react-native';
 import { useMembership } from '@/hooks/membership-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-context';
@@ -29,17 +28,17 @@ export default function MessagesScreen() {
     const now = new Date();
     const diff = now.getTime() - date.getTime();
     const minutes = Math.floor(diff / 60000);
-    
+
     if (minutes < 1) return 'now';
-    if (minutes < 60) return `${minutes} min`;
-    
+    if (minutes < 60) return `${minutes}m`;
+
     const hours = Math.floor(minutes / 60);
-    if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''}`;
-    
+    if (hours < 24) return `${hours}h`;
+
     const days = Math.floor(hours / 24);
     if (days === 1) return 'Yesterday';
-    if (days < 7) return `${days}d ago`;
-    
+    if (days < 7) return `${days}d`;
+
     return date.toLocaleDateString();
   }, []);
 
@@ -55,7 +54,7 @@ export default function MessagesScreen() {
       }
     });
 
-    const filtered = searchQuery.trim() 
+    const filtered = searchQuery.trim()
       ? conversationsList.filter(c => c.otherUserName.toLowerCase().includes(searchQuery.toLowerCase()))
       : conversationsList;
 
@@ -63,19 +62,17 @@ export default function MessagesScreen() {
   }, [items, searchQuery]);
 
   const renderActivityItem = (item: MatchListItem, index: number, isCurrentUser: boolean = false) => {
-    const hasGradient = index < 2;
-    
     return (
-      <TouchableOpacity 
+      <TouchableOpacity
         key={item.id}
-        style={styles.activityItem} 
+        style={styles.activityItem}
         onPress={() => !isCurrentUser && handleConversationPress(item)}
         activeOpacity={0.8}
       >
         <View style={styles.activityAvatarWrapper}>
-          {hasGradient ? (
+          {index < 3 ? (
             <LinearGradient
-              colors={['#FF6B6B', '#FF8E53', '#FFA726']}
+              colors={['#FF2D55', '#FF6B8A', '#FFA726']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 1 }}
               style={styles.activityGradientRing}
@@ -113,52 +110,28 @@ export default function MessagesScreen() {
     );
   };
 
-  const renderConversation = ({ item, index }: { item: MatchListItem; index: number }) => {
+  const renderConversation = ({ item }: { item: MatchListItem }) => {
     const lastMessage = item.lastMessage;
     const timeSince = lastMessage ? getTimeSince(new Date(lastMessage.timestamp)) : '';
     const isMine = lastMessage?.senderId === uid;
-    const unreadCount = Math.random() > 0.6 ? Math.floor(Math.random() * 3) + 1 : 0;
-    const hasGradient = index % 3 !== 2;
 
     return (
-      <TouchableOpacity 
-        style={styles.conversationItem} 
+      <TouchableOpacity
+        style={styles.conversationItem}
         onPress={() => handleConversationPress(item)}
         activeOpacity={0.7}
       >
         <View style={styles.conversationAvatarWrapper}>
-          {hasGradient ? (
-            <LinearGradient
-              colors={['#FF6B6B', '#FF8E53', '#FFA726']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.conversationGradientRing}
-            >
-              <View style={styles.conversationAvatarContainer}>
-                {item.otherUserAvatar ? (
-                  <Image source={{ uri: item.otherUserAvatar }} style={styles.conversationAvatar} />
-                ) : (
-                  <View style={[styles.conversationAvatar, styles.placeholderAvatar]}>
-                    <Text style={styles.placeholderTextLarge}>
-                      {item.otherUserName.substring(0, 1).toUpperCase()}
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </LinearGradient>
+          {item.otherUserAvatar ? (
+            <Image source={{ uri: item.otherUserAvatar }} style={styles.conversationAvatarImg} />
           ) : (
-            <View style={styles.conversationNoGradient}>
-              {item.otherUserAvatar ? (
-                <Image source={{ uri: item.otherUserAvatar }} style={styles.conversationAvatarSimple} />
-              ) : (
-                <View style={[styles.conversationAvatarSimple, styles.placeholderAvatar]}>
-                  <Text style={styles.placeholderTextLarge}>
-                    {item.otherUserName.substring(0, 1).toUpperCase()}
-                  </Text>
-                </View>
-              )}
+            <View style={[styles.conversationAvatarImg, styles.placeholderAvatar]}>
+              <Text style={styles.placeholderTextLarge}>
+                {item.otherUserName.substring(0, 1).toUpperCase()}
+              </Text>
             </View>
           )}
+          <View style={styles.onlineDotSmall} />
         </View>
 
         <View style={styles.conversationContent}>
@@ -166,18 +139,11 @@ export default function MessagesScreen() {
             <Text style={styles.conversationName} numberOfLines={1}>{item.otherUserName}</Text>
             <Text style={styles.conversationTime}>{timeSince}</Text>
           </View>
-          
-          <View style={styles.conversationRow}>
-            <Text style={styles.conversationMessage} numberOfLines={1}>
-              {isMine && <Text style={styles.youLabel}>You: </Text>}
-              {lastMessage?.text || 'Start a conversation'}
-            </Text>
-            {unreadCount > 0 && (
-              <View style={styles.unreadBadge}>
-                <Text style={styles.unreadCount}>{unreadCount}</Text>
-              </View>
-            )}
-          </View>
+
+          <Text style={styles.conversationMessage} numberOfLines={1}>
+            {isMine && <Text style={styles.youLabel}>You: </Text>}
+            {lastMessage?.text || 'Say hello! 👋'}
+          </Text>
         </View>
       </TouchableOpacity>
     );
@@ -193,10 +159,10 @@ export default function MessagesScreen() {
     <View>
       <View style={styles.searchWrapper}>
         <View style={styles.searchContainer}>
-          <Search size={20} color="#9CA3AF" />
+          <Search size={18} color="#9CA3AF" />
           <TextInput
             style={styles.searchInput}
-            placeholder="Search"
+            placeholder="Search conversations..."
             placeholderTextColor="#9CA3AF"
             value={searchQuery}
             onChangeText={setSearchQuery}
@@ -206,7 +172,7 @@ export default function MessagesScreen() {
 
       {newMatches.length > 0 && (
         <View style={styles.activitiesSection}>
-          <Text style={styles.sectionTitle}>Activities</Text>
+          <Text style={styles.sectionTitle}>New Matches</Text>
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
@@ -217,8 +183,8 @@ export default function MessagesScreen() {
           </ScrollView>
         </View>
       )}
-      
-      <Text style={styles.sectionTitle}>Messages</Text>
+
+      <Text style={styles.sectionTitle}>Conversations</Text>
     </View>
   );
 
@@ -229,29 +195,29 @@ export default function MessagesScreen() {
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Messages</Text>
           <TouchableOpacity style={styles.filterButton}>
-            <SlidersHorizontal size={22} color="#FF4D67" />
+            <SlidersHorizontal size={20} color="#1A1A1A" />
           </TouchableOpacity>
         </View>
 
         {tier === 'free' && (
-          <TouchableOpacity 
-            activeOpacity={0.9} 
+          <TouchableOpacity
+            activeOpacity={0.85}
             onPress={() => router.push('/premium' as any)}
             style={styles.premiumBannerWrapper}
           >
             <LinearGradient
-              colors={['#FF4D67', '#FF8E53']}
+              colors={['#FF2D55', '#FF6B8A']}
               start={{ x: 0, y: 0 }}
               end={{ x: 1, y: 0 }}
               style={styles.premiumBanner}
             >
               <View style={styles.premiumBannerContent}>
-                <Crown size={16} color="#FFF" fill="#FFF" />
+                <Sparkles size={16} color="#FFF" />
                 <Text style={styles.premiumBannerText}>
-                  {remainingDailyMessages} free messages left today
+                  {remainingDailyMessages} messages left today
                 </Text>
               </View>
-              <ChevronRight size={16} color="#FFF" />
+              <Text style={styles.upgradeChip}>Upgrade</Text>
             </LinearGradient>
           </TouchableOpacity>
         )}
@@ -263,11 +229,11 @@ export default function MessagesScreen() {
         ) : items.length === 0 ? (
           <View style={styles.emptyContainer} testID="messages-empty">
             <View style={styles.emptyIconWrapper}>
-              <MessageCircle size={32} color="#FF4D67" />
+              <MessageCircle size={32} color="#FF2D55" />
             </View>
-            <Text style={styles.emptyTitle}>No Matches Yet</Text>
+            <Text style={styles.emptyTitle}>No Messages Yet</Text>
             <Text style={styles.emptyDescription}>
-              Start swiping to find your match!
+              Match with someone and start a conversation!
             </Text>
           </View>
         ) : (
@@ -282,7 +248,7 @@ export default function MessagesScreen() {
             ListEmptyComponent={
               newMatches.length > 0 ? (
                 <View style={styles.noConversationsContainer}>
-                   <Text style={styles.emptyDescription}>No active conversations.</Text>
+                  <Text style={styles.emptyDescription}>No active conversations yet.</Text>
                 </View>
               ) : null
             }
@@ -296,7 +262,7 @@ export default function MessagesScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#FAFAFA',
   },
   safeArea: {
     flex: 1,
@@ -307,40 +273,40 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 8,
-    paddingBottom: 16,
+    paddingBottom: 12,
   },
   headerTitle: {
-    fontSize: 34,
-    fontWeight: '800',
+    fontSize: 28,
+    fontWeight: '800' as const,
     color: '#1A1A1A',
     letterSpacing: -0.5,
   },
   filterButton: {
-    width: 52,
-    height: 52,
-    borderRadius: 16,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
+    borderWidth: 1,
     borderColor: '#F0F0F0',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
+    shadowOpacity: 0.04,
     shadowRadius: 8,
     elevation: 2,
   },
   premiumBannerWrapper: {
     paddingHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   premiumBanner: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 16,
+    paddingVertical: 11,
+    borderRadius: 14,
   },
   premiumBannerContent: {
     flexDirection: 'row',
@@ -349,60 +315,75 @@ const styles = StyleSheet.create({
   },
   premiumBannerText: {
     color: '#FFF',
-    fontSize: 14,
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '600' as const,
+  },
+  upgradeChip: {
+    fontSize: 11,
+    fontWeight: '800' as const,
+    color: '#FF2D55',
+    backgroundColor: '#FFF',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+    overflow: 'hidden',
   },
   searchWrapper: {
     paddingHorizontal: 20,
-    marginBottom: 24,
+    marginBottom: 20,
   },
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 30,
-    paddingHorizontal: 20,
-    paddingVertical: 14,
-    gap: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 10,
     borderWidth: 1,
-    borderColor: '#EEEEEE',
+    borderColor: '#F0F0F0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
   searchInput: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: '#1A1A1A',
     padding: 0,
   },
   activitiesSection: {
-    marginBottom: 28,
+    marginBottom: 24,
   },
   sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
+    fontSize: 16,
+    fontWeight: '700' as const,
     color: '#1A1A1A',
-    marginBottom: 16,
+    marginBottom: 14,
     paddingHorizontal: 20,
   },
   activitiesScrollContent: {
     paddingHorizontal: 20,
-    gap: 16,
+    gap: 14,
   },
   activityItem: {
     alignItems: 'center',
-    width: 72,
+    width: 68,
   },
   activityAvatarWrapper: {
-    marginBottom: 8,
+    marginBottom: 6,
   },
   activityGradientRing: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
     padding: 3,
   },
   activityAvatarContainer: {
     flex: 1,
-    borderRadius: 33,
+    borderRadius: 31,
     backgroundColor: '#FFFFFF',
     padding: 2,
     overflow: 'hidden',
@@ -410,25 +391,25 @@ const styles = StyleSheet.create({
   activityAvatar: {
     width: '100%',
     height: '100%',
-    borderRadius: 31,
+    borderRadius: 29,
   },
   activityNoGradient: {
-    width: 72,
-    height: 72,
+    width: 68,
+    height: 68,
   },
   activityAvatarSimple: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
+    width: 68,
+    height: 68,
+    borderRadius: 34,
   },
   activityName: {
-    fontSize: 13,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '500' as const,
     color: '#1A1A1A',
     textAlign: 'center',
   },
   listContainer: {
-    paddingBottom: 24,
+    paddingBottom: 100,
   },
   conversationItem: {
     flexDirection: 'row',
@@ -438,33 +419,24 @@ const styles = StyleSheet.create({
   },
   conversationAvatarWrapper: {
     marginRight: 14,
+    position: 'relative',
   },
-  conversationGradientRing: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
-    padding: 2.5,
-  },
-  conversationAvatarContainer: {
-    flex: 1,
+  conversationAvatarImg: {
+    width: 56,
+    height: 56,
     borderRadius: 28,
-    backgroundColor: '#FFFFFF',
-    padding: 2,
-    overflow: 'hidden',
+    backgroundColor: '#F0F0F0',
   },
-  conversationAvatar: {
-    width: '100%',
-    height: '100%',
-    borderRadius: 26,
-  },
-  conversationNoGradient: {
-    width: 62,
-    height: 62,
-  },
-  conversationAvatarSimple: {
-    width: 62,
-    height: 62,
-    borderRadius: 31,
+  onlineDotSmall: {
+    position: 'absolute',
+    bottom: 2,
+    right: 2,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#22C55E',
+    borderWidth: 2,
+    borderColor: '#FAFAFA',
   },
   placeholderAvatar: {
     backgroundColor: '#FFE5E9',
@@ -472,14 +444,14 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   placeholderText: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: '#FF4D67',
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: '#FF2D55',
   },
   placeholderTextLarge: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#FF4D67',
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: '#FF2D55',
   },
   conversationContent: {
     flex: 1,
@@ -493,41 +465,25 @@ const styles = StyleSheet.create({
   },
   conversationName: {
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '700' as const,
     color: '#1A1A1A',
     flex: 1,
     marginRight: 12,
   },
   conversationTime: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#9CA3AF',
-    fontWeight: '400',
+    fontWeight: '400' as const,
   },
   conversationMessage: {
     fontSize: 14,
     color: '#6B7280',
-    flex: 1,
-    marginRight: 12,
   },
   youLabel: {
     color: '#9CA3AF',
   },
-  unreadBadge: {
-    backgroundColor: '#FF4D67',
-    minWidth: 22,
-    height: 22,
-    borderRadius: 11,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 6,
-  },
-  unreadCount: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-  },
   separatorContainer: {
-    paddingLeft: 96,
+    paddingLeft: 90,
     paddingRight: 20,
   },
   separator: {
@@ -539,7 +495,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   loadingText: {
-    color: '#6B7280',
+    color: '#9CA3AF',
     fontSize: 15,
   },
   emptyContainer: {
@@ -558,13 +514,13 @@ const styles = StyleSheet.create({
   },
   emptyTitle: {
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: '700' as const,
     color: '#1A1A1A',
     marginBottom: 8,
   },
   emptyDescription: {
     fontSize: 15,
-    color: '#6B7280',
+    color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 22,
   },

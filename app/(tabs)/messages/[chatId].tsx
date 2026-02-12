@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert, StatusBar, Image } from 'react-native';
-import { ChevronLeft, Send, ShieldAlert, MoreVertical, Smile, Mic, Check } from 'lucide-react-native';
+import { ChevronLeft, Send, ShieldAlert, MoreVertical, Smile, Mic, Check, Phone, Video } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types';
@@ -53,7 +53,7 @@ export default function ChatScreen() {
     let active = true;
     const failSafe = setTimeout(() => {
       if (active) {
-        console.log('[Chat] init timeout fallback — continuing without participant');
+        console.log('[Chat] init timeout fallback');
         setInitLoading(false);
       }
     }, 3500);
@@ -69,7 +69,7 @@ export default function ChatScreen() {
         let other: string | undefined = (convParts as any[] | null)?.find(p => p.user_id !== uid)?.user_id as string | undefined;
 
         if (!other) {
-          console.log('[Chat] No other participant in participants table, trying messages');
+          console.log('[Chat] No other participant, trying messages');
           const { data: msgs, error: mErr } = await supabase
             .from('messages')
             .select('sender_id')
@@ -90,13 +90,13 @@ export default function ChatScreen() {
           if (!matchErr && match) {
             other = (match.user1_id === uid ? match.user2_id : match.user1_id) as string;
             console.log('[Chat] Found other user from match:', other);
-            
+
             const { data: existingConv } = await supabase
               .from('conversations')
               .select('id')
               .eq('id', chatId)
               .maybeSingle();
-            
+
             if (!existingConv) {
               console.log('[Chat] Creating missing conversation and participants');
               await supabase.from('conversations').insert({ id: chatId, created_by: uid });
@@ -193,15 +193,20 @@ export default function ChatScreen() {
   const renderItem = useCallback(({ item, index }: { item: Message, index: number }) => {
     const isMine = uid != null && item.senderId === uid;
     const showDateSeparator = index === 0;
-    
+
     return (
       <View>
         {showDateSeparator && renderDateSeparator()}
         <View style={[styles.messageWrapper, isMine ? styles.messageWrapperMine : styles.messageWrapperTheirs]}>
           {isMine ? (
-            <View style={styles.sentBubble}>
+            <LinearGradient
+              colors={['#FF2D55', '#FF6B8A']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 1 }}
+              style={styles.sentBubble}
+            >
               <Text style={styles.sentText}>{item.text}</Text>
-            </View>
+            </LinearGradient>
           ) : (
             <View style={styles.receivedBubble}>
               <Text style={styles.receivedText}>{item.text}</Text>
@@ -211,8 +216,8 @@ export default function ChatScreen() {
             <Text style={styles.timeText}>{formatMessageTime(item.timestamp)}</Text>
             {isMine && (
               <View style={styles.readReceipt}>
-                <Check size={12} color="#FF4D67" strokeWidth={3} />
-                <Check size={12} color="#FF4D67" strokeWidth={3} style={styles.checkOverlap} />
+                <Check size={11} color="#FF2D55" strokeWidth={3} />
+                <Check size={11} color="#FF2D55" strokeWidth={3} style={styles.checkOverlap} />
               </View>
             )}
           </View>
@@ -225,7 +230,7 @@ export default function ChatScreen() {
     return (
       <View style={styles.container}>
         <View style={styles.loadingWrap}>
-          <ActivityIndicator color="#FF4D67" size="large" />
+          <ActivityIndicator color="#FF2D55" size="large" />
           <Text style={styles.loadingText}>Connecting...</Text>
         </View>
       </View>
@@ -237,46 +242,38 @@ export default function ChatScreen() {
       <View style={styles.container}>
         <StatusBar barStyle="dark-content" />
         <SafeAreaView style={styles.safeArea}>
-          <View style={styles.dragHandle} />
-          
           <View style={styles.header}>
             <TouchableOpacity onPress={handleBack} style={styles.backBtn} testID="chat-back">
-              <ChevronLeft size={28} color="#1A1A1A" strokeWidth={2} />
+              <ChevronLeft size={26} color="#1A1A1A" strokeWidth={2} />
             </TouchableOpacity>
-            
-            <View style={styles.headerProfile}>
+
+            <TouchableOpacity style={styles.headerProfile} activeOpacity={0.8}>
               <View style={styles.avatarWrapper}>
-                <LinearGradient
-                  colors={['#FF6B6B', '#FF8E53', '#FFA726']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.avatarGradient}
-                >
-                  <View style={styles.avatarInner}>
-                    {otherAvatar ? (
-                      <Image source={{ uri: otherAvatar }} style={styles.avatar} />
-                    ) : (
-                      <View style={[styles.avatar, styles.placeholderAvatar]}>
-                        <Text style={styles.placeholderText}>
-                          {otherName.substring(0, 1).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
+                {otherAvatar ? (
+                  <Image source={{ uri: otherAvatar }} style={styles.avatar} />
+                ) : (
+                  <View style={[styles.avatar, styles.placeholderAvatar]}>
+                    <Text style={styles.placeholderText}>
+                      {otherName.substring(0, 1).toUpperCase()}
+                    </Text>
                   </View>
-                </LinearGradient>
+                )}
+                <View style={styles.onlineDot} />
               </View>
               <View style={styles.headerInfo}>
                 <Text style={styles.headerName} numberOfLines={1}>{otherName}</Text>
-                <View style={styles.onlineStatus}>
-                  <View style={styles.onlineDot} />
-                  <Text style={styles.onlineText}>Online</Text>
-                </View>
+                <Text style={styles.onlineText}>Online now</Text>
               </View>
-            </View>
-
-            <TouchableOpacity style={styles.moreBtn}>
-              <MoreVertical size={22} color="#1A1A1A" />
             </TouchableOpacity>
+
+            <View style={styles.headerActions}>
+              <TouchableOpacity style={styles.headerActionBtn}>
+                <Phone size={18} color="#1A1A1A" />
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.headerActionBtn}>
+                <MoreVertical size={18} color="#1A1A1A" />
+              </TouchableOpacity>
+            </View>
           </View>
 
           <KeyboardAvoidingView
@@ -286,7 +283,7 @@ export default function ChatScreen() {
           >
             {loading ? (
               <View style={styles.loadingWrap}>
-                <ActivityIndicator color="#FF4D67" />
+                <ActivityIndicator color="#FF2D55" />
                 <Text style={styles.loadingText}>Loading history...</Text>
               </View>
             ) : error ? (
@@ -308,41 +305,40 @@ export default function ChatScreen() {
 
             <View style={styles.composerContainer}>
               <View style={styles.inputWrapper}>
+                <TouchableOpacity style={styles.emojiBtn}>
+                  <Smile size={22} color="#9CA3AF" />
+                </TouchableOpacity>
                 <TextInput
                   style={styles.input}
                   value={input}
                   onChangeText={setInput}
-                  placeholder="Your message"
+                  placeholder="Type a message..."
                   placeholderTextColor="#9CA3AF"
                   editable={!sending}
                   testID="chat-input"
                   multiline
                   maxLength={1000}
                 />
-                <TouchableOpacity style={styles.emojiBtn}>
-                  <Smile size={24} color="#9CA3AF" />
-                </TouchableOpacity>
               </View>
-              
+
               <TouchableOpacity
                 onPress={input.trim() ? onSend : undefined}
                 disabled={sending}
                 testID="chat-send"
                 activeOpacity={0.8}
-                style={styles.micBtn}
               >
                 {input.trim() ? (
                   <LinearGradient
-                    colors={['#FF4D67', '#FF8E53']}
+                    colors={['#FF2D55', '#FF6B8A']}
                     start={{ x: 0, y: 0 }}
                     end={{ x: 1, y: 1 }}
-                    style={styles.sendGradient}
+                    style={styles.sendBtn}
                   >
-                    <Send size={20} color="#FFF" style={{ marginLeft: 2 }} />
+                    <Send size={18} color="#FFF" style={{ marginLeft: 2 }} />
                   </LinearGradient>
                 ) : (
                   <View style={styles.micBtnInner}>
-                    <Mic size={22} color="#FF4D67" />
+                    <Mic size={20} color="#FF2D55" />
                   </View>
                 )}
               </TouchableOpacity>
@@ -355,34 +351,26 @@ export default function ChatScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { 
-    flex: 1, 
-    backgroundColor: '#FFFFFF',
+  container: {
+    flex: 1,
+    backgroundColor: '#FAFAFA',
   },
   safeArea: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
   },
   flex: { flex: 1 },
-  dragHandle: {
-    width: 40,
-    height: 5,
-    backgroundColor: '#E5E5E5',
-    borderRadius: 3,
-    alignSelf: 'center',
-    marginTop: 8,
-    marginBottom: 8,
-  },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F0F0F0',
   },
-  backBtn: { 
-    width: 40,
-    height: 40,
+  backBtn: {
+    width: 36,
+    height: 36,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -390,28 +378,28 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    marginLeft: 8,
+    marginLeft: 4,
   },
   avatarWrapper: {
     marginRight: 12,
-  },
-  avatarGradient: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    padding: 2.5,
-  },
-  avatarInner: {
-    flex: 1,
-    borderRadius: 24,
-    backgroundColor: '#FFFFFF',
-    padding: 2,
+    position: 'relative',
   },
   avatar: {
-    width: '100%',
-    height: '100%',
+    width: 44,
+    height: 44,
     borderRadius: 22,
     backgroundColor: '#F0F0F0',
+  },
+  onlineDot: {
+    position: 'absolute',
+    bottom: 0,
+    right: 0,
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    backgroundColor: '#22C55E',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   placeholderAvatar: {
     alignItems: 'center',
@@ -419,55 +407,45 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFE5E9',
   },
   placeholderText: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#FF4D67',
+    fontSize: 16,
+    fontWeight: '700' as const,
+    color: '#FF2D55',
   },
   headerInfo: {
     flex: 1,
   },
-  headerName: { 
-    fontSize: 18, 
-    fontWeight: '700', 
+  headerName: {
+    fontSize: 16,
+    fontWeight: '700' as const,
     color: '#1A1A1A',
-    marginBottom: 2,
-  },
-  onlineStatus: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  onlineDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FF4D67',
+    marginBottom: 1,
   },
   onlineText: {
-    fontSize: 13,
-    color: '#6B7280',
-    fontWeight: '500',
+    fontSize: 12,
+    color: '#22C55E',
+    fontWeight: '500' as const,
   },
-  moreBtn: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+  headerActions: {
+    flexDirection: 'row',
+    gap: 4,
+  },
+  headerActionBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#F5F5F5',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1.5,
-    borderColor: '#F0F0F0',
   },
-  listContent: { 
-    paddingHorizontal: 20, 
+  listContent: {
+    paddingHorizontal: 16,
     paddingTop: 16,
-    paddingBottom: 24,
+    paddingBottom: 16,
   },
   dateSeparator: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginVertical: 20,
-    paddingHorizontal: 20,
+    marginVertical: 16,
   },
   dateLine: {
     flex: 1,
@@ -475,14 +453,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#E5E5E5',
   },
   dateText: {
-    fontSize: 13,
+    fontSize: 12,
     color: '#9CA3AF',
-    fontWeight: '500',
+    fontWeight: '500' as const,
     marginHorizontal: 16,
   },
   messageWrapper: {
     marginBottom: 4,
-    maxWidth: '80%',
+    maxWidth: '78%',
   },
   messageWrapperMine: {
     alignSelf: 'flex-end',
@@ -490,35 +468,39 @@ const styles = StyleSheet.create({
   messageWrapperTheirs: {
     alignSelf: 'flex-start',
   },
-  receivedBubble: { 
-    backgroundColor: '#FFE5E9',
+  receivedBubble: {
+    backgroundColor: '#FFFFFF',
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
     borderTopLeftRadius: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.03,
+    shadowRadius: 4,
+    elevation: 1,
   },
-  receivedText: { 
-    fontSize: 15, 
+  receivedText: {
+    fontSize: 15,
     color: '#1A1A1A',
     lineHeight: 22,
   },
-  sentBubble: { 
-    backgroundColor: '#F3F4F6',
+  sentBubble: {
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderRadius: 20,
     borderTopRightRadius: 4,
   },
-  sentText: { 
-    fontSize: 15, 
-    color: '#1A1A1A',
+  sentText: {
+    fontSize: 15,
+    color: '#FFFFFF',
     lineHeight: 22,
   },
   timeRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 6,
-    marginBottom: 12,
+    marginTop: 4,
+    marginBottom: 10,
     gap: 4,
   },
   timeRowMine: {
@@ -527,90 +509,89 @@ const styles = StyleSheet.create({
   timeRowTheirs: {
     justifyContent: 'flex-start',
   },
-  timeText: { 
-    fontSize: 12, 
+  timeText: {
+    fontSize: 11,
     color: '#9CA3AF',
-    fontWeight: '400',
+    fontWeight: '400' as const,
   },
   readReceipt: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   checkOverlap: {
-    marginLeft: -8,
+    marginLeft: -7,
   },
   composerContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     backgroundColor: '#FFFFFF',
-    gap: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#F0F0F0',
+    gap: 10,
   },
   inputWrapper: {
     flex: 1,
     flexDirection: 'row',
     alignItems: 'flex-end',
     backgroundColor: '#F5F5F5',
-    borderRadius: 28,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-  },
-  input: {
-    flex: 1,
-    minHeight: 40,
-    maxHeight: 120,
-    paddingVertical: 8,
-    color: '#1A1A1A',
-    fontSize: 16,
+    borderRadius: 24,
+    paddingHorizontal: 6,
+    paddingVertical: 4,
   },
   emojiBtn: {
     padding: 8,
   },
-  micBtn: {
-    width: 52,
-    height: 52,
+  input: {
+    flex: 1,
+    minHeight: 36,
+    maxHeight: 100,
+    paddingVertical: 8,
+    paddingRight: 12,
+    color: '#1A1A1A',
+    fontSize: 15,
+  },
+  sendBtn: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   micBtnInner: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     backgroundColor: '#FFE5E9',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  sendGradient: {
-    width: 52,
-    height: 52,
-    borderRadius: 26,
-    alignItems: 'center',
+  loadingWrap: {
+    flex: 1,
     justifyContent: 'center',
-  },
-  loadingWrap: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
+    alignItems: 'center',
     gap: 12,
   },
-  loadingText: { 
-    color: '#6B7280',
+  loadingText: {
+    color: '#9CA3AF',
     fontSize: 15,
-    fontWeight: '500',
+    fontWeight: '500' as const,
   },
-  errorWrap: { 
-    flex: 1, 
-    justifyContent: 'center', 
-    alignItems: 'center', 
-    gap: 8, 
+  errorWrap: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 8,
     paddingHorizontal: 32,
   },
-  errorTitle: { 
-    fontWeight: '700', 
-    color: Colors.error, 
+  errorTitle: {
+    fontWeight: '700' as const,
+    color: Colors.error,
     fontSize: 18,
   },
-  errorText: { 
-    color: '#6B7280', 
+  errorText: {
+    color: '#6B7280',
     textAlign: 'center',
     fontSize: 15,
   },
