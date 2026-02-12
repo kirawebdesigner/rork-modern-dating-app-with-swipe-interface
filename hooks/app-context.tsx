@@ -880,13 +880,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           const myId = myProfile?.id ?? currentProfile?.id ?? null;
           if (!myId) return;
           
-          console.log('[App] inserting nope swipe:', myId, '->', userId);
-          const { error: swipeError } = await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action: 'nope' });
-          if (swipeError) {
-            console.log('[App] nope swipe insert error:', swipeError.message);
-          } else {
-            console.log('[App] nope swipe inserted successfully');
-          }
+          await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action: 'nope' });
         } catch (e) {
           console.log('[App] nope swipe sync failed', e);
         }
@@ -934,10 +928,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         const next: User = { ...base, ownedThemes: Array.from(owned) } as User;
         AsyncStorage.setItem('user_profile', JSON.stringify(next));
         
-        if (TEST_MODE) {
-          console.log('[App] TEST MODE: Theme unlocked locally only');
-          return next;
-        }
+        if (TEST_MODE) return next;
         
         (async () => {
           try {
@@ -976,10 +967,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       const next: User = { ...(prev as User), profileTheme: theme } as User;
       AsyncStorage.setItem('user_profile', JSON.stringify(next));
       
-      if (TEST_MODE) {
-        console.log('[App] TEST MODE: Theme set locally only');
-        return next;
-      }
+      if (TEST_MODE) return next;
       
       (async () => {
         try {
