@@ -330,6 +330,19 @@ BEGIN
 END;
 $$;
 
+-- App versions table (for in-app update checker)
+CREATE TABLE IF NOT EXISTS public.app_versions (
+  id UUID DEFAULT uuid_generate_v4() PRIMARY KEY,
+  version TEXT NOT NULL,
+  apk_url TEXT NOT NULL,
+  release_notes TEXT DEFAULT '',
+  force_update BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+ALTER TABLE public.app_versions ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Allow all on app_versions" ON public.app_versions FOR ALL USING (true) WITH CHECK (true);
+
 -- Insert default interests
 INSERT INTO public.interests (name, category) VALUES
   ('Travel', 'Lifestyle'),

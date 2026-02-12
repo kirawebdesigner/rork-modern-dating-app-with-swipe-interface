@@ -14,6 +14,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import Colors from "@/constants/colors";
 import { trpc, trpcClient } from "@/lib/trpc";
 import { registerForPushNotificationsAsync, setupNotificationHandlers, savePushTokenToServer } from "@/lib/notifications";
+import UpdateChecker from "@/components/UpdateChecker";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -162,6 +163,7 @@ export default function RootLayout() {
                     <I18nProvider>
                       <ThemeProvider>
                         <RootLayoutNav />
+                        <UpdateChecker />
                       </ThemeProvider>
                     </I18nProvider>
                   </MembershipProvider>

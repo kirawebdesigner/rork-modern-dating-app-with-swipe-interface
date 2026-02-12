@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, Image, Platform } from 'react-native';
+import { View, Text, StyleSheet, TextInput, TouchableOpacity, Alert, ScrollView, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
@@ -8,7 +8,6 @@ import { useI18n } from '@/hooks/i18n-context';
 import { supabase } from '@/lib/supabase';
 import * as Clipboard from 'expo-clipboard';
 import { useAuth } from '@/hooks/auth-context';
-import GradientButton from '@/components/GradientButton';
 
 export default function AccountSettingsScreen() {
   const router = useRouter();
@@ -18,11 +17,8 @@ export default function AccountSettingsScreen() {
   const [password, setPassword] = useState<string>('');
   const [loadingEmail, setLoadingEmail] = useState<boolean>(false);
   const [loadingPassword, setLoadingPassword] = useState<boolean>(false);
-  const [loadingAll, setLoadingAll] = useState<boolean>(false);
   const canUpdateEmail = useMemo(() => email.trim().length > 5 && email.includes('@'), [email]);
   const canUpdatePassword = useMemo(() => password.trim().length >= 6, [password]);
-  const displayName = useMemo(() => user?.name ?? 'You', [user?.name]);
-  const avatar = useMemo(() => user?.profile?.photos?.[0] ?? 'https://images.unsplash.com/photo-1544006659-f0b21884ce1d?q=80&w=256&auto=format&fit=crop', [user?.profile?.photos]);
 
   const handleUpdateEmail = async () => {
     if (!canUpdateEmail) return;
@@ -79,149 +75,187 @@ export default function AccountSettingsScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerWrap}>
-        <View style={styles.headerBg} />
-        <View style={styles.headerRow}>
-          <TouchableOpacity onPress={() => safeGoBack(router, '/settings')} style={styles.backBtn} accessibilityLabel={t('Back')} testID="account-back">
-            <ArrowLeft size={20} color={Colors.text.white} />
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => safeGoBack(router, '/settings')} style={styles.backBtn} accessibilityLabel={t('Back')} testID="account-back">
+          <ArrowLeft size={22} color={Colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('Account')}</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <Text style={styles.sectionLabel}>{t('Email')}</Text>
+        <View style={styles.card}>
+          <View style={styles.inputRow}>
+            <View style={styles.inputIcon}>
+              <Mail size={18} color="#3B82F6" />
+            </View>
+            <TextInput
+              style={styles.input}
+              placeholder={t('Enter new email')}
+              placeholderTextColor="#9CA3AF"
+              keyboardType="email-address"
+              autoCapitalize="none"
+              value={email}
+              onChangeText={setEmail}
+              testID="account-email"
+            />
+          </View>
+          <TouchableOpacity
+            style={[styles.actionBtn, { opacity: canUpdateEmail && !loadingEmail ? 1 : 0.5 }]}
+            onPress={handleUpdateEmail}
+            disabled={!canUpdateEmail || loadingEmail}
+            testID="save-email"
+          >
+            <Text style={styles.actionBtnText}>{loadingEmail ? t('Saving...') : t('Update Email')}</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('Account')}</Text>
-          <View style={{ width: 28 }} />
         </View>
-        <View style={styles.profileRow}>
-          <Image source={{ uri: avatar }} style={styles.avatar} accessibilityIgnoresInvertColors />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.subtitle}>{t('Security and account preferences')}</Text>
-          </View>
-        </View>
-      </View>
 
-      <View style={styles.content}>
+        <Text style={styles.sectionLabel}>{t('Password')}</Text>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('Email')}</Text>
-          <View style={styles.cardBody}>
-            <View style={[styles.inputRow, styles.itemDivider]}>
-              <View style={styles.iconWrap}><Mail size={18} color={Colors.primary} /></View>
-              <TextInput
-                style={styles.input}
-                placeholder={t('Enter new email')}
-                placeholderTextColor={'#9CA3AF'}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                value={email}
-                onChangeText={setEmail}
-                testID="account-email"
-              />
+          <View style={styles.inputRow}>
+            <View style={styles.inputIcon}>
+              <KeyRound size={18} color="#8B5CF6" />
             </View>
-            <TouchableOpacity
-              style={[styles.primaryBtn, { opacity: canUpdateEmail && !loadingEmail ? 1 : 0.6 }]}
-              onPress={handleUpdateEmail}
-              disabled={!canUpdateEmail || loadingEmail}
-              testID="save-email"
-            >
-              <Text style={styles.primaryBtnText}>{loadingEmail ? t('Saving...') : t('Save')}</Text>
-            </TouchableOpacity>
+            <TextInput
+              style={styles.input}
+              placeholder={t('Enter new password')}
+              placeholderTextColor="#9CA3AF"
+              secureTextEntry
+              value={password}
+              onChangeText={setPassword}
+              testID="account-password"
+            />
           </View>
+          <TouchableOpacity
+            style={[styles.actionBtn, { opacity: canUpdatePassword && !loadingPassword ? 1 : 0.5 }]}
+            onPress={handleUpdatePassword}
+            disabled={!canUpdatePassword || loadingPassword}
+            testID="save-password"
+          >
+            <Text style={styles.actionBtnText}>{loadingPassword ? t('Saving...') : t('Update Password')}</Text>
+          </TouchableOpacity>
         </View>
 
+        <Text style={styles.sectionLabel}>{t('Data & Account')}</Text>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('Password')}</Text>
-          <View style={styles.cardBody}>
-            <View style={[styles.inputRow, styles.itemDivider]}>
-              <View style={styles.iconWrap}><KeyRound size={18} color={Colors.primary} /></View>
-              <TextInput
-                style={styles.input}
-                placeholder={t('Enter new password')}
-                placeholderTextColor={'#9CA3AF'}
-                secureTextEntry
-                value={password}
-                onChangeText={setPassword}
-                testID="account-password"
-              />
-            </View>
-            <TouchableOpacity
-              style={[styles.primaryBtn, { opacity: canUpdatePassword && !loadingPassword ? 1 : 0.6 }]}
-              onPress={handleUpdatePassword}
-              disabled={!canUpdatePassword || loadingPassword}
-              testID="save-password"
-            >
-              <Text style={styles.primaryBtnText}>{loadingPassword ? t('Saving...') : t('Save')}</Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity style={styles.outlineBtn} onPress={handleExportData} testID="export-data">
+            <FileDown size={18} color={Colors.text.primary} />
+            <Text style={styles.outlineBtnText}>{t('Export My Data')}</Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.dangerBtn}
+            onPress={() => Alert.alert(t('Coming soon'), t('Account deletion will be available soon.'))}
+            testID="delete-account"
+          >
+            <Trash2 size={18} color="#FFF" />
+            <Text style={styles.dangerBtnText}>{t('Delete Account')}</Text>
+          </TouchableOpacity>
         </View>
 
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('Danger zone')}</Text>
-          <View style={styles.cardBody}>
-            <TouchableOpacity style={styles.secondaryBtn} onPress={handleExportData} testID="export-data">
-              <FileDown size={18} color={Colors.text.primary} />
-              <Text style={styles.secondaryBtnText}>{t('Export my data')}</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.dangerBtn} onPress={() => Alert.alert(t('Coming soon'), t('Account deletion will be available soon.'))} testID="delete-account">
-              <Trash2 size={18} color={Colors.text.white} />
-              <Text style={styles.dangerBtnText}>{t('Delete account')}</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        <View style={{ height: 120 }} />
-      </View>
-
-      <View style={styles.footer} testID="save-bar-account">
-        <GradientButton
-          title={loadingAll ? t('Saving...') : t('Save Changes')}
-          onPress={async () => {
-            try {
-              setLoadingAll(true);
-              if (canUpdateEmail) {
-                await supabase.auth.updateUser({ email: email.trim() });
-                setEmail('');
-              }
-              if (canUpdatePassword) {
-                await supabase.auth.updateUser({ password: password.trim() });
-                setPassword('');
-              }
-              Alert.alert(t('Saved'), t('Your changes have been saved'));
-            } catch (e: any) {
-              Alert.alert(t('Error'), e?.message ?? t('Failed to save changes'));
-            } finally {
-              setLoadingAll(false);
-            }
-          }}
-          style={styles.saveButton}
-        />
-      </View>
-    </SafeAreaView>
+        <View style={{ height: 60 }} />
+      </ScrollView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.backgroundSecondary },
-  headerWrap: { backgroundColor: 'transparent' },
-  headerBg: { height: 140, backgroundColor: Colors.primary },
-  headerRow: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { color: Colors.text.white, fontSize: 18, fontWeight: '700' },
-  backBtn: { padding: 6 },
-  profileRow: { position: 'absolute', bottom: -32, left: 16, right: 16, flexDirection: 'row', gap: 12, alignItems: 'center' },
-  avatar: { width: 64, height: 64, borderRadius: 16, borderWidth: 2, borderColor: '#fff' },
-  name: { fontSize: 20, fontWeight: '800', color: Colors.text.white },
-  subtitle: { fontSize: 12, color: '#FFE1EA' },
-  content: { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 24 },
-  sectionTitle: { fontSize: 12, color: Colors.text.secondary, marginBottom: 8 },
-  card: { marginBottom: 16 },
-  cardBody: { backgroundColor: Colors.card, borderRadius: 16, shadowColor: Colors.shadow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4, overflow: 'hidden', padding: 12, gap: 12 },
-  inputRow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: Colors.backgroundSecondary, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 12, height: 50 },
-  itemDivider: { borderBottomWidth: 0 },
-  iconWrap: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FFF1F5', alignItems: 'center', justifyContent: 'center' },
-  input: { flex: 1, color: Colors.text.primary },
-  primaryBtn: { marginTop: 0, backgroundColor: Colors.primary, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  primaryBtnText: { color: Colors.text.white, fontWeight: '700' },
-  secondaryBtn: { flexDirection: 'row', gap: 8, backgroundColor: Colors.backgroundSecondary, borderWidth: 1, borderColor: Colors.border, height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  secondaryBtnText: { color: Colors.text.primary, fontWeight: '700' },
-  dangerBtn: { flexDirection: 'row', gap: 8, backgroundColor: '#EF4444', height: 48, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
-  dangerBtnText: { color: Colors.text.white, fontWeight: '700' },
-  footer: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 12, paddingBottom: Platform.OS === 'web' ? 20 : 34, backgroundColor: Colors.card, borderTopWidth: 1, borderTopColor: Colors.border, shadowColor: Colors.shadow, shadowOpacity: 1, shadowRadius: 12, shadowOffset: { width: 0, height: -4 }, elevation: 6 },
-  saveButton: { marginTop: 8 },
+  container: { flex: 1, backgroundColor: '#F8F8FA' },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 56 : 48,
+    paddingBottom: 12,
+    backgroundColor: '#F8F8FA',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  headerTitle: { fontSize: 18, fontWeight: '700' as const, color: Colors.text.primary },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.text.secondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginLeft: 4,
+    marginTop: 8,
+  },
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  inputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: '#F8F8FA',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    height: 52,
+  },
+  inputIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  input: { flex: 1, color: Colors.text.primary, fontSize: 15 },
+  actionBtn: {
+    backgroundColor: Colors.primary,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionBtnText: { color: '#FFF', fontWeight: '700' as const, fontSize: 15 },
+  outlineBtn: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#F8F8FA',
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  outlineBtnText: { color: Colors.text.primary, fontWeight: '600' as const, fontSize: 15 },
+  dangerBtn: {
+    flexDirection: 'row',
+    gap: 10,
+    backgroundColor: '#EF4444',
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dangerBtnText: { color: '#FFF', fontWeight: '700' as const, fontSize: 15 },
 });

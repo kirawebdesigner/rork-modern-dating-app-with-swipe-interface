@@ -1,126 +1,408 @@
 import React, { useMemo } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Alert, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, Image, Platform } from 'react-native';
 import Colors from '@/constants/colors';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
-import { User, Shield, Bell, Crown, Globe, ChevronRight, ArrowLeft, Share2, Mail, LogOut, FileText, Lock, Info } from 'lucide-react-native';
+import {
+  User,
+  Shield,
+  Bell,
+  Crown,
+  Globe,
+  ChevronRight,
+  ArrowLeft,
+  Share2,
+  LogOut,
+  FileText,
+  Lock,
+  Info,
+  Palette,
+} from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
 import * as Linking from 'expo-linking';
 import { useAuth } from '@/hooks/auth-context';
+import { useMembership } from '@/hooks/membership-context';
+
+interface SettingItemProps {
+  icon: React.ReactNode;
+  iconBg: string;
+  label: string;
+  subtitle?: string;
+  onPress: () => void;
+  testID?: string;
+  danger?: boolean;
+  badge?: string;
+}
+
+function SettingItem({ icon, iconBg, label, subtitle, onPress, testID, danger, badge }: SettingItemProps) {
+  return (
+    <TouchableOpacity style={styles.item} onPress={onPress} testID={testID} activeOpacity={0.6}>
+      <View style={[styles.itemIcon, { backgroundColor: iconBg }]}>{icon}</View>
+      <View style={styles.itemContent}>
+        <Text style={[styles.itemLabel, danger && styles.itemLabelDanger]}>{label}</Text>
+        {subtitle ? <Text style={styles.itemSubtitle}>{subtitle}</Text> : null}
+      </View>
+      {badge ? (
+        <View style={styles.badge}>
+          <Text style={styles.badgeText}>{badge}</Text>
+        </View>
+      ) : null}
+      {!danger && <ChevronRight size={18} color="#D1D5DB" />}
+    </TouchableOpacity>
+  );
+}
 
 export default function SettingsScreen() {
   const router = useRouter();
   const { t } = useI18n();
   const { logout, user } = useAuth();
+  const { tier } = useMembership();
   const displayName = useMemo(() => user?.name ?? 'You', [user?.name]);
   const avatar = useMemo(() => user?.profile?.photos?.[0] ?? 'https://images.unsplash.com/photo-1544006659-f0b21884ce1d?q=80&w=256&auto=format&fit=crop', [user?.profile?.photos]);
+  const tierLabel = useMemo(() => {
+    if (tier === 'vip') return 'VIP';
+    if (tier === 'gold') return 'Gold';
+    return 'Free';
+  }, [tier]);
+
+  const handleLogout = async () => {
+    try {
+      await logout();
+      Alert.alert(t('Signed out'), t('You have been signed out.'));
+      router.replace('/(auth)/login' as any);
+    } catch {
+      Alert.alert(t('Error'), t('Failed to sign out'));
+    }
+  };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerWrap}>
-        <View style={styles.headerBg} />
-        <View style={styles.headerRow}>
-          <TouchableOpacity accessibilityLabel="Go back" onPress={() => safeGoBack(router, '/(tabs)/profile')} testID="settings-back-btn" style={styles.backBtn} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-            <ArrowLeft size={20} color={Colors.text.white} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('Settings')}</Text>
-          <View style={{ width: 28 }} />
-        </View>
-        <View style={styles.profileRow}>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          accessibilityLabel="Go back"
+          onPress={() => safeGoBack(router, '/(tabs)/profile')}
+          testID="settings-back-btn"
+          style={styles.backBtn}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <ArrowLeft size={22} color={Colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('Settings')}</Text>
+        <View style={{ width: 40 }} />
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <TouchableOpacity
+          style={styles.profileCard}
+          onPress={() => router.push('/profile-settings' as any)}
+          activeOpacity={0.7}
+        >
           <Image source={{ uri: avatar }} style={styles.avatar} accessibilityIgnoresInvertColors />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.name}>{displayName}</Text>
-            <Text style={styles.subtitle}>{t('Manage your account, privacy, and app')}</Text>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName}>{displayName}</Text>
+            <View style={styles.tierRow}>
+              <View style={[styles.tierPill, tier !== 'free' && styles.tierPillActive]}>
+                <Crown size={12} color={tier !== 'free' ? '#F59E0B' : Colors.text.light} />
+                <Text style={[styles.tierPillText, tier !== 'free' && styles.tierPillTextActive]}>{tierLabel}</Text>
+              </View>
+            </View>
           </View>
+          <ChevronRight size={20} color="#D1D5DB" />
+        </TouchableOpacity>
+
+        <Text style={styles.sectionLabel}>{t('Account')}</Text>
+        <View style={styles.section}>
+          <SettingItem
+            icon={<User size={18} color="#FF2D55" />}
+            iconBg="#FFF1F3"
+            label={t('Edit Profile')}
+            subtitle={t('Photos, bio, interests')}
+            onPress={() => router.push('/profile-settings' as any)}
+            testID="settings-edit-profile"
+          />
+          <View style={styles.divider} />
+          <SettingItem
+            icon={<User size={18} color="#3B82F6" />}
+            iconBg="#EFF6FF"
+            label={t('Account Settings')}
+            subtitle={t('Email, password, data')}
+            onPress={() => router.push('/settings/account' as any)}
+            testID="settings-account"
+          />
         </View>
-      </View>
 
-      <View style={styles.content}>
-        <Card title={t('Account')}>
-          <Item icon={<User size={18} color={Colors.primary} />} label={t('Edit profile')} onPress={() => router.push('/profile-settings' as any)} testID="settings-edit-profile" />
-          <Item icon={<User size={18} color={Colors.primary} />} label={t('Account settings')} onPress={() => router.push('/settings/account' as any)} testID="settings-account" last />
-        </Card>
+        <Text style={styles.sectionLabel}>{t('Privacy & Security')}</Text>
+        <View style={styles.section}>
+          <SettingItem
+            icon={<Shield size={18} color="#8B5CF6" />}
+            iconBg="#EDE9FE"
+            label={t('Privacy')}
+            subtitle={t('Visibility, incognito mode')}
+            onPress={() => router.push('/settings/privacy' as any)}
+            testID="settings-privacy"
+          />
+          <View style={styles.divider} />
+          <SettingItem
+            icon={<Lock size={18} color="#059669" />}
+            iconBg="#ECFDF5"
+            label={t('Security')}
+            subtitle={t('Biometric, 2FA, login alerts')}
+            onPress={() => router.push('/settings/security' as any)}
+            testID="settings-security"
+          />
+          <View style={styles.divider} />
+          <SettingItem
+            icon={<Info size={18} color="#6B7280" />}
+            iconBg="#F3F4F6"
+            label={t('App Permissions')}
+            onPress={() => router.push('/permissions-info' as any)}
+            testID="settings-permissions"
+          />
+        </View>
 
-        <Card title={t('Privacy & Security')}>
-          <Item icon={<Shield size={18} color={Colors.primary} />} label={t('Privacy settings')} onPress={() => router.push('/settings/privacy' as any)} testID="settings-privacy" />
-          <Item icon={<Lock size={18} color={Colors.primary} />} label={t('Security')} onPress={() => router.push('/settings/security' as any)} testID="settings-security" />
-          <Item icon={<Info size={18} color={Colors.primary} />} label={t('App Permissions')} onPress={() => router.push('/permissions-info' as any)} testID="settings-permissions" last />
-        </Card>
+        <Text style={styles.sectionLabel}>{t('Notifications')}</Text>
+        <View style={styles.section}>
+          <SettingItem
+            icon={<Bell size={18} color="#F59E0B" />}
+            iconBg="#FEF3C7"
+            label={t('Push Notifications')}
+            subtitle={t('Likes, matches, messages')}
+            onPress={() => router.push('/settings/notifications' as any)}
+            testID="settings-notifications"
+          />
+        </View>
 
-        <Card title={t('Notifications')}>
-          <Item icon={<Bell size={18} color={Colors.primary} />} label={t('Manage notifications')} onPress={() => router.push('/settings/notifications' as any)} testID="settings-notifications" last />
-        </Card>
+        <Text style={styles.sectionLabel}>{t('Subscription')}</Text>
+        <View style={styles.section}>
+          <SettingItem
+            icon={<Crown size={18} color="#F59E0B" />}
+            iconBg="#FEF3C7"
+            label={t('Premium Plans')}
+            subtitle={tier === 'free' ? t('Upgrade for more features') : t('Manage your plan')}
+            onPress={() => router.push('/premium' as any)}
+            testID="settings-upgrade"
+            badge={tier === 'free' ? 'NEW' : undefined}
+          />
+          <View style={styles.divider} />
+          <SettingItem
+            icon={<Share2 size={18} color="#22C55E" />}
+            iconBg="#ECFDF5"
+            label={t('Invite & Earn Gold')}
+            subtitle={t('Get 30 days Gold free')}
+            onPress={() => router.push('/referrals' as any)}
+            testID="settings-referrals"
+          />
+        </View>
 
-        <Card title={t('Subscription')}>
-          <Item icon={<Crown size={18} color={Colors.primary} />} label={t('Upgrade to Premium')} onPress={() => router.push('/premium' as any)} testID="settings-upgrade" last />
-        </Card>
+        <Text style={styles.sectionLabel}>{t('App')}</Text>
+        <View style={styles.section}>
+          <SettingItem
+            icon={<Globe size={18} color="#3B82F6" />}
+            iconBg="#EFF6FF"
+            label={t('Language')}
+            onPress={() => router.push('/language' as any)}
+            testID="settings-language"
+          />
+          <View style={styles.divider} />
+          <SettingItem
+            icon={<FileText size={18} color="#6B7280" />}
+            iconBg="#F3F4F6"
+            label={t('Terms & Conditions')}
+            onPress={() => router.push('/terms' as any)}
+            testID="settings-terms"
+          />
+          <View style={styles.divider} />
+          <SettingItem
+            icon={<FileText size={18} color="#6B7280" />}
+            iconBg="#F3F4F6"
+            label={t('Privacy Policy')}
+            onPress={() => router.push('/privacy-policy' as any)}
+            testID="settings-privacy-policy"
+          />
+        </View>
 
-        <Card title={t('Growth')}>
-          <Item icon={<Share2 size={18} color={Colors.primary} />} label={t('Share & Get Gold')} onPress={() => router.push('/referrals' as any)} testID="settings-referrals" />
-          <Item icon={<Mail size={18} color={Colors.primary} />} label={t('Share via Email')} onPress={() => Linking.openURL('mailto:zewijuna1@gmail.com?subject=Feedback&body=Hi,%0D%0A')} testID="settings-share-email" last />
-        </Card>
+        <View style={styles.section}>
+          <SettingItem
+            icon={<LogOut size={18} color="#EF4444" />}
+            iconBg="#FEF2F2"
+            label={t('Sign Out')}
+            onPress={handleLogout}
+            testID="settings-logout"
+            danger
+          />
+        </View>
 
-        <Card title={t('App')}>
-          <Item icon={<Globe size={18} color={Colors.primary} />} label={t('Language')} onPress={() => router.push('/language' as any)} testID="settings-language" />
-          <Item icon={<FileText size={18} color={Colors.primary} />} label={t('Terms & Conditions')} onPress={() => router.push('/terms' as any)} testID="settings-terms" />
-          <Item icon={<FileText size={18} color={Colors.primary} />} label={t('Privacy Policy')} onPress={() => router.push('/privacy-policy' as any)} testID="settings-privacy-policy" last />
-        </Card>
-
-        <Card title={t('Session')}>
-          <Item icon={<LogOut size={18} color={'#EF4444'} />} label={t('Logout')} onPress={async () => {
-            try {
-              await logout();
-              Alert.alert(t('Signed out'), t('You have been signed out.'));
-              router.replace('/(auth)/login' as any);
-            } catch {
-              Alert.alert(t('Error'), t('Failed to sign out'));
-            }
-          }} testID="settings-logout" last />
-        </Card>
-      </View>
-    </SafeAreaView>
-  );
-}
-
-function Card({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.card}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      <View style={styles.cardBody}>{children}</View>
+        <Text style={styles.versionText}>Zewijuna v1.0.0</Text>
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </View>
   );
 }
 
-function Item({ icon, label, onPress, testID, last }: { icon: React.ReactNode; label: string; onPress: () => void; testID?: string; last?: boolean }) {
-  return (
-    <TouchableOpacity style={[styles.item, !last ? styles.itemDivider : null]} onPress={onPress} testID={testID}>
-      <View style={styles.itemLeft}>
-        <View style={styles.iconWrap}>{icon}</View>
-        <Text style={styles.itemLabel}>{label}</Text>
-      </View>
-      <ChevronRight size={18} color={Colors.text.secondary} />
-    </TouchableOpacity>
-  );
-}
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.backgroundSecondary },
-  headerWrap: { backgroundColor: 'transparent' },
-  headerBg: { height: 140, backgroundColor: Colors.primary },
-  headerRow: { position: 'absolute', top: 0, left: 0, right: 0, paddingHorizontal: 16, paddingTop: 12, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  headerTitle: { color: Colors.text.white, fontSize: 18, fontWeight: '700' },
-  backBtn: { padding: 6 },
-  profileRow: { position: 'absolute', bottom: -32, left: 16, right: 16, flexDirection: 'row', gap: 12, alignItems: 'center' },
-  avatar: { width: 64, height: 64, borderRadius: 16, borderWidth: 2, borderColor: '#fff' },
-  name: { fontSize: 20, fontWeight: '800', color: Colors.text.white },
-  subtitle: { fontSize: 12, color: '#FFE1EA' },
-  content: { paddingTop: 56, paddingHorizontal: 16, paddingBottom: 24 },
-  sectionTitle: { fontSize: 12, color: Colors.text.secondary, marginBottom: 8 },
-  card: { marginBottom: 16 },
-  cardBody: { backgroundColor: Colors.card, borderRadius: 16, shadowColor: Colors.shadow, shadowOpacity: 1, shadowRadius: 16, shadowOffset: { width: 0, height: 8 }, elevation: 4, overflow: 'hidden' },
-  item: { minHeight: 56, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  itemDivider: { borderBottomWidth: 1, borderBottomColor: Colors.border },
-  itemLeft: { flexDirection: 'row', alignItems: 'center', gap: 12, flex: 1 },
-  iconWrap: { width: 32, height: 32, borderRadius: 8, backgroundColor: '#FFF1F5', alignItems: 'center', justifyContent: 'center' },
-  itemLabel: { fontSize: 16, color: Colors.text.primary, flexShrink: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: '#F8F8FA',
+  },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 56 : 48,
+    paddingBottom: 12,
+    backgroundColor: '#F8F8FA',
+  },
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text.primary,
+  },
+  scrollContent: {
+    paddingHorizontal: 20,
+    paddingTop: 8,
+  },
+  profileCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  avatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    marginRight: 14,
+    backgroundColor: '#E5E7EB',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: Colors.text.primary,
+    marginBottom: 4,
+  },
+  tierRow: {
+    flexDirection: 'row',
+  },
+  tierPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    backgroundColor: '#F3F4F6',
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 10,
+  },
+  tierPillActive: {
+    backgroundColor: '#FEF3C7',
+  },
+  tierPillText: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.text.light,
+  },
+  tierPillTextActive: {
+    color: '#B45309',
+  },
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.text.secondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginLeft: 4,
+  },
+  section: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    marginBottom: 20,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  item: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  itemIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  itemContent: {
+    flex: 1,
+  },
+  itemLabel: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: Colors.text.primary,
+  },
+  itemLabelDanger: {
+    color: '#EF4444',
+  },
+  itemSubtitle: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    marginTop: 2,
+  },
+  badge: {
+    backgroundColor: '#FF2D55',
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 8,
+    marginRight: 8,
+  },
+  badgeText: {
+    color: '#FFF',
+    fontSize: 10,
+    fontWeight: '800' as const,
+    letterSpacing: 0.5,
+  },
+  divider: {
+    height: 1,
+    backgroundColor: '#F3F4F6',
+    marginLeft: 68,
+  },
+  versionText: {
+    textAlign: 'center',
+    fontSize: 12,
+    color: Colors.text.light,
+    marginTop: 8,
+    marginBottom: 16,
+  },
 });

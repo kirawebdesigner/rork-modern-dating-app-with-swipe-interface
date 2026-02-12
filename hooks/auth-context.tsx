@@ -357,6 +357,30 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     const userId = data.user?.id;
     if (userId) {
       await createProfile(userId, data.user?.email ?? trimmedEmail, trimmedName);
+
+      try {
+        const storedRef = await AsyncStorage.getItem('referrer_code');
+        if (storedRef) {
+          console.log('[Auth] Processing referral code:', storedRef);
+          const { data: referrer } = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('referral_code', storedRef)
+            .maybeSingle();
+
+          if (referrer?.id && referrer.id !== userId) {
+            await supabase.from('referrals').insert({
+              referrer_id: referrer.id,
+              referred_user_id: userId,
+            });
+            await supabase.from('profiles').update({ referred_by: referrer.id }).eq('id', userId);
+            console.log('[Auth] Referral recorded:', referrer.id, '->', userId);
+          }
+          await AsyncStorage.removeItem('referrer_code');
+        }
+      } catch (refErr) {
+        console.log('[Auth] Referral tracking error:', refErr);
+      }
     }
 
     await synchronizeUser();

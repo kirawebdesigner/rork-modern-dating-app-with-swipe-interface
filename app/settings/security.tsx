@@ -1,12 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { SafeAreaView, View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, Platform } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
-import { ArrowLeft, Shield, Eye, EyeOff, AlertCircle, Fingerprint } from 'lucide-react-native';
+import { ArrowLeft, Shield, Eye, EyeOff, AlertCircle, Fingerprint, Smartphone, Bell } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
-import GradientButton from '@/components/GradientButton';
-import { useAuth } from '@/hooks/auth-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 const BIOMETRIC_KEY = 'biometric_enabled';
@@ -16,7 +14,6 @@ const TWO_FACTOR_KEY = 'two_factor_enabled';
 export default function SecuritySettingsScreen() {
   const router = useRouter();
   const { t } = useI18n();
-  const { user } = useAuth();
   const [twoFactorEnabled, setTwoFactorEnabled] = useState<boolean>(false);
   const [biometricEnabled, setBiometricEnabled] = useState<boolean>(false);
   const [biometricAvailable, setBiometricAvailable] = useState<boolean>(false);
@@ -58,7 +55,6 @@ export default function SecuritySettingsScreen() {
         const compatible = await LocalAuth.hasHardwareAsync();
         const enrolled = await LocalAuth.isEnrolledAsync();
         setBiometricAvailable(compatible && enrolled);
-
         if (compatible) {
           const types = await LocalAuth.supportedAuthenticationTypesAsync();
           const AuthenticationType = LocalAuth.AuthenticationType;
@@ -70,7 +66,6 @@ export default function SecuritySettingsScreen() {
             setBiometricType('Iris');
           }
         }
-        console.log('[Security] Biometric available:', compatible && enrolled, 'type:', biometricType);
       } catch (e) {
         console.log('[Security] biometric check error', e);
         setBiometricAvailable(false);
@@ -89,22 +84,16 @@ export default function SecuritySettingsScreen() {
           fallbackLabel: t('Use passcode'),
           disableDeviceFallback: false,
         });
-
         if (result.success) {
           setBiometricEnabled(true);
           await AsyncStorage.setItem(BIOMETRIC_KEY, 'true');
-          console.log('[Security] Biometric enabled successfully');
-        } else {
-          console.log('[Security] Biometric auth cancelled or failed');
         }
       } catch (e) {
-        console.log('[Security] biometric toggle error', e);
         Alert.alert(t('Error'), t('Could not enable biometric authentication'));
       }
     } else {
       setBiometricEnabled(false);
       await AsyncStorage.setItem(BIOMETRIC_KEY, 'false');
-      console.log('[Security] Biometric disabled');
     }
   }, [t]);
 
@@ -117,381 +106,284 @@ export default function SecuritySettingsScreen() {
       ]);
       Alert.alert(t('Success'), t('Security settings updated successfully'));
     } catch (e) {
-      console.log('[Security] save error', e);
       Alert.alert(t('Error'), t('Could not save settings'));
     }
   };
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.headerWrap}>
-        <View style={styles.headerBg} />
-        <View style={styles.headerRow}>
-          <TouchableOpacity
-            onPress={() => safeGoBack(router, '/settings')}
-            style={styles.backBtn}
-            accessibilityLabel={t('Back')}
-            testID="security-back"
-          >
-            <ArrowLeft size={20} color={Colors.text.white} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t('Security')}</Text>
-          <View style={{ width: 28 }} />
-        </View>
+    <View style={styles.container}>
+      <View style={styles.header}>
+        <TouchableOpacity
+          onPress={() => safeGoBack(router, '/settings')}
+          style={styles.backBtn}
+          accessibilityLabel={t('Back')}
+          testID="security-back"
+        >
+          <ArrowLeft size={22} color={Colors.text.primary} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>{t('Security')}</Text>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.infoCard}>
-          <Shield size={32} color={Colors.primary} />
-          <Text style={styles.infoTitle}>{t('Keep Your Account Safe')}</Text>
-          <Text style={styles.infoText}>
-            {t('Enable additional security features to protect your account from unauthorized access')}
-          </Text>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        <View style={styles.heroCard}>
+          <View style={styles.heroIcon}>
+            <Shield size={28} color={Colors.primary} />
+          </View>
+          <Text style={styles.heroTitle}>{t('Account Protection')}</Text>
+          <Text style={styles.heroSubtitle}>{t('Enable security features to keep your account safe')}</Text>
         </View>
 
+        <Text style={styles.sectionLabel}>{t('Account Info')}</Text>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('Account Information')}</Text>
-          <View style={styles.cardBody}>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{t('Phone Number')}</Text>
-              <View style={styles.infoValueRow}>
-                <Text style={styles.infoValue}>
-                  {showSensitiveData ? phoneNumber : maskedPhone}
-                </Text>
-                <TouchableOpacity
-                  onPress={() => setShowSensitiveData(!showSensitiveData)}
-                  style={styles.eyeButton}
-                >
-                  {showSensitiveData ? (
-                    <EyeOff size={18} color={Colors.text.secondary} />
-                  ) : (
-                    <Eye size={18} color={Colors.text.secondary} />
-                  )}
-                </TouchableOpacity>
-              </View>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>{t('Account Created')}</Text>
-              <Text style={styles.infoValue}>
-                {new Date().toLocaleDateString()}
-              </Text>
+          <View style={styles.infoRow}>
+            <Text style={styles.infoLabel}>{t('Phone Number')}</Text>
+            <View style={styles.infoValueRow}>
+              <Text style={styles.infoValue}>{showSensitiveData ? phoneNumber : maskedPhone}</Text>
+              <TouchableOpacity onPress={() => setShowSensitiveData(!showSensitiveData)} style={styles.eyeBtn}>
+                {showSensitiveData ? <EyeOff size={16} color={Colors.text.secondary} /> : <Eye size={16} color={Colors.text.secondary} />}
+              </TouchableOpacity>
             </View>
           </View>
         </View>
 
+        <Text style={styles.sectionLabel}>{t('Authentication')}</Text>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('Authentication')}</Text>
-          <View style={styles.cardBody}>
-            <Row
-              label={t('Two-Factor Authentication')}
-              description={t('Add an extra layer of security with SMS verification')}
-              value={twoFactorEnabled}
-              onValueChange={(v) => setTwoFactorEnabled(v)}
-              testID="2fa-switch"
-            />
-            <View style={[styles.row, styles.biometricRow]}>
-              <View style={styles.biometricLeft}>
-                <View style={styles.biometricIconWrap}>
-                  <Fingerprint size={22} color={biometricAvailable ? Colors.primary : Colors.text.light} />
-                </View>
-                <View style={styles.rowContent}>
-                  <Text style={styles.rowLabel}>{biometricType} {t('Login')}</Text>
-                  <Text style={styles.rowDescription}>
-                    {biometricAvailable
-                      ? t('Use biometric authentication to unlock the app')
-                      : Platform.OS === 'web'
-                        ? t('Biometric auth is not available on web')
-                        : t('No biometric hardware detected on this device')}
-                  </Text>
-                </View>
-              </View>
-              <Switch
-                value={biometricEnabled}
-                onValueChange={handleBiometricToggle}
-                disabled={!biometricAvailable}
-                testID="biometric-switch"
-              />
-            </View>
-          </View>
+          <SecurityRow
+            icon={<Smartphone size={18} color="#3B82F6" />}
+            iconBg="#EFF6FF"
+            label={t('Two-Factor Authentication')}
+            subtitle={t('SMS verification on login')}
+            value={twoFactorEnabled}
+            onValueChange={setTwoFactorEnabled}
+            testID="2fa-switch"
+          />
+          <View style={styles.divider} />
+          <SecurityRow
+            icon={<Fingerprint size={18} color={biometricAvailable ? '#8B5CF6' : '#9CA3AF'} />}
+            iconBg={biometricAvailable ? '#EDE9FE' : '#F3F4F6'}
+            label={`${biometricType} ${t('Login')}`}
+            subtitle={
+              biometricAvailable
+                ? t('Unlock app with biometrics')
+                : Platform.OS === 'web'
+                  ? t('Not available on web')
+                  : t('No biometric hardware detected')
+            }
+            value={biometricEnabled}
+            onValueChange={handleBiometricToggle}
+            disabled={!biometricAvailable}
+            testID="biometric-switch"
+          />
         </View>
 
+        <Text style={styles.sectionLabel}>{t('Monitoring')}</Text>
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>{t('Activity Monitoring')}</Text>
-          <View style={styles.cardBody}>
-            <Row
-              label={t('Login Alerts')}
-              description={t('Get notified when someone logs into your account')}
-              value={loginAlerts}
-              onValueChange={(v) => setLoginAlerts(v)}
-              testID="login-alerts-switch"
-              last
-            />
-          </View>
+          <SecurityRow
+            icon={<Bell size={18} color="#F59E0B" />}
+            iconBg="#FEF3C7"
+            label={t('Login Alerts')}
+            subtitle={t('Get notified on new logins')}
+            value={loginAlerts}
+            onValueChange={setLoginAlerts}
+            testID="login-alerts-switch"
+          />
         </View>
 
-        <View style={styles.warningCard}>
-          <AlertCircle size={24} color="#EF4444" />
-          <View style={styles.warningContent}>
-            <Text style={styles.warningTitle}>{t('Account Security Tips')}</Text>
-            <Text style={styles.warningText}>
-              • {t('Never share your phone verification codes')}{'\n'}
-              • {t('Use a unique phone number for your account')}{'\n'}
-              • {t('Enable two-factor authentication for extra security')}{'\n'}
-              • {t('Log out from devices you don\'t recognize')}
+        <View style={styles.tipsCard}>
+          <AlertCircle size={20} color="#EF4444" />
+          <View style={styles.tipsContent}>
+            <Text style={styles.tipsTitle}>{t('Security Tips')}</Text>
+            <Text style={styles.tipsText}>
+              {`\u2022 ${t('Never share verification codes')}\n\u2022 ${t('Enable two-factor authentication')}\n\u2022 ${t('Log out from unknown devices')}`}
             </Text>
           </View>
         </View>
 
+        <TouchableOpacity style={styles.saveBtn} onPress={handleSave} activeOpacity={0.8}>
+          <Text style={styles.saveBtnText}>{t('Save Changes')}</Text>
+        </TouchableOpacity>
+
         <TouchableOpacity
-          style={styles.dangerButton}
+          style={styles.deleteBtn}
           onPress={() => {
             Alert.alert(
               t('Delete Account'),
-              t('Are you sure you want to permanently delete your account? This action cannot be undone.'),
+              t('This action cannot be undone. Are you sure?'),
               [
                 { text: t('Cancel'), style: 'cancel' },
-                {
-                  text: t('Delete'),
-                  style: 'destructive',
-                  onPress: () => {
-                    Alert.alert(t('Coming Soon'), t('Account deletion feature will be available soon'));
-                  },
-                },
+                { text: t('Delete'), style: 'destructive', onPress: () => Alert.alert(t('Coming Soon'), t('Account deletion will be available soon')) },
               ]
             );
           }}
         >
-          <Text style={styles.dangerButtonText}>{t('Delete Account')}</Text>
+          <Text style={styles.deleteBtnText}>{t('Delete Account')}</Text>
         </TouchableOpacity>
 
-        <View style={styles.bottomSpacing} />
+        <View style={{ height: 40 }} />
       </ScrollView>
-
-      <View style={styles.footer} testID="save-bar-security">
-        <GradientButton
-          title={t('Save Changes')}
-          onPress={handleSave}
-          style={styles.saveButton}
-        />
-      </View>
-    </SafeAreaView>
+    </View>
   );
 }
 
-function Row({
-  label,
-  description,
-  value,
-  onValueChange,
-  testID,
-  last,
-}: {
+function SecurityRow({ icon, iconBg, label, subtitle, value, onValueChange, disabled, testID }: {
+  icon: React.ReactNode;
+  iconBg: string;
   label: string;
-  description?: string;
+  subtitle: string;
   value: boolean;
   onValueChange: (v: boolean) => void;
+  disabled?: boolean;
   testID?: string;
-  last?: boolean;
 }) {
   return (
-    <View style={[styles.row, !last && styles.rowBorder]}>
+    <View style={[styles.row, disabled && styles.rowDisabled]}>
+      <View style={[styles.rowIcon, { backgroundColor: iconBg }]}>{icon}</View>
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{label}</Text>
-        {description && <Text style={styles.rowDescription}>{description}</Text>}
+        <Text style={styles.rowSubtitle}>{subtitle}</Text>
       </View>
-      <Switch
-        value={value}
-        onValueChange={onValueChange}
-        testID={testID}
-      />
+      <Switch value={value} onValueChange={onValueChange} disabled={disabled} testID={testID} />
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.backgroundSecondary },
-  headerWrap: { backgroundColor: 'transparent' },
-  headerBg: { height: 140, backgroundColor: Colors.primary },
-  headerRow: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
+  container: { flex: 1, backgroundColor: '#F8F8FA' },
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingTop: Platform.OS === 'ios' ? 56 : 48,
+    paddingBottom: 12,
+    backgroundColor: '#F8F8FA',
   },
-  headerTitle: { color: Colors.text.white, fontSize: 18, fontWeight: '700' as const },
-  backBtn: { padding: 6 },
-  content: { paddingTop: 56, paddingHorizontal: 16 },
-  infoCard: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 24,
-    marginBottom: 24,
+  backBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFF',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 2,
   },
-  infoTitle: {
-    fontSize: 20,
+  headerTitle: { fontSize: 18, fontWeight: '700' as const, color: Colors.text.primary },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 8 },
+  heroCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    padding: 24,
+    alignItems: 'center',
+    marginBottom: 24,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+  },
+  heroIcon: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    backgroundColor: '#FFF1F3',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+  heroTitle: {
+    fontSize: 18,
     fontWeight: '700' as const,
     color: Colors.text.primary,
-    marginTop: 16,
-    marginBottom: 8,
-    textAlign: 'center' as const,
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.text.secondary,
-    textAlign: 'center' as const,
-    lineHeight: 20,
-  },
-  sectionTitle: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginBottom: 8,
-    fontWeight: '600' as const,
-  },
-  card: { marginBottom: 16 },
-  cardBody: {
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 8 },
-    elevation: 4,
-    overflow: 'hidden',
-    paddingHorizontal: 16,
-  },
-  row: {
-    paddingVertical: 16,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    justifyContent: 'space-between' as const,
-    gap: 12,
-  },
-  rowBorder: {
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  rowContent: {
-    flex: 1,
-  },
-  rowLabel: {
-    color: Colors.text.primary,
-    fontSize: 16,
-    fontWeight: '500' as const,
-    marginBottom: 4,
-  },
-  rowDescription: {
-    color: Colors.text.secondary,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  biometricRow: {
-    borderBottomWidth: 0,
-  },
-  biometricLeft: {
-    flex: 1,
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 12,
-  },
-  biometricIconWrap: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    backgroundColor: '#FFF1F3',
-    justifyContent: 'center' as const,
-    alignItems: 'center' as const,
-  },
-  infoRow: {
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  infoLabel: {
-    fontSize: 14,
-    color: Colors.text.secondary,
     marginBottom: 6,
   },
-  infoValueRow: {
-    flexDirection: 'row' as const,
-    alignItems: 'center' as const,
-    gap: 8,
+  heroSubtitle: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    textAlign: 'center',
+    lineHeight: 18,
   },
-  infoValue: {
-    fontSize: 16,
-    color: Colors.text.primary,
-    fontWeight: '500' as const,
+  sectionLabel: {
+    fontSize: 12,
+    fontWeight: '700' as const,
+    color: Colors.text.secondary,
+    textTransform: 'uppercase' as const,
+    letterSpacing: 0.8,
+    marginBottom: 8,
+    marginLeft: 4,
   },
-  eyeButton: {
-    padding: 4,
+  card: {
+    backgroundColor: '#FFF',
+    borderRadius: 18,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 1,
+    marginBottom: 20,
   },
-  warningCard: {
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+  },
+  rowDisabled: { opacity: 0.5 },
+  rowIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+  rowContent: { flex: 1 },
+  rowLabel: { fontSize: 15, fontWeight: '600' as const, color: Colors.text.primary },
+  rowSubtitle: { fontSize: 12, color: Colors.text.secondary, marginTop: 2 },
+  divider: { height: 1, backgroundColor: '#F3F4F6', marginLeft: 68 },
+  infoRow: {
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+  },
+  infoLabel: { fontSize: 12, color: Colors.text.secondary, marginBottom: 6 },
+  infoValueRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  infoValue: { fontSize: 16, color: Colors.text.primary, fontWeight: '500' as const },
+  eyeBtn: { padding: 4 },
+  tipsCard: {
     backgroundColor: '#FEF2F2',
     borderRadius: 16,
-    padding: 20,
-    marginVertical: 24,
-    flexDirection: 'row' as const,
-    gap: 16,
+    padding: 16,
+    marginBottom: 24,
+    flexDirection: 'row',
+    gap: 12,
     borderWidth: 1,
     borderColor: '#FEE2E2',
   },
-  warningContent: {
-    flex: 1,
+  tipsContent: { flex: 1 },
+  tipsTitle: { fontSize: 14, fontWeight: '700' as const, color: '#DC2626', marginBottom: 6 },
+  tipsText: { fontSize: 13, color: '#991B1B', lineHeight: 20 },
+  saveBtn: {
+    backgroundColor: Colors.primary,
+    height: 52,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
-  warningTitle: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: '#DC2626',
-    marginBottom: 8,
-  },
-  warningText: {
-    fontSize: 14,
-    color: '#991B1B',
-    lineHeight: 20,
-  },
-  dangerButton: {
+  saveBtnText: { color: '#FFF', fontWeight: '700' as const, fontSize: 16 },
+  deleteBtn: {
     backgroundColor: '#FEE2E2',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: 'center' as const,
+    height: 48,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: '#FCA5A5',
-    marginBottom: 24,
   },
-  dangerButtonText: {
-    fontSize: 16,
-    fontWeight: '700' as const,
-    color: '#DC2626',
-  },
-  bottomSpacing: {
-    height: 100,
-  },
-  footer: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    paddingHorizontal: 16,
-    paddingTop: 12,
-    paddingBottom: 34,
-    backgroundColor: Colors.card,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 6,
-  },
-  saveButton: {
-    marginTop: 8,
-  },
+  deleteBtnText: { color: '#DC2626', fontWeight: '700' as const, fontSize: 15 },
 });
