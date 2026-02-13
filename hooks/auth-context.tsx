@@ -185,8 +185,13 @@ const createProfile = async (userId: string, email: string | null, name: string)
 export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const isLoggingOutRef = React.useRef(false);
 
   const synchronizeUser = useCallback(async () => {
+    if (isLoggingOutRef.current) {
+      console.log('[Auth] Skipping synchronizeUser during logout');
+      return;
+    }
     setIsLoading(true);
     try {
       const cachedProfile = deserializeProfile(await AsyncStorage.getItem(USER_STORAGE_KEY));
@@ -445,13 +450,10 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   }, [synchronizeUser]);
 
   const logout = useCallback(async () => {
-    try {
-      if (!TEST_MODE) {
-        await supabase.auth.signOut().catch(e => console.log('[Auth] signOut network error:', e));
-      }
-    } catch (e) {
-      console.log('[Auth] signOut error (continuing):', e);
-    }
+    console.log('[Auth] Logout started');
+    isLoggingOutRef.current = true;
+    
+    setUser(null);
     
     const keysToRemove = [
       'user_profile',
@@ -477,7 +479,18 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     
     await Promise.all(keysToRemove.map(k => AsyncStorage.removeItem(k).catch(() => {})));
     console.log('[Auth] All storage keys cleared');
-    setUser(null);
+    
+    try {
+      if (!TEST_MODE) {
+        await supabase.auth.signOut({ scope: 'local' }).catch(e => console.log('[Auth] signOut network error:', e));
+      }
+    } catch (e) {
+      console.log('[Auth] signOut error (continuing):', e);
+    }
+    
+    setIsLoading(false);
+    isLoggingOutRef.current = false;
+    console.log('[Auth] Logout completed');
   }, []);
 
   const reloadProfile = useCallback(async () => {

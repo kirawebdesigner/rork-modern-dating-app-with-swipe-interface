@@ -68,11 +68,10 @@ export default function SettingsScreen() {
   const handleLogout = async () => {
     try {
       await logout();
-      Alert.alert(t('Signed out'), t('You have been signed out.'));
-      router.replace('/(auth)/login' as any);
-    } catch {
-      Alert.alert(t('Error'), t('Failed to sign out'));
+    } catch (e) {
+      console.log('[Settings] Logout error (continuing):', e);
     }
+    router.replace('/(auth)/login' as any);
   };
 
   return (
