@@ -223,11 +223,22 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
 
   const checkExpiration = useCallback(async (userId: string) => {
     try {
-      const { data } = await supabase
-        .from('memberships')
-        .select('tier, expires_at')
-        .eq('user_id', userId)
-        .maybeSingle();
+      let data: any = null;
+      try {
+        const result = await supabase
+          .from('memberships')
+          .select('tier, expires_at')
+          .eq('user_id', userId)
+          .maybeSingle();
+        data = result.data;
+        if (result.error) {
+          console.log('[Membership] checkExpiration query error:', result.error.message);
+          return null;
+        }
+      } catch (networkErr: any) {
+        console.log('[Membership] checkExpiration network error:', networkErr?.message);
+        return null;
+      }
       
       if (data && data.expires_at && data.tier !== 'free') {
         const expiresAt = new Date(data.expires_at);
@@ -235,10 +246,14 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         
         if (now >= expiresAt) {
           console.log('[Membership] Membership expired, downgrading to free');
-          await supabase
-            .from('memberships')
-            .update({ tier: 'free', expires_at: null, updated_at: now.toISOString() })
-            .eq('user_id', userId);
+          try {
+            await supabase
+              .from('memberships')
+              .update({ tier: 'free', expires_at: null, updated_at: now.toISOString() })
+              .eq('user_id', userId);
+          } catch (updateErr: any) {
+            console.log('[Membership] Error updating expired membership:', updateErr?.message);
+          }
           return 'free';
         }
       }

@@ -39,18 +39,34 @@ export function useRealtimeMessages(conversationId: string | null, currentUserId
       try {
         setLoading(true);
         setError(null);
-        const { data, error } = await supabase
-          .from('messages')
-          .select('id, conversation_id, sender_id, content, created_at')
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true });
-        if (error) throw error;
+        let data: any = null;
+        let fetchError: any = null;
+        try {
+          const result = await supabase
+            .from('messages')
+            .select('id, conversation_id, sender_id, content, created_at')
+            .eq('conversation_id', conversationId)
+            .order('created_at', { ascending: true });
+          data = result.data;
+          fetchError = result.error;
+        } catch (networkErr: any) {
+          console.log('[Chat] Network error loading messages:', networkErr?.message);
+          if (active) setError('Network unavailable');
+          if (active) setLoading(false);
+          return;
+        }
+        if (fetchError) {
+          console.log('[Chat] Fetch messages error:', fetchError.message);
+          if (active) setError(fetchError.message);
+          if (active) setLoading(false);
+          return;
+        }
         if (!active) return;
         const mapped = (data as unknown as DbMessageRow[]).map(mapRow);
         setMessages(mapped);
       } catch (e: any) {
-        console.error('[Chat] fetch messages error', e);
-        setError(e?.message ?? 'Failed to load messages');
+        console.log('[Chat] fetch messages error', e?.message);
+        if (active) setError(e?.message ?? 'Failed to load messages');
       } finally {
         if (active) setLoading(false);
       }
@@ -106,8 +122,13 @@ export function useRealtimeMessages(conversationId: string | null, currentUserId
       sender_id: currentUserId,
       content: sanitized,
     };
-    const { error } = await supabase.from('messages').insert(insert);
-    if (error) throw error;
+    try {
+      const { error } = await supabase.from('messages').insert(insert);
+      if (error) throw error;
+    } catch (e: any) {
+      console.log('[Chat] Send message error:', e?.message);
+      throw new Error('Failed to send message. Check your connection.');
+    }
   }, [conversationId, currentUserId]);
 
   return { messages, loading, error, sendMessage };
@@ -139,27 +160,38 @@ export function useUserMatches(userId: string | null) {
         setError(null);
         console.log('[Chat] Loading matches for user:', userId);
 
-        // First, load all matches for this user
-        const { data: matchesData, error: matchErr } = await supabase
-          .from('matches')
-          .select('id, user1_id, user2_id, matched_at')
-          .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
+        let matchesData: any[] | null = null;
+        let matchErr: any = null;
+        try {
+          const matchResult = await supabase
+            .from('matches')
+            .select('id, user1_id, user2_id, matched_at')
+            .or(`user1_id.eq.${userId},user2_id.eq.${userId}`);
+          matchesData = matchResult.data;
+          matchErr = matchResult.error;
+        } catch (networkErr: any) {
+          console.log('[Chat] Network error loading matches:', networkErr?.message);
+          if (active) setError('Network unavailable');
+          if (active) setLoading(false);
+          return;
+        }
         
         if (matchErr) {
           console.log('[Chat] Error loading matches:', matchErr.message);
-          throw matchErr;
+          if (active) setError(matchErr.message);
+          if (active) setLoading(false);
+          return;
         }
 
         console.log('[Chat] Found matches:', matchesData?.length ?? 0);
 
         if (!matchesData || matchesData.length === 0) {
           console.log('[Chat] No matches found');
-          setItems([]);
-          setLoading(false);
+          if (active) setItems([]);
+          if (active) setLoading(false);
           return;
         }
 
-        // Get other user IDs from matches
         const matchMap = new Map<string, { matchId: string; otherId: string; matchedAt: string }>();
         matchesData.forEach((m: any) => {
           const otherId = m.user1_id === userId ? m.user2_id : m.user1_id;
@@ -171,40 +203,51 @@ export function useUserMatches(userId: string | null) {
 
         console.log('[Chat] Other user IDs:', otherUserIds);
 
-        // Load profiles for matched users
-        const { data: profiles, error: profErr } = await supabase
-          .from('profiles')
-          .select('id, name, photos')
-          .in('id', otherUserIds);
-        
-        if (profErr) console.log('[Chat] Profile fetch error:', profErr.message);
+        let profiles: any[] | null = null;
+        try {
+          const profResult = await supabase
+            .from('profiles')
+            .select('id, name, photos')
+            .in('id', otherUserIds);
+          profiles = profResult.data;
+          if (profResult.error) console.log('[Chat] Profile fetch error:', profResult.error.message);
+        } catch (e: any) {
+          console.log('[Chat] Network error fetching profiles:', e?.message);
+        }
 
-        // Ensure conversations exist for all matches
         for (const matchId of matchIds) {
-          const matchInfo = matchMap.get(matchId)!;
-          const { data: existingConv } = await supabase
-            .from('conversations')
-            .select('id')
-            .eq('id', matchId)
-            .maybeSingle();
-          
-          if (!existingConv) {
-            console.log('[Chat] Creating conversation for match:', matchId);
-            await supabase.from('conversations').insert({ id: matchId, created_by: userId });
-            await supabase.from('conversation_participants').insert([
-              { conversation_id: matchId, user_id: userId },
-              { conversation_id: matchId, user_id: matchInfo.otherId }
-            ]);
+          try {
+            const matchInfo = matchMap.get(matchId)!;
+            const { data: existingConv } = await supabase
+              .from('conversations')
+              .select('id')
+              .eq('id', matchId)
+              .maybeSingle();
+            
+            if (!existingConv) {
+              console.log('[Chat] Creating conversation for match:', matchId);
+              await supabase.from('conversations').insert({ id: matchId, created_by: userId });
+              await supabase.from('conversation_participants').insert([
+                { conversation_id: matchId, user_id: userId },
+                { conversation_id: matchId, user_id: matchInfo.otherId }
+              ]);
+            }
+          } catch (convErr: any) {
+            console.log('[Chat] Error ensuring conversation for match', matchId, ':', convErr?.message);
           }
         }
 
-        // Load messages for all match conversations
-        const { data: msgs, error: mErr } = await supabase
-          .from('messages')
-          .select('id, conversation_id, sender_id, content, created_at')
-          .in('conversation_id', matchIds);
-        
-        if (mErr) console.log('[Chat] Messages fetch error:', mErr.message);
+        let msgs: any[] | null = null;
+        try {
+          const msgsResult = await supabase
+            .from('messages')
+            .select('id, conversation_id, sender_id, content, created_at')
+            .in('conversation_id', matchIds);
+          msgs = msgsResult.data;
+          if (msgsResult.error) console.log('[Chat] Messages fetch error:', msgsResult.error.message);
+        } catch (e: any) {
+          console.log('[Chat] Network error fetching messages:', e?.message);
+        }
 
         // Build latest message map
         const latestByConv = new Map<string, DbMessageRow>();
@@ -247,8 +290,8 @@ export function useUserMatches(userId: string | null) {
         
         console.log('[Chat] Loaded', itemsNext.length, 'match conversations');
       } catch (e: any) {
-        console.error('[Chat] load conversations error', e);
-        setError(e?.message ?? 'Failed to load conversations');
+        console.log('[Chat] load conversations error', e?.message);
+        if (active) setError(e?.message ?? 'Failed to load conversations');
       } finally {
         if (active) setLoading(false);
       }

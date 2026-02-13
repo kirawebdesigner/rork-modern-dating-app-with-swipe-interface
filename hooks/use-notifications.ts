@@ -58,14 +58,30 @@ export function useNotifications(userId: string | null) {
         setLoading(true);
         setError(null);
 
-        const { data, error: fetchError } = await supabase
-          .from('notifications')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(50);
+        let data: any = null;
+        let fetchError: any = null;
+        try {
+          const result = await supabase
+            .from('notifications')
+            .select('*')
+            .eq('user_id', userId)
+            .order('created_at', { ascending: false })
+            .limit(50);
+          data = result.data;
+          fetchError = result.error;
+        } catch (networkErr: any) {
+          console.log('[Notifications] Network error:', networkErr?.message);
+          if (active) setError('Network unavailable');
+          if (active) setLoading(false);
+          return;
+        }
 
-        if (fetchError) throw fetchError;
+        if (fetchError) {
+          console.log('[Notifications] Fetch error:', fetchError.message);
+          if (active) setError(fetchError.message);
+          if (active) setLoading(false);
+          return;
+        }
         if (!active) return;
 
         const mapped = (data as unknown as DbNotificationRow[]).map(mapRow);
@@ -74,7 +90,7 @@ export function useNotifications(userId: string | null) {
 
         console.log('[Notifications] Loaded', mapped.length, 'notifications,', mapped.filter(n => !n.read).length, 'unread');
       } catch (e: any) {
-        console.error('[Notifications] fetch error', e);
+        console.log('[Notifications] fetch error', e?.message);
         if (active) setError(e?.message ?? 'Failed to load notifications');
       } finally {
         if (active) setLoading(false);
@@ -144,7 +160,7 @@ export function useNotifications(userId: string | null) {
         channelRef.current = null;
       }
     };
-  }, [userId, mapRow, notifications]);
+  }, [userId, mapRow]);
 
   const markAsRead = useCallback(async (notificationId: string) => {
     if (!userId) return;
@@ -156,14 +172,17 @@ export function useNotifications(userId: string | null) {
         .eq('id', notificationId)
         .eq('user_id', userId);
 
-      if (error) throw error;
+      if (error) {
+        console.log('[Notifications] mark as read error:', error.message);
+        return;
+      }
 
       setNotifications(prev =>
         prev.map(n => n.id === notificationId ? { ...n, read: true } : n)
       );
       setUnreadCount(prev => Math.max(0, prev - 1));
     } catch (e: any) {
-      console.error('[Notifications] mark as read error', e);
+      console.log('[Notifications] mark as read network error:', e?.message);
     }
   }, [userId]);
 
@@ -177,12 +196,15 @@ export function useNotifications(userId: string | null) {
         .eq('user_id', userId)
         .eq('read', false);
 
-      if (error) throw error;
+      if (error) {
+        console.log('[Notifications] mark all as read error:', error.message);
+        return;
+      }
 
       setNotifications(prev => prev.map(n => ({ ...n, read: true })));
       setUnreadCount(0);
     } catch (e: any) {
-      console.error('[Notifications] mark all as read error', e);
+      console.log('[Notifications] mark all as read network error:', e?.message);
     }
   }, [userId]);
 
@@ -190,25 +212,28 @@ export function useNotifications(userId: string | null) {
     if (!userId) return;
 
     try {
-      const notif = notifications.find(n => n.id === notificationId);
-      
       const { error } = await supabase
         .from('notifications')
         .delete()
         .eq('id', notificationId)
         .eq('user_id', userId);
 
-      if (error) throw error;
-
-      setNotifications(prev => prev.filter(n => n.id !== notificationId));
-      
-      if (notif && !notif.read) {
-        setUnreadCount(prev => Math.max(0, prev - 1));
+      if (error) {
+        console.log('[Notifications] delete error:', error.message);
+        return;
       }
+
+      setNotifications(prev => {
+        const removed = prev.find(n => n.id === notificationId);
+        if (removed && !removed.read) {
+          setUnreadCount(c => Math.max(0, c - 1));
+        }
+        return prev.filter(n => n.id !== notificationId);
+      });
     } catch (e: any) {
-      console.error('[Notifications] delete error', e);
+      console.log('[Notifications] delete network error:', e?.message);
     }
-  }, [userId, notifications]);
+  }, [userId]);
 
   return {
     notifications,

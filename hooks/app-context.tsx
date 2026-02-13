@@ -3,7 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { User, Match, SwipeAction, MembershipTier, ThemeId } from '@/types';
 import { sendPushToUser } from '@/lib/notifications';
-import { supabase, TEST_MODE, safeFetch } from '@/lib/supabase';
+import { supabase, TEST_MODE } from '@/lib/supabase';
 
 type InterestedIn = 'girl' | 'boy';
 
@@ -269,11 +269,19 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           console.log('[App] Network error getting auth user:', authErr?.message);
         }
         if (!profile && uid) {
-          const { data: me, error: meErr } = await supabase
-            .from('profiles')
-            .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
-            .eq('id', uid)
-            .maybeSingle();
+          let me: any = null;
+          let meErr: any = null;
+          try {
+            const meResult = await supabase
+              .from('profiles')
+              .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
+              .eq('id', uid)
+              .maybeSingle();
+            me = meResult.data;
+            meErr = meResult.error;
+          } catch (meFetchErr: any) {
+            console.log('[App] Network error fetching self profile:', meFetchErr?.message);
+          }
           if (!meErr && me) {
             const mappedMe: User = {
               id: String(me.id),
@@ -495,46 +503,63 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         }
         
         if (userPhone) {
-          const { data: myProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('phone', userPhone)
-            .maybeSingle();
+          let myProfile: any = null;
+          try {
+            const myProfileResult = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('phone', userPhone)
+              .maybeSingle();
+            myProfile = myProfileResult.data;
+          } catch (e: any) {
+            console.log('[App] Network error fetching my profile for matches:', e?.message);
+          }
           
           const myId = myProfile?.id ?? null;
           if (myId) {
-            const { data: matchesRows } = await supabase
-              .from('matches')
-              .select('id, user1_id, user2_id, matched_at')
-              .or(`user1_id.eq.${myId},user2_id.eq.${myId}`);
+            let matchesRows: any[] | null = null;
+            try {
+              const matchResult = await supabase
+                .from('matches')
+                .select('id, user1_id, user2_id, matched_at')
+                .or(`user1_id.eq.${myId},user2_id.eq.${myId}`);
+              matchesRows = matchResult.data;
+            } catch (e: any) {
+              console.log('[App] Network error loading matches:', e?.message);
+            }
             
             if (matchesRows && matchesRows.length > 0) {
               console.log('[App] loading matches:', matchesRows.length);
               const matchesWithUsers = await Promise.all(
                 matchesRows.map(async (m: any) => {
-                  const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
-                  const { data: otherUser } = await supabase
-                    .from('profiles')
-                    .select('id,name,age,gender,bio,photos,interests,city')
-                    .eq('id', otherId)
-                    .maybeSingle();
-                  
-                  if (!otherUser) return null;
-                  
-                  return {
-                    id: String(m.id),
-                    user: {
-                      id: String(otherUser.id),
-                      name: String(otherUser.name ?? 'User'),
-                      age: Number(otherUser.age ?? 0),
-                      gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
-                      bio: String(otherUser.bio ?? ''),
-                      photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
-                      interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
-                      location: { city: String(otherUser.city ?? '') },
-                    },
-                    matchedAt: new Date(String(m.matched_at)),
-                  } as Match;
+                  try {
+                    const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
+                    const { data: otherUser } = await supabase
+                      .from('profiles')
+                      .select('id,name,age,gender,bio,photos,interests,city')
+                      .eq('id', otherId)
+                      .maybeSingle();
+                    
+                    if (!otherUser) return null;
+                    
+                    return {
+                      id: String(m.id),
+                      user: {
+                        id: String(otherUser.id),
+                        name: String(otherUser.name ?? 'User'),
+                        age: Number(otherUser.age ?? 0),
+                        gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
+                        bio: String(otherUser.bio ?? ''),
+                        photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+                        interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
+                        location: { city: String(otherUser.city ?? '') },
+                      },
+                      matchedAt: new Date(String(m.matched_at)),
+                    } as Match;
+                  } catch (e: any) {
+                    console.log('[App] Network error loading match user:', e?.message);
+                    return null;
+                  }
                 })
               );
               
@@ -544,8 +569,8 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             }
           }
         }
-      } catch (matchLoadErr) {
-        console.log('[App] load matches failed', matchLoadErr);
+      } catch (matchLoadErr: any) {
+        console.log('[App] load matches failed', matchLoadErr?.message);
       }
     } catch (error) {
       console.error('Error loading app data:', error);

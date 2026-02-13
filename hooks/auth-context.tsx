@@ -119,11 +119,20 @@ const fetchProfile = async (userId: string): Promise<User | null> => {
   }
   
   try {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle<SupabaseProfileRow>();
+    let data: any = null;
+    let error: any = null;
+    try {
+      const result = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle<SupabaseProfileRow>();
+      data = result.data;
+      error = result.error;
+    } catch (networkErr: any) {
+      console.log('[Auth] fetchProfile network error:', networkErr?.message);
+      return null;
+    }
 
     if (error) {
       console.log('[Auth] fetchProfile error', error.message);
@@ -136,8 +145,8 @@ const fetchProfile = async (userId: string): Promise<User | null> => {
     }
 
     return mapProfile(data);
-  } catch (error) {
-    console.log('[Auth] fetchProfile exception', error);
+  } catch (error: any) {
+    console.log('[Auth] fetchProfile exception', error?.message);
     return null;
   }
 };
@@ -163,9 +172,13 @@ const createProfile = async (userId: string, email: string | null, name: string)
     completed: false,
   };
 
-  const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-  if (error) {
-    console.log('[Auth] createProfile error', error.message);
+  try {
+    const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+    if (error) {
+      console.log('[Auth] createProfile error', error.message);
+    }
+  } catch (e: any) {
+    console.log('[Auth] createProfile network error:', e?.message);
   }
 };
 
@@ -316,22 +329,36 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
       return;
     }
     
-    const { error, data } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
-    if (error) {
-      throw new Error(error.message || 'Invalid credentials');
+    let loginData: any = null;
+    let loginError: any = null;
+    try {
+      const result = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+      loginData = result.data;
+      loginError = result.error;
+    } catch (networkErr: any) {
+      console.log('[Auth] Login network error:', networkErr?.message);
+      throw new Error('Network unavailable. Please check your connection.');
+    }
+    if (loginError) {
+      throw new Error(loginError.message || 'Invalid credentials');
     }
     await synchronizeUser();
     
-    if (data.user) {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('completed')
-        .eq('id', data.user.id)
-        .maybeSingle();
-      
-      if (profile?.completed) {
-        router.replace('/(tabs)' as any);
-      } else {
+    if (loginData?.user) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('completed')
+          .eq('id', loginData.user.id)
+          .maybeSingle();
+        
+        if (profile?.completed) {
+          router.replace('/(tabs)' as any);
+        } else {
+          router.replace('/profile-setup' as any);
+        }
+      } catch (e: any) {
+        console.log('[Auth] Error checking profile after login:', e?.message);
         router.replace('/profile-setup' as any);
       }
     }
@@ -355,45 +382,58 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
       return { user: { id: userId, email: trimmedEmail } };
     }
 
-    const { data, error } = await supabase.auth.signUp({ 
-      email: trimmedEmail, 
-      password,
-      options: {
-        data: {
-          name: trimmedName,
+    let data: any = null;
+    let signupError: any = null;
+    try {
+      const result = await supabase.auth.signUp({ 
+        email: trimmedEmail, 
+        password,
+        options: {
+          data: {
+            name: trimmedName,
+          }
         }
-      }
-    });
-    if (error) {
-      throw new Error(error.message || 'Unable to create account');
+      });
+      data = result.data;
+      signupError = result.error;
+    } catch (networkErr: any) {
+      console.log('[Auth] Signup network error:', networkErr?.message);
+      throw new Error('Network unavailable. Please check your connection.');
+    }
+    if (signupError) {
+      throw new Error(signupError.message || 'Unable to create account');
     }
 
-    const userId = data.user?.id;
+    const userId = data?.user?.id;
     if (userId) {
-      await createProfile(userId, data.user?.email ?? trimmedEmail, trimmedName);
+      await createProfile(userId, data?.user?.email ?? trimmedEmail, trimmedName);
 
       try {
         const storedRef = await AsyncStorage.getItem('referrer_code');
         if (storedRef) {
           console.log('[Auth] Processing referral code:', storedRef);
-          const { data: referrer } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('referral_code', storedRef)
-            .maybeSingle();
+          try {
+            const { data: referrer } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('referral_code', storedRef)
+              .maybeSingle();
 
-          if (referrer?.id && referrer.id !== userId) {
-            await supabase.from('referrals').insert({
-              referrer_id: referrer.id,
-              referred_user_id: userId,
-            });
-            await supabase.from('profiles').update({ referred_by: referrer.id }).eq('id', userId);
-            console.log('[Auth] Referral recorded:', referrer.id, '->', userId);
+            if (referrer?.id && referrer.id !== userId) {
+              await supabase.from('referrals').insert({
+                referrer_id: referrer.id,
+                referred_user_id: userId,
+              });
+              await supabase.from('profiles').update({ referred_by: referrer.id }).eq('id', userId);
+              console.log('[Auth] Referral recorded:', referrer.id, '->', userId);
+            }
+          } catch (refNetErr: any) {
+            console.log('[Auth] Referral network error:', refNetErr?.message);
           }
           await AsyncStorage.removeItem('referrer_code');
         }
-      } catch (refErr) {
-        console.log('[Auth] Referral tracking error:', refErr);
+      } catch (refErr: any) {
+        console.log('[Auth] Referral tracking error:', refErr?.message);
       }
     }
 
