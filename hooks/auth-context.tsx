@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 import { supabase, TEST_MODE } from '@/lib/supabase';
 import { AuthUser, User, ThemeId } from '@/types';
 import { router } from 'expo-router';
@@ -185,7 +185,7 @@ const createProfile = async (userId: string, email: string | null, name: string)
 export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
-  const isLoggingOutRef = React.useRef(false);
+  const isLoggingOutRef = useRef(false);
 
   const synchronizeUser = useCallback(async () => {
     if (isLoggingOutRef.current) {
