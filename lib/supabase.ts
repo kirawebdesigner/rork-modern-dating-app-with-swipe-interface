@@ -26,7 +26,7 @@ const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const supabaseUrl = envUrl ?? DEFAULT_URL;
 const supabaseAnonKey = envAnon ?? DEFAULT_ANON;
 
-export const isSupabaseConfigured = Boolean(envUrl && envAnon);
+export const isSupabaseConfigured = true;
 
 const storage = Platform.OS === 'web' ? undefined : AsyncStorage;
 

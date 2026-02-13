@@ -2,7 +2,7 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo } from 'react';
 import { MembershipTier, MembershipFeatures, UserCredits, MonthlyAllowances } from '@/types';
-import { supabase, isSupabaseConfigured, safeFetch } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from './auth-context';
 
 const TEST_MODE = false;
@@ -160,25 +160,24 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         console.log('[Membership] Skipping server sync: Supabase not configured');
         return;
       }
+      const storedId = await AsyncStorage.getItem('user_id');
       const storedPhone = await AsyncStorage.getItem('user_phone');
-      if (!storedPhone) {
-        console.log('[Membership] No phone, skipping server sync');
-        return;
+      
+      let userId = authUser?.id ?? storedId ?? null;
+      
+      if (!userId && storedPhone) {
+        try {
+          const profileResult = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('phone', storedPhone)
+            .maybeSingle();
+          userId = profileResult?.data?.id ?? null;
+        } catch (e: any) {
+          console.log('[Membership] Network error fetching profile for sync:', e?.message);
+        }
       }
       
-      let syncProfileId: string | null = null;
-      try {
-        const profileResult = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('phone', storedPhone)
-          .maybeSingle();
-        syncProfileId = profileResult?.data?.id ?? null;
-      } catch (e: any) {
-        console.log('[Membership] Network error fetching profile for sync:', e?.message);
-      }
-      
-      const userId = syncProfileId ?? authUser?.id ?? null;
       if (!userId) {
         console.log('[Membership] No user ID found, skipping server sync');
         return;
@@ -188,7 +187,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       
       const payload = {
         user_id: userId,
-        phone_number: storedPhone,
+        phone_number: storedPhone ?? null,
         tier,
         message_credits: credits.messages,
         boost_credits: credits.boosts,
@@ -259,26 +258,24 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         return;
       }
       
+      const storedId = await AsyncStorage.getItem('user_id');
       const storedPhone = await AsyncStorage.getItem('user_phone');
-      if (!storedPhone) {
-        console.log('[Membership] No phone, loading from local only');
-        await loadFromLocalStorage();
-        return;
+      
+      let userId = authUser?.id ?? storedId ?? null;
+      
+      if (!userId && storedPhone) {
+        try {
+          const profileResult2 = await supabase
+            .from('profiles')
+            .select('id')
+            .eq('phone', storedPhone)
+            .maybeSingle();
+          userId = profileResult2?.data?.id ?? null;
+        } catch (e: any) {
+          console.log('[Membership] Network error fetching profile for load:', e?.message);
+        }
       }
       
-      let loadProfileId: string | null = null;
-      try {
-        const profileResult2 = await supabase
-          .from('profiles')
-          .select('id')
-          .eq('phone', storedPhone)
-          .maybeSingle();
-        loadProfileId = profileResult2?.data?.id ?? null;
-      } catch (e: any) {
-        console.log('[Membership] Network error fetching profile for load:', e?.message);
-      }
-      
-      const userId = loadProfileId ?? authUser?.id ?? null;
       if (!userId) {
         console.log('[Membership] No user ID, loading from local only');
         await loadFromLocalStorage();

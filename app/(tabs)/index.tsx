@@ -8,18 +8,16 @@ import {
   Text,
   TouchableOpacity,
   Platform,
+  Alert,
 } from 'react-native';
 import { X, Heart, Star, MapPin, Filter, Rocket, Undo2, Sparkles } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import ColorsConst from '@/constants/colors';
 import { useI18n } from '@/hooks/i18n-context';
-import { useTheme } from '@/hooks/theme-context';
 import SwipeCard from '@/components/SwipeCard';
 import { useApp } from '@/hooks/app-context';
 import { useMembership } from '@/hooks/membership-context';
 import { useRouter } from 'expo-router';
-import { Alert } from 'react-native';
 
 const { width: screenWidth } = Dimensions.get('window');
 const SWIPE_THRESHOLD = screenWidth * 0.25;
@@ -27,7 +25,6 @@ const SWIPE_THRESHOLD = screenWidth * 0.25;
 export default function DiscoverScreen() {
   const { potentialMatches, swipeUser, filters, swipeHistory } = useApp();
   const { t } = useI18n();
-  const { colors } = useTheme();
   const { tier, features, remainingProfileViews, useDaily, remainingRightSwipes, useSuperLike } = useMembership();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -98,34 +95,6 @@ export default function DiscoverScreen() {
     }
   }, [swipeHistory]);
 
-  useEffect(() => {
-    if (currentUser?.id && !countedViewsRef.current.has(currentUser.id)) {
-      countedViewsRef.current.add(currentUser.id);
-      void useDaily('views').then((ok) => {
-        console.log('[Discover] view counted for', currentUser.id, 'ok=', ok);
-      }).catch((e) => console.log('[Discover] view count error', e));
-    }
-  }, [currentUser?.id]);
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => !isAnimating,
-      onMoveShouldSetPanResponder: () => !isAnimating,
-      onPanResponderMove: (_, gesture) => {
-        position.setValue({ x: gesture.dx, y: gesture.dy });
-      },
-      onPanResponderRelease: (_, gesture) => {
-        if (gesture.dx > SWIPE_THRESHOLD) {
-          forceSwipe('right');
-        } else if (gesture.dx < -SWIPE_THRESHOLD) {
-          forceSwipe('left');
-        } else {
-          resetPosition();
-        }
-      },
-    })
-  ).current;
-
   const forceSwipe = useCallback((direction: 'left' | 'right') => {
     setIsAnimating(true);
     const x = direction === 'right' ? screenWidth * 1.5 : -screenWidth * 1.5;
@@ -170,27 +139,83 @@ export default function DiscoverScreen() {
     );
   }, [tier, router]);
 
+  const useDailyRef = useRef(useDaily);
+  useDailyRef.current = useDaily;
+  const consumeSuperLikeRef = useRef(useSuperLike);
+  consumeSuperLikeRef.current = useSuperLike;
+  const forceSwipeRef = useRef(forceSwipe);
+  forceSwipeRef.current = forceSwipe;
+  const resetPositionRef = useRef(resetPosition);
+  resetPositionRef.current = resetPosition;
+  const showUpgradePromptRef = useRef(showUpgradePrompt);
+  showUpgradePromptRef.current = showUpgradePrompt;
+  const isAnimatingRef = useRef(isAnimating);
+  isAnimatingRef.current = isAnimating;
+
+  useEffect(() => {
+    if (currentUser?.id && !countedViewsRef.current.has(currentUser.id)) {
+      countedViewsRef.current.add(currentUser.id);
+      useDailyRef.current('views').then((ok) => {
+        console.log('[Discover] view counted for', currentUser.id, 'ok=', ok);
+        if (!ok) {
+          console.log('[Discover] Profile view limit reached');
+        }
+      }).catch((e) => console.log('[Discover] view count error', e));
+    }
+  }, [currentUser?.id]);
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => !isAnimatingRef.current,
+      onMoveShouldSetPanResponder: () => !isAnimatingRef.current,
+      onPanResponderMove: (_, gesture) => {
+        position.setValue({ x: gesture.dx, y: gesture.dy });
+      },
+      onPanResponderRelease: (_, gesture) => {
+        if (gesture.dx > SWIPE_THRESHOLD) {
+          useDailyRef.current('rightSwipes').then((ok) => {
+            if (!ok) {
+              resetPositionRef.current();
+              showUpgradePromptRef.current('right swipes');
+            } else {
+              forceSwipeRef.current('right');
+            }
+          }).catch(() => {
+            forceSwipeRef.current('right');
+          });
+        } else if (gesture.dx < -SWIPE_THRESHOLD) {
+          forceSwipeRef.current('left');
+        } else {
+          resetPositionRef.current();
+        }
+      },
+    })
+  ).current;
+
   const handleActionButton = useCallback(async (action: 'nope' | 'like' | 'superlike') => {
     if (isAnimating || !currentUser) return;
 
-    if (action === 'like' || action === 'superlike') {
-      const ok = await useDaily('rightSwipes');
+    if (action === 'nope') {
+      forceSwipe('left');
+      return;
+    }
+    
+    if (action === 'like') {
+      const ok = await useDailyRef.current('rightSwipes');
       if (!ok) {
         showUpgradePrompt('right swipes');
         return;
       }
-    }
-
-    if (action === 'nope') {
-      forceSwipe('left');
-    } else if (action === 'like') {
       forceSwipe('right');
-    } else {
+      return;
+    }
+    
+    if (action === 'superlike') {
       if (tier === 'free') {
         showUpgradePrompt('super likes');
         return;
       }
-      const ok = await useSuperLike();
+      const ok = await consumeSuperLikeRef.current();
       if (!ok) {
         Alert.alert('Out of Super Likes', 'Get more Super Likes in the Store.', [
           { text: 'Cancel', style: 'cancel' },
@@ -211,7 +236,7 @@ export default function DiscoverScreen() {
         setIsAnimating(false);
       });
     }
-  }, [isAnimating, currentUser, useDaily, useSuperLike, tier, showUpgradePrompt, forceSwipe, swipeUser, position, router]);
+  }, [isAnimating, currentUser, tier, showUpgradePrompt, forceSwipe, swipeUser, position, router]);
 
   const onRewind = useCallback(() => {
     if (!features.rewind) {

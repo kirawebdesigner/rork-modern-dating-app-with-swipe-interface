@@ -1,7 +1,7 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { supabase, TEST_MODE, safeFetch } from '@/lib/supabase';
+import { supabase, TEST_MODE } from '@/lib/supabase';
 import { AuthUser, User, ThemeId } from '@/types';
 import { router } from 'expo-router';
 
@@ -405,13 +405,38 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   }, [synchronizeUser]);
 
   const logout = useCallback(async () => {
-    if (!TEST_MODE) {
-      await supabase.auth.signOut();
+    try {
+      if (!TEST_MODE) {
+        await supabase.auth.signOut().catch(e => console.log('[Auth] signOut network error:', e));
+      }
+    } catch (e) {
+      console.log('[Auth] signOut error (continuing):', e);
     }
-    await persistProfile(null);
-    await AsyncStorage.removeItem('user_id');
-    await AsyncStorage.removeItem('user_email');
-    await AsyncStorage.removeItem('user_phone');
+    
+    const keysToRemove = [
+      'user_profile',
+      'user_id',
+      'user_email',
+      'user_phone',
+      'tier',
+      'credits',
+      'swipe_history',
+      'filters_state',
+      'blocked_ids',
+      'membership_tier',
+      'membership_credits',
+      'remaining_daily_messages',
+      'remaining_profile_views',
+      'remaining_right_swipes',
+      'remaining_compliments',
+      'last_reset',
+      'monthly_allowances',
+      'last_allowance_grant',
+      'referrer_code',
+    ];
+    
+    await Promise.all(keysToRemove.map(k => AsyncStorage.removeItem(k).catch(() => {})));
+    console.log('[Auth] All storage keys cleared');
     setUser(null);
   }, []);
 
