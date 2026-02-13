@@ -53,10 +53,51 @@ export default function ProfileDetails() {
   const { remainingProfileViews, tier, useDaily } = useMembership();
   const { t } = useI18n();
 
-  const user: User | undefined = useMemo(
-    () => potentialMatches.find((u) => u.id === String(id)),
-    [id, potentialMatches],
-  );
+  const [fetchedUser, setFetchedUser] = useState<User | null>(null);
+
+  const user: User | undefined = useMemo(() => {
+    const found = potentialMatches.find((u) => u.id === String(id));
+    if (found) return found;
+    if (fetchedUser && fetchedUser.id === String(id)) return fetchedUser;
+    return undefined;
+  }, [id, potentialMatches, fetchedUser]);
+
+  useEffect(() => {
+    if (!id) return;
+    const found = potentialMatches.find((u) => u.id === String(id));
+    if (found) return;
+    console.log('[ProfileDetails] User not in potentialMatches, fetching from DB:', id);
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id,name,age,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,instagram')
+          .eq('id', String(id))
+          .maybeSingle();
+        if (!error && data) {
+          const mapped: User = {
+            id: String(data.id),
+            name: String(data.name ?? 'User'),
+            age: Number(data.age ?? 0),
+            gender: (data.gender as 'boy' | 'girl') ?? 'boy',
+            interestedIn: (data.interested_in as 'boy' | 'girl' | null) ?? undefined,
+            bio: String(data.bio ?? ''),
+            photos: Array.isArray(data.photos) && data.photos.length > 0 ? (data.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640'],
+            interests: Array.isArray(data.interests) ? (data.interests as string[]) : [],
+            location: { city: String(data.city ?? '') },
+            heightCm: typeof data.height_cm === 'number' ? Number(data.height_cm) : undefined,
+            education: data.education ? String(data.education) : undefined,
+            verified: Boolean(data.verified),
+            instagram: data.instagram ? String(data.instagram) : undefined,
+          };
+          setFetchedUser(mapped);
+          console.log('[ProfileDetails] Fetched user from DB:', mapped.name);
+        }
+      } catch (e) {
+        console.log('[ProfileDetails] Fetch user failed:', e);
+      }
+    })();
+  }, [id, potentialMatches]);
 
   const hasCountedRef = useRef<boolean>(false);
   useEffect(() => {

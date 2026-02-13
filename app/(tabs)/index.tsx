@@ -34,7 +34,11 @@ export default function DiscoverScreen() {
   const countedViewsRef = useRef<Set<string>>(new Set());
   const position = useRef(new Animated.ValueXY()).current;
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
-  const [localSwipedIds, setLocalSwipedIds] = useState<Set<string>>(new Set());
+  const [localSwipedIds, setLocalSwipedIds] = useState<Set<string>>(() => {
+    const initial = new Set<string>();
+    swipeHistory.forEach(s => initial.add(s.userId));
+    return initial;
+  });
   const [rewindStack, setRewindStack] = useState<string[]>([]);
 
   const swipedIdsSet = useMemo(() => {
@@ -79,6 +83,20 @@ export default function DiscoverScreen() {
     outputRange: [1, 0.6, 1],
     extrapolate: 'clamp',
   });
+
+  useEffect(() => {
+    const newIds = new Set<string>(localSwipedIds);
+    let changed = false;
+    swipeHistory.forEach(s => {
+      if (!newIds.has(s.userId)) {
+        newIds.add(s.userId);
+        changed = true;
+      }
+    });
+    if (changed) {
+      setLocalSwipedIds(newIds);
+    }
+  }, [swipeHistory]);
 
   useEffect(() => {
     if (currentUser?.id && !countedViewsRef.current.has(currentUser.id)) {

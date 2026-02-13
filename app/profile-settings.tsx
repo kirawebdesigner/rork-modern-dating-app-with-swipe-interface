@@ -1,19 +1,23 @@
 import React, { useMemo, useRef, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, TextInput, Alert, SafeAreaView, Platform, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Image, TextInput, Alert, Animated } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';
 import { useI18n } from '@/hooks/i18n-context';
 import { useApp } from '@/hooks/app-context';
 import { useMembership } from '@/hooks/membership-context';
 import { ThemeId } from '@/types';
-import { Plus, Lock, Globe, EyeOff, ArrowLeft, X, Camera } from 'lucide-react-native';
+import { ChevronLeft, X, Camera, ImagePlus, Globe, EyeOff, Lock, Check, Ruler, GraduationCap, MapPin, Instagram, User, Palette, Heart, Shield } from 'lucide-react-native';
 import * as ImagePicker from 'expo-image-picker';
+import * as Haptics from 'expo-haptics';
 import { categorizedInterests, InterestCategory, Interest } from '@/mocks/interests';
+import { LinearGradient } from 'expo-linear-gradient';
 import GradientButton from '@/components/GradientButton';
 
 export default function ProfileSettings() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { currentProfile, updateProfile, filters, setFilters } = useApp();
   const { t } = useI18n();
   const { tier } = useMembership();
@@ -29,13 +33,8 @@ export default function ProfileSettings() {
   const [city, setCity] = useState<string>(currentProfile?.location?.city ?? '');
   const [heightCm, setHeightCm] = useState<string>(currentProfile?.heightCm ? String(currentProfile.heightCm) : '');
   const [education, setEducation] = useState<string>(currentProfile?.education ?? '');
-  const ownedThemes = (currentProfile?.ownedThemes ?? []) as ThemeId[];
-  const selectedTheme = (currentProfile?.profileTheme ?? null) as ThemeId | null;
   const [instagram, setInstagram] = useState<string>(currentProfile?.instagram ?? '');
-  const scrollRef = useRef<ScrollView | null>(null);
-  const [activeSeg, setActiveSeg] = useState<'basic' | 'photos' | 'about' | 'interests' | 'location' | 'privacy'>('basic');
-  const sectionsYRef = useRef<Record<string, number>>({});
-  const sectionsY = sectionsYRef.current;
+  const scrollY = useRef(new Animated.Value(0)).current;
 
   const canAdvanced = useMemo(() => tier === 'gold' || tier === 'vip', [tier]);
 
@@ -44,20 +43,20 @@ export default function ProfileSettings() {
       Alert.alert('Limit reached', 'You can only add up to 6 photos');
       return;
     }
-
     try {
       const res = await ImagePicker.requestMediaLibraryPermissionsAsync();
       if (!res.granted) {
         Alert.alert('Permission required', 'Photo library access is needed.');
         return;
       }
-      const result = await ImagePicker.launchImageLibraryAsync({ 
-        allowsEditing: true, 
+      const result = await ImagePicker.launchImageLibraryAsync({
+        allowsEditing: true,
         aspect: [1, 1],
-        quality: 0.8, 
-        mediaTypes: ImagePicker.MediaTypeOptions.Images 
+        quality: 0.8,
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
       });
       if (!result.canceled && result.assets[0]) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setPhotos(prev => [...prev, result.assets[0].uri]);
       }
     } catch (e) {
@@ -66,12 +65,14 @@ export default function ProfileSettings() {
   };
 
   const removePhoto = (index: number) => {
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setPhotos(prev => prev.filter((_, i) => i !== index));
   };
 
   const toggleInterest = (interest: string) => {
-    setInterests(prev => 
-      prev.includes(interest) 
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+    setInterests(prev =>
+      prev.includes(interest)
         ? prev.filter(i => i !== interest)
         : [...prev, interest]
     );
@@ -84,8 +85,9 @@ export default function ProfileSettings() {
         Alert.alert('Permission required', 'Camera access is needed.');
         return;
       }
-      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1,1], quality: 0.8 });
+      const result = await ImagePicker.launchCameraAsync({ allowsEditing: true, aspect: [1, 1], quality: 0.8 });
       if (!result.canceled && result.assets[0]) {
+        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
         setPhotos(prev => [...prev, result.assets[0].uri]);
       }
     } catch (e) {
@@ -93,666 +95,846 @@ export default function ProfileSettings() {
     }
   };
 
-  const onScroll = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    try {
-      const y: number = e?.nativeEvent?.contentOffset?.y ?? 0;
-      const order: { key: typeof activeSeg; y: number }[] = [
-        { key: 'basic' as typeof activeSeg, y: sectionsY['basic'] ?? 0 },
-        { key: 'photos' as typeof activeSeg, y: sectionsY['photos'] ?? 0 },
-        { key: 'about' as typeof activeSeg, y: sectionsY['about'] ?? 0 },
-        { key: 'interests' as typeof activeSeg, y: sectionsY['interests'] ?? 0 },
-        { key: 'location' as typeof activeSeg, y: sectionsY['location'] ?? 0 },
-        { key: 'privacy' as typeof activeSeg, y: sectionsY['privacy'] ?? 0 },
-      ].sort((a, b) => a.y - b.y);
-      let current = 'basic' as typeof activeSeg;
-      for (let i = 0; i < order.length; i++) {
-        const next = order[i + 1];
-        if (!next || y + 20 < next.y) { current = order[i].key; break; }
-      }
-      if (current !== activeSeg) setActiveSeg(current);
-    } catch (err) {
-      console.log('[ProfileSettings] onScroll parse error', err);
+  const handleSave = useCallback(async () => {
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+    const nextAge = Number(age) || currentProfile?.age || 0;
+    if (nextAge < 18) {
+      Alert.alert(t('Age restriction'), t('You must be at least 18 years old.'));
+      return;
     }
-  }, [activeSeg, sectionsY]);
-
-  const scrollTo = useCallback((key: typeof activeSeg) => {
-    const y = sectionsY[key] ?? 0;
-    scrollRef.current?.scrollTo({ y: Math.max(0, y - 60), animated: true });
-  }, [sectionsY]);
+    const ig = instagram.trim() || undefined;
+    await updateProfile({
+      name,
+      age: nextAge,
+      photos,
+      bio,
+      interests,
+      instagram: ig,
+      privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito },
+      location: { ...(currentProfile?.location ?? { city: '' }), city },
+      heightCm: Number(heightCm) || undefined,
+      education: education || undefined,
+    });
+    await setFilters({ ...filters, distanceKm: radius });
+    Alert.alert(t('Applied'), t('Profile updated successfully!'));
+    safeGoBack(router, '/(tabs)/profile');
+  }, [name, age, photos, bio, interests, instagram, privacy, hideOnline, incognito, city, heightCm, education, radius, currentProfile, filters, updateProfile, setFilters, router, t]);
 
   if (!currentProfile) {
     return (
-      <SafeAreaView style={styles.center}>
-        <Text style={styles.title}>{t('Create profile first')}</Text>
-      </SafeAreaView>
+      <View style={[styles.emptyContainer, { paddingTop: insets.top }]}>
+        <Text style={styles.emptyTitle}>{t('Create profile first')}</Text>
+      </View>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
-      <View style={styles.header}>
-        <TouchableOpacity testID="btn-back" onPress={() => safeGoBack(router, '/(tabs)/profile')} style={styles.backButton}>
-          <ArrowLeft size={24} color={Colors.text.white} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{t('Profile Settings')}</Text>
-        <View style={styles.placeholder} />
-      </View>
-
-      <ScrollView
-        ref={scrollRef}
-        style={styles.content}
-        showsVerticalScrollIndicator={false}
-        stickyHeaderIndices={[1]}
-        onScroll={onScroll}
-        scrollEventThrottle={16}
-        testID="scroll-profile-settings"
+    <View style={styles.container}>
+      <LinearGradient
+        colors={['#FF2D55', '#FF6B8A']}
+        start={{ x: 0, y: 0 }}
+        end={{ x: 1, y: 1 }}
+        style={[styles.headerBg, { paddingTop: insets.top }]}
       >
-        <View style={styles.profileHeaderCard} onLayout={(e) => { sectionsY['top'] = e.nativeEvent.layout.y; }}>
-          <View style={styles.avatarWrap}>
+        <View style={styles.headerRow}>
+          <TouchableOpacity testID="btn-back" onPress={() => safeGoBack(router, '/(tabs)/profile')} style={styles.headerBtn}>
+            <ChevronLeft size={22} color="#FFF" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>{t('Edit Profile')}</Text>
+          <TouchableOpacity onPress={handleSave} style={styles.saveHeaderBtn}>
+            <Text style={styles.saveHeaderText}>{t('Save')}</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.profileCard}>
+          <View style={styles.avatarSection}>
             <Image
-              source={{ uri: (currentProfile.photos?.[0] ?? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=400&auto=format&fit=crop') as string }}
+              source={{ uri: (photos[0] ?? currentProfile.photos?.[0] ?? 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=400') }}
               style={styles.avatar}
             />
-            <View style={styles.tierPill}>
-              <Text style={styles.tierPillText}>{tier?.toUpperCase?.() ?? 'FREE'}</Text>
+            <TouchableOpacity style={styles.avatarEditBtn} onPress={addPhoto}>
+              <Camera size={14} color="#FFF" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.profileInfo}>
+            <Text style={styles.profileName} numberOfLines={1}>{name || currentProfile.name || 'Your Name'}</Text>
+            <Text style={styles.profileLocation} numberOfLines={1}>{city || currentProfile.location?.city || 'Add location'}</Text>
+            <View style={styles.tierBadge}>
+              <Text style={styles.tierText}>{tier?.toUpperCase?.() ?? 'FREE'}</Text>
             </View>
           </View>
-          <View style={styles.headerInfo}>
-            <Text style={styles.headerName} numberOfLines={1}>{name || currentProfile.name || t('Your Name')}</Text>
-            <Text style={styles.headerSub} numberOfLines={1}>{city || currentProfile.location?.city || t('Add location')}</Text>
-          </View>
         </View>
+      </LinearGradient>
 
-        <View style={styles.segmentBar} testID="segmented-control">
-          {([
-            { key: 'basic', label: t('Basic') },
-            { key: 'photos', label: t('Photos') },
-            { key: 'about', label: t('About') },
-            { key: 'interests', label: t('Interests') },
-            { key: 'location', label: t('Location') },
-            { key: 'privacy', label: t('Privacy') },
-          ] as { key: typeof activeSeg; label: string }[]).map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => scrollTo(tab.key as typeof activeSeg)}
-              style={[styles.segmentItem, activeSeg === (tab.key as typeof activeSeg) && styles.segmentItemActive]}
-              testID={`segment-${tab.key}`}
-            >
-              <Text style={[styles.segmentText, activeSeg === (tab.key as typeof activeSeg) && styles.segmentTextActive]}>{tab.label}</Text>
+      <Animated.ScrollView
+        style={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+        onScroll={Animated.event([{ nativeEvent: { contentOffset: { y: scrollY } } }], { useNativeDriver: true })}
+        scrollEventThrottle={16}
+        contentContainerStyle={{ paddingBottom: 120 }}
+        testID="scroll-profile-settings"
+      >
+        <SectionCard icon={<User size={18} color="#FF2D55" />} title={t('Basic Info')}>
+          <InputField label={t('Your name')} value={name} onChangeText={setName} testID="input-name" autoCapitalize="words" />
+          <View style={styles.row}>
+            <View style={styles.halfField}>
+              <InputField label={t('Age')} value={age} onChangeText={setAge} testID="input-age" keyboardType="numeric" />
+            </View>
+            <View style={styles.halfField}>
+              <InputField label={t('Height (cm)')} value={heightCm} onChangeText={(txt) => setHeightCm(txt.replace(/[^0-9]/g, ''))} testID="input-height" keyboardType="numeric" icon={<Ruler size={16} color={Colors.text.light} />} />
+            </View>
+          </View>
+          <InputField label={t('Education')} value={education} onChangeText={setEducation} testID="input-education" icon={<GraduationCap size={16} color={Colors.text.light} />} />
+          <InputField
+            label={t('Instagram')}
+            value={instagram}
+            onChangeText={(val) => {
+              const cleaned = String(val ?? '').replace(/^https?:\/\/(?:www\.)?instagram\.com\//i, '').replace(/^@+/, '').trim();
+              setInstagram(cleaned);
+            }}
+            testID="input-instagram"
+            autoCapitalize="none"
+            icon={<Instagram size={16} color={Colors.text.light} />}
+          />
+        </SectionCard>
+
+        <SectionCard icon={<Camera size={18} color="#FF9500" />} title={t('Photos')}>
+          <Text style={styles.sectionHint}>{t('Add up to 6 photos to showcase yourself')}</Text>
+          <View style={styles.photoActions}>
+            <TouchableOpacity style={styles.photoActionBtn} onPress={capturePhoto}>
+              <Camera size={18} color="#FF2D55" />
+              <Text style={styles.photoActionText}>{t('Camera')}</Text>
             </TouchableOpacity>
-          ))}
-        </View>
+            <TouchableOpacity style={styles.photoActionBtn} onPress={addPhoto}>
+              <ImagePlus size={18} color="#FF2D55" />
+              <Text style={styles.photoActionText}>{t('Gallery')}</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.photoGrid}>
+            {Array.from({ length: 6 }).map((_, index) => {
+              const photo = photos[index];
+              return (
+                <View key={index} style={styles.photoSlot}>
+                  {photo ? (
+                    <>
+                      <Image source={{ uri: photo }} style={styles.photo} />
+                      <TouchableOpacity style={styles.removePhotoBtn} onPress={() => removePhoto(index)}>
+                        <X size={12} color="#FFF" />
+                      </TouchableOpacity>
+                      {index === 0 && (
+                        <View style={styles.mainPhotoBadge}>
+                          <Text style={styles.mainPhotoText}>Main</Text>
+                        </View>
+                      )}
+                    </>
+                  ) : (
+                    <TouchableOpacity style={styles.emptyPhoto} onPress={addPhoto} disabled={index > photos.length}>
+                      {index === photos.length ? (
+                        <ImagePlus size={22} color={Colors.text.light} />
+                      ) : (
+                        <View style={styles.emptyDot} />
+                      )}
+                    </TouchableOpacity>
+                  )}
+                </View>
+              );
+            })}
+          </View>
+        </SectionCard>
 
-        <View onLayout={(e) => { sectionsY['basic'] = e.nativeEvent.layout.y; }} style={styles.cardSection} testID="section-basic">
-          <Text style={styles.sectionTitle}>{t('Basic Info')}</Text>
-          <View style={styles.rowInputs}>
+        <SectionCard icon={<Heart size={18} color="#5856D6" />} title={t('About Me')}>
+          <View style={styles.bioContainer}>
             <TextInput
-              style={styles.textInput}
-              value={name}
-              onChangeText={setName}
-              placeholder={t('Your name')}
-              placeholderTextColor={Colors.text.secondary}
-              autoCapitalize="words"
-              testID="input-name"
+              style={styles.bioInput}
+              value={bio}
+              onChangeText={setBio}
+              placeholder={t('Tell others about yourself...')}
+              placeholderTextColor={Colors.text.light}
+              multiline
+              maxLength={500}
+              textAlignVertical="top"
             />
-            <TextInput
-              style={styles.textInput}
-              value={age}
-              onChangeText={setAge}
-              inputMode="numeric"
-              placeholder={t('Age')}
-              placeholderTextColor={Colors.text.secondary}
-              testID="input-age"
-            />
+            <Text style={styles.charCount}>{bio.length}/500</Text>
           </View>
-          <View style={[styles.rowInputs, { marginTop: 12 }]}> 
-            <TextInput
-              style={styles.textInput}
-              value={city}
-              onChangeText={setCity}
-              placeholder={t('City, Country')}
-              placeholderTextColor={Colors.text.secondary}
-              autoCapitalize="words"
-              testID="input-location"
-            />
-            <TextInput
-              style={styles.textInput}
-              value={heightCm}
-              onChangeText={(txt) => setHeightCm(txt.replace(/[^0-9]/g, ''))}
-              inputMode="numeric"
-              placeholder={t('Height (cm) placeholder')}
-              placeholderTextColor={Colors.text.secondary}
-              testID="input-height"
-            />
-          </View>
-          <View style={{ marginTop: 12 }}>
-            <TextInput
-              style={styles.textInput}
-              value={education}
-              onChangeText={setEducation}
-              placeholder={t('Education (e.g., Bachelor in CS)')}
-              placeholderTextColor={Colors.text.secondary}
-              autoCapitalize="sentences"
-              testID="input-education"
-            />
-          </View>
-          <View style={{ marginTop: 12 }}>
-            <TextInput
-              style={styles.textInput}
-              value={instagram}
-              onChangeText={(val) => {
-                const cleaned = String(val ?? '')
-                  .replace(/^https?:\/\/(?:www\.)?instagram\.com\//i, '')
-                  .replace(/^@+/, '')
-                  .trim();
-                setInstagram(cleaned);
-              }}
-              placeholder={t('Instagram username (optional)')}
-              placeholderTextColor={Colors.text.secondary}
-              autoCapitalize="none"
-              autoCorrect={false}
-              testID="input-instagram"
-            />
-          </View>
-        </View>
+        </SectionCard>
 
-        <View onLayout={(e) => { sectionsY['photos'] = e.nativeEvent.layout.y; }} style={styles.cardSection} testID="section-photos">
-          <Text style={styles.sectionTitle}>{t('Photo Gallery')}</Text>
-          <Text style={styles.sectionSubtitle}>{t('Add up to 6 photos to showcase yourself')}</Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <GradientButton title={t('Add from Camera')} onPress={capturePhoto} style={{ flex: 1 }} />
-            <GradientButton title={t('Add from Gallery')} variant="secondary" onPress={addPhoto} style={{ flex: 1 }} />
-          </View>
-          <View style={{ height: 12 }} />
-          {renderPhotoGrid()}
-        </View>
-
-        <View style={styles.cardSection}>
-          <Text style={styles.sectionTitle}>{t('Customize Profile')}</Text>
-          <Text style={styles.sectionSubtitle}>{t('Choose a theme for your info panel. Purchased themes stay unlocked.')}</Text>
+        <SectionCard icon={<Palette size={18} color="#FF9500" />} title={t('Profile Theme')}>
+          <Text style={styles.sectionHint}>{t('Customize your info panel look')}</Text>
           <View style={styles.themesRow}>
-            {(['midnight','sunset','geometric'] as ThemeId[]).map((th) => {
-              const owned = ownedThemes.includes(th);
-              const isSelected = selectedTheme === th;
+            {(['midnight', 'sunset', 'geometric'] as ThemeId[]).map((th) => {
+              const owned = (currentProfile?.ownedThemes ?? []).includes(th);
+              const isSelected = (currentProfile?.profileTheme ?? null) === th;
+              const themeLabel = th === 'midnight' ? 'Midnight' : th === 'sunset' ? 'Sunset' : 'Geometric';
               return (
                 <TouchableOpacity
                   key={th}
-                  style={[styles.themeCard, isSelected && styles.themeCardActive, !owned && styles.themeCardLocked]}
+                  style={[styles.themeCard, isSelected && styles.themeCardActive]}
                   onPress={async () => {
-                    console.log('[ProfileSettings] theme press', { th, owned });
-                    if (!owned) { Alert.alert(t('Upgrade needed'), 'Buy this theme in the Store (Premium page).'); return; }
+                    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+                    if (!owned) { Alert.alert(t('Upgrade needed'), 'Buy this theme in the Store.'); return; }
                     await updateProfile({ profileTheme: th });
-                    Alert.alert(t('Applied'), `${th === 'midnight' ? 'Midnight' : th === 'sunset' ? 'Sunset' : 'Geometric'} applied to your info panel.`);
                   }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected, disabled: !owned }}
                   testID={`theme-option-${th}`}
                 >
-                  <View style={[styles.themePreview, th === 'geometric' ? styles.geoPreview : th === 'midnight' ? styles.midnightPreview : styles.sunsetPreview]} />
-                  <Text style={styles.themeLabel}>
-                    {th === 'midnight' ? 'Midnight' : th === 'sunset' ? 'Sunset' : 'Geometric'} {owned ? '' : '🔒'}
-                  </Text>
+                  <View style={[styles.themePreview, th === 'midnight' && styles.midnightPrev, th === 'sunset' && styles.sunsetPrev, th === 'geometric' && styles.geoPrev]}>
+                    {isSelected && <Check size={18} color="#FFF" />}
+                    {!owned && <Lock size={16} color="rgba(255,255,255,0.7)" />}
+                  </View>
+                  <Text style={[styles.themeLabel, isSelected && styles.themeLabelActive]}>{themeLabel}</Text>
                 </TouchableOpacity>
               );
             })}
-            <TouchableOpacity 
-              style={[styles.themeCard, selectedTheme == null && styles.themeCardActive]}
-              onPress={async () => { await updateProfile({ profileTheme: null }); Alert.alert('Removed', 'Theme cleared.'); }}
-              accessibilityRole="button"
-              accessibilityState={{ selected: selectedTheme == null }}
-              testID="theme-option-none"
-            >
-              <View style={[styles.themePreview, styles.nonePreview]} />
-              <Text style={styles.themeLabel}>{t('None')}</Text>
-            </TouchableOpacity>
           </View>
-        </View>
+        </SectionCard>
 
-        <View onLayout={(e) => { sectionsY['about'] = e.nativeEvent.layout.y; }} style={styles.cardSection} testID="section-about">
-          <Text style={styles.sectionTitle}>{t('About Me')}</Text>
-          <TextInput
-            style={styles.bioInput}
-            value={bio}
-            onChangeText={setBio}
-            placeholder={t('Tell others about yourself...')}
-            placeholderTextColor={Colors.text.secondary}
-            multiline
-            maxLength={500}
-            textAlignVertical="top"
-          />
-          <Text style={styles.characterCount}>{bio.length}/500</Text>
-        </View>
-
-        <View onLayout={(e) => { sectionsY['interests'] = e.nativeEvent.layout.y; }} style={styles.cardSection} testID="section-interests">
-          <Text style={styles.sectionTitle}>{t('InterestsTitle')}</Text>
-          <Text style={styles.sectionSubtitle}>{t('Select your interests to find better matches')}</Text>
+        <SectionCard icon={<Palette size={18} color="#34C759" />} title={t('Interests')}>
+          <Text style={styles.sectionHint}>{t('Select your interests to find better matches')}</Text>
           {categorizedInterests.map((category: InterestCategory) => (
-            <View key={category.name} style={styles.categoryContainer}>
+            <View key={category.name} style={styles.categoryBlock}>
               <Text style={styles.categoryTitle}>{category.name}</Text>
               <View style={styles.interestsGrid}>
-                {category.interests.map((interest: Interest) => (
-                  <TouchableOpacity
-                    key={`${category.name}-${interest.name}`}
-                    style={[
-                      styles.interestTag,
-                      interests.includes(interest.name) && styles.interestTagSelected,
-                    ]}
-                    onPress={() => toggleInterest(interest.name)}
-                    testID={`interest-${interest.name}`}
-                  >
-                    <Text style={styles.interestIcon}>{interest.icon}</Text>
-                    <Text
-                      style={[
-                        styles.interestText,
-                        interests.includes(interest.name) && styles.interestTextSelected,
-                      ]}
+                {category.interests.map((interest: Interest) => {
+                  const selected = interests.includes(interest.name);
+                  return (
+                    <TouchableOpacity
+                      key={`${category.name}-${interest.name}`}
+                      style={[styles.interestChip, selected && styles.interestChipSelected]}
+                      onPress={() => toggleInterest(interest.name)}
+                      testID={`interest-${interest.name}`}
                     >
-                      {interest.name}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
+                      <Text style={styles.interestEmoji}>{interest.icon}</Text>
+                      <Text style={[styles.interestName, selected && styles.interestNameSelected]}>{interest.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
               </View>
             </View>
           ))}
-        </View>
+        </SectionCard>
 
-        <View onLayout={(e) => { sectionsY['location'] = e.nativeEvent.layout.y; }} style={styles.cardSection} testID="section-location">
-          <Text style={styles.sectionTitle}>{t('Location & Distance')}</Text>
-          <Text style={styles.label}>{t('Search radius')} {canAdvanced ? '' : '(Gold+ feature)'}</Text>
-          <View style={styles.radiusContainer}>
+        <SectionCard icon={<MapPin size={18} color="#007AFF" />} title={t('Location & Distance')}>
+          <InputField label={t('City, Country')} value={city} onChangeText={setCity} testID="input-location" icon={<MapPin size={16} color={Colors.text.light} />} />
+          <Text style={styles.radiusLabel}>{t('Search radius')} {!canAdvanced && <Text style={styles.premiumTag}>(Gold+)</Text>}</Text>
+          <View style={styles.radiusRow}>
             <TouchableOpacity
-              style={[styles.radiusButton, !canAdvanced && styles.disabled]}
-              onPress={() => canAdvanced && setRadius(Math.max(1, radius - 5))}
+              style={[styles.radiusBtn, !canAdvanced && styles.radiusBtnDisabled]}
+              onPress={() => { if (canAdvanced) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRadius(Math.max(1, radius - 5)); } }}
               disabled={!canAdvanced}
             >
-              <Text style={styles.radiusButtonText}>-5</Text>
+              <Text style={styles.radiusBtnText}>-5</Text>
             </TouchableOpacity>
-            <Text style={styles.radiusValue}>{radius} km</Text>
+            <View style={styles.radiusDisplay}>
+              <Text style={styles.radiusValue}>{radius}</Text>
+              <Text style={styles.radiusUnit}>km</Text>
+            </View>
             <TouchableOpacity
-              style={[styles.radiusButton, !canAdvanced && styles.disabled]}
-              onPress={() => canAdvanced && setRadius(Math.min(100, radius + 5))}
+              style={[styles.radiusBtn, !canAdvanced && styles.radiusBtnDisabled]}
+              onPress={() => { if (canAdvanced) { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setRadius(Math.min(100, radius + 5)); } }}
               disabled={!canAdvanced}
             >
-              <Text style={styles.radiusButtonText}>+5</Text>
+              <Text style={styles.radiusBtnText}>+5</Text>
             </TouchableOpacity>
           </View>
-        </View>
+        </SectionCard>
 
-        <View onLayout={(e) => { sectionsY['privacy'] = e.nativeEvent.layout.y; }} style={styles.cardSection} testID="section-privacy">
-          <Text style={styles.sectionTitle}>{t('Privacy settings')}</Text>
-          
-          <Text style={styles.label}>{t('Profile Visibility')}</Text>
-          <View style={styles.privacyRow}>
-            {(['everyone','matches','nobody'] as const).map(v => (
-              <TouchableOpacity key={v} onPress={() => setPrivacy(v)} style={[styles.privacyChip, privacy === v && styles.privacyChipActive]}>
-                {v === 'everyone' && <Globe size={16} color={privacy === 'everyone' ? '#fff' : Colors.text.primary} />}
-                {v === 'matches' && <Lock size={16} color={privacy === 'matches' ? '#fff' : Colors.text.primary} />}
-                {v === 'nobody' && <EyeOff size={16} color={privacy === 'nobody' ? '#fff' : Colors.text.primary} />}
-                <Text style={[styles.privacyText, privacy === v && styles.privacyTextActive]}>{v}</Text>
+        <SectionCard icon={<Shield size={18} color="#FF3B30" />} title={t('Privacy')}>
+          <Text style={styles.privacyLabel}>{t('Profile Visibility')}</Text>
+          <View style={styles.privacyOptions}>
+            {([
+              { value: 'everyone' as const, label: 'Everyone', icon: <Globe size={16} color={privacy === 'everyone' ? '#FFF' : Colors.text.primary} /> },
+              { value: 'matches' as const, label: 'Matches', icon: <Lock size={16} color={privacy === 'matches' ? '#FFF' : Colors.text.primary} /> },
+              { value: 'nobody' as const, label: 'Nobody', icon: <EyeOff size={16} color={privacy === 'nobody' ? '#FFF' : Colors.text.primary} /> },
+            ]).map(opt => (
+              <TouchableOpacity
+                key={opt.value}
+                style={[styles.privacyChip, privacy === opt.value && styles.privacyChipActive]}
+                onPress={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setPrivacy(opt.value); }}
+              >
+                {opt.icon}
+                <Text style={[styles.privacyChipText, privacy === opt.value && styles.privacyChipTextActive]}>{opt.label}</Text>
               </TouchableOpacity>
             ))}
           </View>
 
-          <View style={styles.toggleRow}>
-            <TouchableOpacity onPress={() => setHideOnline(!hideOnline)} style={[styles.toggle, hideOnline && styles.toggleOn]}>
-              <View style={[styles.knob, hideOnline && styles.knobOn]} />
-            </TouchableOpacity>
-            <Text style={styles.toggleLabel}>{t('Hide online status')}</Text>
-          </View>
+          <ToggleRow label={t('Hide online status')} value={hideOnline} onToggle={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setHideOnline(!hideOnline); }} />
+          <ToggleRow label={t('Incognito mode (VIP)')} value={incognito} onToggle={() => { Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light); setIncognito(!incognito); }} />
+        </SectionCard>
+      </Animated.ScrollView>
 
-          <View style={styles.toggleRow}>
-            <TouchableOpacity onPress={() => setIncognito(!incognito)} style={[styles.toggle, incognito && styles.toggleOn]}>
-              <View style={[styles.knob, incognito && styles.knobOn]} />
-            </TouchableOpacity>
-            <Text style={styles.toggleLabel}>{t('Incognito mode (VIP feature)')}</Text>
-          </View>
-        </View>
+      <View style={[styles.footer, { paddingBottom: Math.max(insets.bottom, 12) + 8 }]} testID="save-bar">
+        <GradientButton title={t('Save Changes')} onPress={handleSave} style={styles.saveBtn} />
+      </View>
+    </View>
+  );
+}
 
-        <View style={styles.bottomSpacing} />
-      </ScrollView>
+function SectionCard({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+  return (
+    <View style={sectionStyles.card}>
+      <View style={sectionStyles.headerRow}>
+        <View style={sectionStyles.iconWrap}>{icon}</View>
+        <Text style={sectionStyles.title}>{title}</Text>
+      </View>
+      {children}
+    </View>
+  );
+}
 
-      <View style={styles.footer} testID="save-bar">
-        <GradientButton
-          title={t('Save Changes')}
-          onPress={async () => {
-            const nextAge = Number(age) || currentProfile.age || 0;
-            if (nextAge < 18) { Alert.alert(t('Age restriction'), t('You must be at least 18 years old.')); return; }
-            const ig = instagram.trim() || undefined;
-            await updateProfile({ name, age: nextAge, photos, bio, interests, instagram: ig, privacy: { visibility: privacy, hideOnlineStatus: hideOnline, incognito }, location: { ...(currentProfile.location ?? { city: '' }), city }, heightCm: Number(heightCm) || undefined, education: education || undefined });
-            await setFilters({ ...filters, distanceKm: radius });
-            Alert.alert(t('Applied'), t('Profile updated successfully!'));
-            safeGoBack(router, '/(tabs)/profile')
-          }}
-          style={styles.saveButton}
+function InputField({ label, value, onChangeText, testID, autoCapitalize, keyboardType, icon }: {
+  label: string;
+  value: string;
+  onChangeText: (text: string) => void;
+  testID?: string;
+  autoCapitalize?: 'none' | 'sentences' | 'words';
+  keyboardType?: 'default' | 'numeric';
+  icon?: React.ReactNode;
+}) {
+  return (
+    <View style={inputStyles.container}>
+      <Text style={inputStyles.label}>{label}</Text>
+      <View style={inputStyles.inputRow}>
+        {icon && <View style={inputStyles.iconWrap}>{icon}</View>}
+        <TextInput
+          style={[inputStyles.input, icon ? inputStyles.inputWithIcon : undefined]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={label}
+          placeholderTextColor={Colors.text.light}
+          autoCapitalize={autoCapitalize}
+          inputMode={keyboardType === 'numeric' ? 'numeric' : 'text'}
+          testID={testID}
         />
       </View>
-    </SafeAreaView>
+    </View>
   );
-
-  function renderPhotoGrid() {
-    return (
-      <View style={styles.photoGrid}>
-        {Array.from({ length: 6 }).map((_, index) => {
-          const photo = photos[index];
-          return (
-            <View key={index} style={styles.photoSlot}>
-              {photo ? (
-                <>
-                  <Image source={{ uri: photo }} style={styles.photo} />
-                  <TouchableOpacity
-                    style={styles.removePhotoButton}
-                    onPress={() => removePhoto(index)}
-                  >
-                    <X size={16} color={Colors.text.white} />
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <TouchableOpacity
-                  style={styles.addPhoto}
-                  onPress={addPhoto}
-                  disabled={index > photos.length}
-                >
-                  {index === photos.length ? (
-                    <>
-                      <Camera size={24} color={Colors.text.secondary} />
-                      <Text style={styles.addPhotoText}>Add Photo</Text>
-                    </>
-                  ) : (
-                    <Plus size={24} color={Colors.text.light} />
-                  )}
-                </TouchableOpacity>
-              )}
-            </View>
-          );
-        })}
-      </View>
-    );
-  }
 }
+
+function ToggleRow({ label, value, onToggle }: { label: string; value: boolean; onToggle: () => void }) {
+  return (
+    <View style={toggleStyles.row}>
+      <Text style={toggleStyles.label}>{label}</Text>
+      <TouchableOpacity onPress={onToggle} style={[toggleStyles.track, value && toggleStyles.trackOn]}>
+        <View style={[toggleStyles.thumb, value && toggleStyles.thumbOn]} />
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+const sectionStyles = StyleSheet.create({
+  card: {
+    marginHorizontal: 16,
+    marginTop: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.04,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F3F4F6',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  iconWrap: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: '#FFF1F3',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '700' as const,
+    color: '#1A1A1A',
+    letterSpacing: -0.2,
+  },
+});
+
+const inputStyles = StyleSheet.create({
+  container: {
+    marginBottom: 14,
+  },
+  label: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.text.secondary,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  inputRow: {
+    position: 'relative',
+  },
+  iconWrap: {
+    position: 'absolute',
+    left: 14,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    zIndex: 1,
+  },
+  input: {
+    height: 48,
+    borderWidth: 1.5,
+    borderColor: '#F0F0F0',
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    fontSize: 15,
+    color: Colors.text.primary,
+    backgroundColor: '#FAFAFA',
+  },
+  inputWithIcon: {
+    paddingLeft: 40,
+  },
+});
+
+const toggleStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 14,
+    borderTopWidth: 1,
+    borderTopColor: '#F5F5F5',
+  },
+  label: {
+    fontSize: 15,
+    color: Colors.text.primary,
+    flex: 1,
+  },
+  track: {
+    width: 50,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: '#E5E7EB',
+    padding: 3,
+    justifyContent: 'center',
+  },
+  trackOn: {
+    backgroundColor: '#FF2D55',
+  },
+  thumb: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#000',
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 3,
+  },
+  thumbOn: {
+    transform: [{ translateX: 20 }],
+  },
+});
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F8F8FA',
   },
-  center: { 
-    flex: 1, 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    backgroundColor: Colors.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  emptyContainer: {
+    flex: 1,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    backgroundColor: Colors.primary,
+    justifyContent: 'center',
+    backgroundColor: '#F8F8FA',
   },
-  backButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: Colors.text.primary,
+  },
+  headerBg: {
+    paddingBottom: 24,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  headerBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: 'rgba(255,255,255,0.2)',
     justifyContent: 'center',
     alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: Colors.text.white,
+    fontSize: 18,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
   },
-  placeholder: {
-    width: 44,
-  },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
-  cameraOverlay: { position: 'absolute', bottom: 40, left: 20, right: 20 },
-  profileHeaderCard: {
-    marginTop: 16,
-    marginBottom: 12,
-    backgroundColor: Colors.card,
+  saveHeaderBtn: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: 'rgba(255,255,255,0.25)',
     borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+  },
+  saveHeaderText: {
+    fontSize: 14,
+    fontWeight: '700' as const,
+    color: '#FFFFFF',
+  },
+  profileCard: {
     flexDirection: 'row',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    gap: 16,
   },
-  avatarWrap: { position: 'relative' },
-  avatar: { width: 64, height: 64, borderRadius: 32, backgroundColor: Colors.backgroundSecondary },
-  tierPill: { position: 'absolute', bottom: -6, right: -6, backgroundColor: Colors.primary, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  tierPillText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  headerInfo: { marginLeft: 12, flex: 1 },
-  headerName: { fontSize: 18, fontWeight: '800', color: Colors.text.primary },
-  headerSub: { fontSize: 13, color: Colors.text.secondary, marginTop: 2 },
-
-  section: {
-    marginBottom: 32,
+  avatarSection: {
+    position: 'relative',
   },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginBottom: 8,
+  avatar: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 3,
+    borderColor: 'rgba(255,255,255,0.5)',
   },
-  themesRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  themeCard: { width: '47%', borderRadius: 12, borderWidth: 1, borderColor: Colors.border, padding: 12, backgroundColor: Colors.backgroundSecondary },
-  themeCardActive: { borderColor: Colors.primary },
-  themePreview: { height: 60, borderRadius: 10, marginBottom: 8 },
-  midnightPreview: { backgroundColor: '#0c1020' },
-  sunsetPreview: { backgroundColor: '#ff7a59' },
-  geoPreview: { backgroundColor: '#ECEFF3' },
-  nonePreview: { backgroundColor: Colors.background },
-  themeLabel: { color: Colors.text.primary, fontWeight: '600' },
-  rowInputs: { flexDirection: 'row', gap: 12 },
-  textInput: { flex: 1, borderWidth: 1, borderColor: Colors.border, borderRadius: 12, paddingHorizontal: 12, height: 48, color: Colors.text.primary, backgroundColor: Colors.background },
-  themeCardLocked: { opacity: 0.6 },
-  sectionSubtitle: {
-    fontSize: 14,
+  avatarEditBtn: {
+    position: 'absolute',
+    bottom: -2,
+    right: -2,
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#FF2D55',
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+  },
+  profileInfo: {
+    flex: 1,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+  },
+  profileLocation: {
+    fontSize: 13,
+    color: 'rgba(255,255,255,0.75)',
+    marginTop: 2,
+  },
+  tierBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 10,
+  },
+  tierText: {
+    fontSize: 10,
+    fontWeight: '800' as const,
+    color: '#FFFFFF',
+    letterSpacing: 1,
+  },
+  scrollContent: {
+    flex: 1,
+    marginTop: -12,
+  },
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  halfField: {
+    flex: 1,
+  },
+  sectionHint: {
+    fontSize: 13,
     color: Colors.text.secondary,
+    marginBottom: 14,
+    lineHeight: 18,
+  },
+  photoActions: {
+    flexDirection: 'row',
+    gap: 12,
     marginBottom: 16,
   },
-  title: { fontSize: 24, fontWeight: '800', color: Colors.text.primary, marginVertical: 16 },
-  label: { fontSize: 14, color: Colors.text.secondary, marginBottom: 8, marginTop: 16 },
+  photoActionBtn: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 12,
+    borderRadius: 14,
+    backgroundColor: '#FFF1F3',
+    borderWidth: 1,
+    borderColor: '#FFE1EA',
+  },
+  photoActionText: {
+    fontSize: 14,
+    fontWeight: '600' as const,
+    color: '#FF2D55',
+  },
   photoGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 12,
+    gap: 10,
   },
   photoSlot: {
     width: '30%',
     aspectRatio: 1,
     position: 'relative',
   },
-  photo: { 
+  photo: {
     width: '100%',
     height: '100%',
-    borderRadius: 12,
+    borderRadius: 14,
   },
-  addPhoto: { 
-    width: '100%',
-    height: '100%',
-    borderRadius: 12,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-  },
-  addPhotoText: {
-    fontSize: 12,
-    color: Colors.text.secondary,
-    marginTop: 4,
-  },
-  removePhotoButton: {
+  removePhotoBtn: {
     position: 'absolute',
     top: 4,
     right: 4,
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: Colors.error,
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    backgroundColor: 'rgba(0,0,0,0.6)',
     justifyContent: 'center',
     alignItems: 'center',
   },
+  mainPhotoBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: '#FF2D55',
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 8,
+  },
+  mainPhotoText: {
+    fontSize: 10,
+    fontWeight: '700' as const,
+    color: '#FFF',
+  },
+  emptyPhoto: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#E5E7EB',
+    borderStyle: 'dashed',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FAFAFA',
+  },
+  emptyDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#D1D5DB',
+  },
+  bioContainer: {
+    position: 'relative',
+  },
   bioInput: {
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 12,
-    padding: 16,
-    fontSize: 16,
+    borderWidth: 1.5,
+    borderColor: '#F0F0F0',
+    borderRadius: 14,
+    padding: 14,
+    fontSize: 15,
     color: Colors.text.primary,
-    backgroundColor: Colors.background,
-    minHeight: 120,
+    backgroundColor: '#FAFAFA',
+    minHeight: 100,
   },
-  characterCount: {
+  charCount: {
+    position: 'absolute',
+    bottom: 8,
+    right: 12,
+    fontSize: 11,
+    color: Colors.text.light,
+  },
+  themesRow: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+  themeCard: {
+    flex: 1,
+    borderRadius: 14,
+    borderWidth: 2,
+    borderColor: '#F0F0F0',
+    overflow: 'hidden',
+  },
+  themeCardActive: {
+    borderColor: '#FF2D55',
+  },
+  themePreview: {
+    height: 50,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  midnightPrev: {
+    backgroundColor: '#0c1020',
+  },
+  sunsetPrev: {
+    backgroundColor: '#ff7a59',
+  },
+  geoPrev: {
+    backgroundColor: '#CBD5E1',
+  },
+  themeLabel: {
     fontSize: 12,
-    color: Colors.text.secondary,
-    textAlign: 'right',
-    marginTop: 8,
+    fontWeight: '600' as const,
+    color: Colors.text.primary,
+    textAlign: 'center',
+    paddingVertical: 8,
+    backgroundColor: '#FAFAFA',
   },
-  categoryContainer: {
-    marginBottom: 24,
+  themeLabelActive: {
+    color: '#FF2D55',
+    fontWeight: '700' as const,
+  },
+  categoryBlock: {
+    marginBottom: 16,
   },
   categoryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '700' as const,
     color: Colors.text.primary,
-    marginBottom: 12,
+    marginBottom: 10,
   },
   interestsGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 8,
   },
-  interestTag: {
+  interestChip: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
     paddingVertical: 8,
     borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
-    marginBottom: 8,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FAFAFA',
   },
-  interestTagSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
+  interestChipSelected: {
+    backgroundColor: '#FF2D55',
+    borderColor: '#FF2D55',
   },
-  interestIcon: {
+  interestEmoji: {
     fontSize: 14,
-    marginRight: 6,
+    marginRight: 5,
   },
-  interestText: {
-    fontSize: 14,
+  interestName: {
+    fontSize: 13,
+    fontWeight: '500' as const,
     color: Colors.text.primary,
   },
-  interestTextSelected: {
-    color: Colors.text.white,
+  interestNameSelected: {
+    color: '#FFF',
+    fontWeight: '600' as const,
   },
-  radiusContainer: {
+  radiusLabel: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    marginBottom: 12,
+    marginTop: 8,
+  },
+  premiumTag: {
+    color: '#FF9500',
+    fontWeight: '600' as const,
+  },
+  radiusRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.backgroundSecondary,
-    borderRadius: 12,
-    padding: 16,
+    gap: 16,
   },
-  radiusButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.primary,
+  radiusBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#FF2D55',
     justifyContent: 'center',
     alignItems: 'center',
   },
-  radiusButtonText: {
-    color: Colors.text.white,
+  radiusBtnDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  radiusBtnText: {
+    color: '#FFF',
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '700' as const,
+  },
+  radiusDisplay: {
+    alignItems: 'center',
   },
   radiusValue: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: Colors.text.primary,
-    marginHorizontal: 20,
+    fontSize: 28,
+    fontWeight: '800' as const,
+    color: '#1A1A1A',
   },
-  disabled: { opacity: 0.4 },
-  privacyRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 12, flexWrap: 'wrap' },
-  privacyChip: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 12, paddingVertical: 8, borderRadius: 14, borderWidth: 1, borderColor: Colors.border, marginRight: 8 },
-  privacyChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  privacyText: { color: Colors.text.primary },
-  privacyTextActive: { color: '#fff', fontWeight: '700' },
-  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, marginTop: 16 },
-  toggle: { width: 50, height: 28, borderRadius: 14, backgroundColor: Colors.backgroundSecondary, padding: 2, justifyContent: 'center' },
-  toggleOn: { backgroundColor: Colors.primary },
-  knob: { width: 24, height: 24, borderRadius: 12, backgroundColor: Colors.text.light, position: 'absolute', left: 2 },
-  knobOn: { backgroundColor: '#fff', transform: [{ translateX: 22 }] },
-  toggleLabel: { color: Colors.text.primary, flex: 1 },
-  bottomSpacing: {
-    height: 120,
+  radiusUnit: {
+    fontSize: 12,
+    color: Colors.text.secondary,
+    fontWeight: '600' as const,
+  },
+  privacyLabel: {
+    fontSize: 13,
+    color: Colors.text.secondary,
+    marginBottom: 10,
+  },
+  privacyOptions: {
+    flexDirection: 'row',
+    gap: 8,
+    marginBottom: 8,
+  },
+  privacyChip: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: '#E5E7EB',
+    backgroundColor: '#FAFAFA',
+  },
+  privacyChipActive: {
+    backgroundColor: '#FF2D55',
+    borderColor: '#FF2D55',
+  },
+  privacyChipText: {
+    fontSize: 12,
+    fontWeight: '600' as const,
+    color: Colors.text.primary,
+  },
+  privacyChipTextActive: {
+    color: '#FFF',
   },
   footer: {
     position: 'absolute',
     left: 0,
     right: 0,
     bottom: 0,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     paddingTop: 12,
-    paddingBottom: Platform.OS === 'web' ? 20 : 34,
-    backgroundColor: Colors.card,
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 1,
+    borderTopColor: '#F3F4F6',
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
     shadowRadius: 12,
     shadowOffset: { width: 0, height: -4 },
     elevation: 6,
   },
-  saveButton: {
-    marginTop: 8,
+  saveBtn: {
+    marginBottom: 4,
   },
-  cardSection: {
-    marginBottom: 16,
-    backgroundColor: Colors.card,
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOpacity: 1,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-  segmentBar: {
-    flexDirection: 'row',
-    backgroundColor: Colors.background,
-    paddingVertical: 10,
-    gap: 8,
-  },
-  segmentItem: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.backgroundSecondary,
-  },
-  segmentItemActive: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  segmentText: { color: Colors.text.primary, fontWeight: '600', fontSize: 13 },
-  segmentTextActive: { color: '#fff' },
 });
