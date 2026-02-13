@@ -1,4 +1,4 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,103 +8,92 @@ import {
   useWindowDimensions,
   TouchableOpacity,
   SafeAreaView,
+  Image,
   Animated,
   StatusBar,
   Platform,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Haptics from 'expo-haptics';
-import { Heart, Bell, Users, Sparkles, Shield, ChevronRight, ArrowRight } from 'lucide-react-native';
-
+import Colors from '@/constants/colors';
+import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/hooks/auth-context';
+
+
 
 const slides = [
   {
     id: '1',
-    title: 'Find Your Match',
-    description: 'Discover amazing people near you who share your passions and interests.',
-    icon: 'heart',
-    color: '#FF2D55',
-    bgGradient: ['#FF2D55', '#FF6B8A'] as const,
-    emoji: '💕',
+    title: 'Search friends',
+    description: 'Find friends from your contacts and get connected.',
+    image: 'https://img.icons8.com/fluency/240/find-user-male.png',
   },
   {
     id: '2',
-    title: 'Stay Connected',
-    description: 'Get instant notifications when someone likes you or sends a message.',
-    icon: 'bell',
-    color: '#FF9500',
-    bgGradient: ['#FF9500', '#FFCC02'] as const,
-    emoji: '🔔',
+    title: 'Enable notifications',
+    description: 'Get notified when you get a match or receive a message.',
+    image: 'https://img.icons8.com/fluency/240/appointment-reminders--v2.png',
   },
   {
     id: '3',
-    title: 'Smart Matching',
-    description: 'Our algorithm pairs you with people who truly match your personality.',
-    icon: 'sparkles',
-    color: '#5856D6',
-    bgGradient: ['#5856D6', '#AF52DE'] as const,
-    emoji: '✨',
+    title: 'Matches',
+    description: 'We match you with people that have a large array of similar interests.',
+    image: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/shiiaapmpjs259hdyagf5',
   },
   {
     id: '4',
-    title: 'Safe & Verified',
-    description: 'Every profile goes through verification to keep our community authentic.',
-    icon: 'shield',
-    color: '#34C759',
-    bgGradient: ['#34C759', '#30D158'] as const,
-    emoji: '🛡️',
+    title: 'Premium',
+    description: 'Sign up today and enjoy the first month of premium benefits on us.',
+    image: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/hcurirtv54zoche8cbolw',
   },
   {
     id: '5',
-    title: 'Ready to Start?',
-    description: 'Join thousands of people who found meaningful connections here.',
-    icon: 'users',
-    color: '#FF2D55',
-    bgGradient: ['#FF2D55', '#C2185B'] as const,
-    emoji: '🚀',
+    title: 'Algorithm',
+    description: 'Users go through a vetting process to help prevent matching with bots.',
+    image: 'https://pub-e001eb4506b145aa938b5d3badbff6a5.r2.dev/attachments/tpy6y37ytrmloqnx4k1oh',
   },
 ];
 
-type Slide = (typeof slides)[number];
-
-const IconForSlide = ({ icon, color }: { icon: string; color: string }) => {
-  const size = 36;
-  switch (icon) {
-    case 'heart': return <Heart size={size} color={color} fill={color} />;
-    case 'bell': return <Bell size={size} color={color} />;
-    case 'sparkles': return <Sparkles size={size} color={color} />;
-    case 'shield': return <Shield size={size} color={color} />;
-    case 'users': return <Users size={size} color={color} />;
-    default: return <Heart size={size} color={color} />;
-  }
-};
+type Slide = { id: string; title: string; description: string; image: string };
 
 export default function OnboardingScreen() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const listRef = useRef<FlatList<Slide>>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const { isAuthenticated, user } = useAuth();
-
-  const scrollX = useRef(new Animated.Value(0)).current;
-  const buttonScale = useRef(new Animated.Value(1)).current;
-  const emojiFloat = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(emojiFloat, { toValue: -12, duration: 1500, useNativeDriver: true }),
-        Animated.timing(emojiFloat, { toValue: 0, duration: 1500, useNativeDriver: true }),
-      ])
-    ).start();
-  }, [emojiFloat]);
+  const { isAuthenticated } = useAuth();
+  const { user } = useAuth();
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const scaleAnim = useRef(new Animated.Value(0.9)).current;
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
     const idx = viewableItems?.[0]?.index ?? 0;
+    console.log('[Onboarding] viewable index', idx);
     setCurrentIndex(idx ?? 0);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
+
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 200,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 0.9,
+        useNativeDriver: true,
+      }),
+    ]).start(() => {
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 400,
+          useNativeDriver: true,
+        }),
+        Animated.spring(scaleAnim, {
+          toValue: 1,
+          friction: 5,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
   }).current;
 
   const viewConfigRef = useRef({ viewAreaCoveragePercentThreshold: 60 });
@@ -114,13 +103,18 @@ export default function OnboardingScreen() {
     const redirectIfReady = async () => {
       try {
         if (!mounted || !isAuthenticated) return;
+
         const completed = Boolean(user?.profile?.completed);
         console.log('[Onboarding] Redirect check:', { isAuthenticated, completed });
+
         if (completed) {
+          console.log('[Onboarding] Profile completed, redirecting to tabs');
           router.replace('/(tabs)' as any);
           return;
         }
+
         if (isAuthenticated && !completed) {
+          console.log('[Onboarding] Profile incomplete, redirecting to profile-setup');
           router.replace('/profile-setup' as any);
           return;
         }
@@ -133,346 +127,267 @@ export default function OnboardingScreen() {
     return () => { mounted = false; clearTimeout(t); };
   }, [isAuthenticated, user, router]);
 
-  const triggerHaptic = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, []);
-
-  const handleNext = useCallback(() => {
-    triggerHaptic();
-
-    Animated.sequence([
-      Animated.timing(buttonScale, { toValue: 0.92, duration: 80, useNativeDriver: true }),
-      Animated.spring(buttonScale, { toValue: 1, friction: 4, useNativeDriver: true }),
-    ]).start();
-
+  const handleNext = () => {
+    console.log('[Onboarding] CTA pressed at index', currentIndex);
     if (currentIndex < slides.length - 1) {
+      const nextIndex = currentIndex + 1;
       try {
-        listRef.current?.scrollToIndex({ index: currentIndex + 1, animated: true });
+        listRef.current?.scrollToIndex({ index: nextIndex, animated: true });
+        // Fallback: manually update index in case onViewableItemsChanged doesn't fire immediately
+        setTimeout(() => {
+          if (currentIndex < nextIndex) {
+            console.log('[Onboarding] Internal index sync fallback');
+            setCurrentIndex(nextIndex);
+          }
+        }, 500);
       } catch (e) {
-        console.log('[Onboarding] scrollToIndex failed', e);
+        console.log('[Onboarding] scrollToIndex failed, trying offset', e);
+        try {
+          listRef.current?.scrollToOffset({ offset: (nextIndex) * width, animated: true });
+          setCurrentIndex(nextIndex);
+        } catch (e2) {
+          console.log('[Onboarding] Scroll totally failed', e2);
+          setCurrentIndex(nextIndex);
+        }
       }
     } else {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
-      router.push('/(auth)/signup' as any);
+      console.log('[Onboarding] Navigating to signup');
+      try {
+        router.push('/(auth)/signup' as any);
+      } catch (e) {
+        console.log('[Onboarding] Navigation failed', e);
+        Alert.alert('Error', 'Could not open signup page. Please try again.');
+      }
     }
-  }, [currentIndex, triggerHaptic, buttonScale, router]);
+  };
 
-  const handleSkip = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(auth)/signup' as any);
-  }, [router]);
+  const handleSkip = () => {
+    console.log('[Onboarding] Skip pressed');
+    try {
+      router.push('/(auth)/signup' as any);
+    } catch (e) {
+      console.log('[Onboarding] Skip navigation failed', e);
+    }
+  };
 
-  const handleLogin = useCallback(() => {
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-    router.push('/(auth)/login' as any);
-  }, [router]);
-
-  const isLast = currentIndex === slides.length - 1;
-  const currentSlide = slides[currentIndex];
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(scaleAnim, {
+        toValue: 1,
+        friction: 5,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [fadeAnim, scaleAnim]);
 
   return (
-    <View style={styles.root}>
-      <StatusBar barStyle="light-content" />
-      <LinearGradient
-        colors={currentSlide?.bgGradient ?? ['#FF2D55', '#FF6B8A']}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={StyleSheet.absoluteFill}
-      />
-      <View style={styles.decorCircle1} />
-      <View style={styles.decorCircle2} />
-      <View style={styles.decorCircle3} />
+    <SafeAreaView style={styles.container}>
+      <StatusBar barStyle="dark-content" />
+      <TouchableOpacity style={styles.skipButton} onPress={handleSkip} testID="skip-button">
+        <Text style={styles.skipText}>Skip</Text>
+      </TouchableOpacity>
 
-      <SafeAreaView style={styles.container}>
-        <View style={styles.topBar}>
-          <View style={styles.stepIndicator}>
-            <Text style={styles.stepText}>{currentIndex + 1}/{slides.length}</Text>
-          </View>
-          {!isLast && (
-            <TouchableOpacity onPress={handleSkip} style={styles.skipButton} testID="skip-button">
-              <Text style={styles.skipText}>Skip</Text>
-              <ChevronRight size={16} color="rgba(255,255,255,0.8)" />
-            </TouchableOpacity>
-          )}
+      <FlatList
+        ref={listRef}
+        data={slides as Slide[]}
+        keyExtractor={(item) => item.id}
+        renderItem={({ item }: ListRenderItemInfo<Slide>) => (
+          <Animated.View
+            style={[
+              styles.slide,
+              { width },
+              { opacity: fadeAnim, transform: [{ scale: scaleAnim }] }
+            ]}
+            testID={`slide-${item.id}`}
+          >
+            <View style={styles.imageContainer}>
+              <View style={styles.imageWrapper}>
+                <Image
+                  source={{ uri: item.image }}
+                  style={[styles.image, { width: width - 80 }]}
+                  accessibilityIgnoresInvertColors
+                  accessible
+                  accessibilityLabel={item.title}
+                  testID={`slide-image-${item.id}`}
+                />
+                <View style={styles.imageOverlay} />
+              </View>
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={styles.title}>{item.title}</Text>
+              <Text style={styles.description}>{item.description}</Text>
+            </View>
+          </Animated.View>
+        )}
+        horizontal
+        pagingEnabled
+        style={styles.list}
+        showsHorizontalScrollIndicator={false}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewConfigRef.current}
+        getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
+        initialNumToRender={1}
+        windowSize={3}
+        removeClippedSubviews={Platform.OS !== 'web'}
+        contentContainerStyle={styles.listContent}
+      />
+
+      <View style={styles.footer}>
+        <View style={styles.pagination}>
+          {slides.map((s, index) => (
+            <View
+              key={s.id}
+              style={[
+                styles.dot,
+                index === currentIndex && styles.activeDot,
+              ]}
+            />
+          ))}
         </View>
 
-        <FlatList
-          ref={listRef}
-          data={slides}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item, index }: ListRenderItemInfo<Slide>) => {
-            const inputRange = [(index - 1) * width, index * width, (index + 1) * width];
-            const scale = scrollX.interpolate({
-              inputRange,
-              outputRange: [0.8, 1, 0.8],
-              extrapolate: 'clamp',
-            });
-            const opacity = scrollX.interpolate({
-              inputRange,
-              outputRange: [0.4, 1, 0.4],
-              extrapolate: 'clamp',
-            });
-            const translateY = scrollX.interpolate({
-              inputRange,
-              outputRange: [30, 0, 30],
-              extrapolate: 'clamp',
-            });
-
-            return (
-              <Animated.View
-                style={[
-                  styles.slide,
-                  { width },
-                  { opacity, transform: [{ scale }, { translateY }] },
-                ]}
-                testID={`slide-${item.id}`}
-              >
-                <View style={styles.iconContainer}>
-                  <View style={styles.iconCircle}>
-                    <IconForSlide icon={item.icon} color={item.color} />
-                  </View>
-                  <Animated.Text
-                    style={[styles.emojiFloat, { transform: [{ translateY: emojiFloat }] }]}
-                  >
-                    {item.emoji}
-                  </Animated.Text>
-                </View>
-
-                <Text style={styles.title}>{item.title}</Text>
-                <Text style={styles.description}>{item.description}</Text>
-              </Animated.View>
-            );
-          }}
-          horizontal
-          pagingEnabled
-          style={styles.list}
-          showsHorizontalScrollIndicator={false}
-          onViewableItemsChanged={onViewableItemsChanged}
-          viewabilityConfig={viewConfigRef.current}
-          getItemLayout={(_, index) => ({ length: width, offset: width * index, index })}
-          onScroll={Animated.event(
-            [{ nativeEvent: { contentOffset: { x: scrollX } } }],
-            { useNativeDriver: true }
-          )}
-          scrollEventThrottle={16}
-          initialNumToRender={1}
-          windowSize={3}
-          removeClippedSubviews={Platform.OS !== 'web'}
+        <GradientButton
+          title={currentIndex === slides.length - 1 ? 'Get Started' : 'Create an account'}
+          onPress={handleNext}
+          style={styles.button}
+          testID="cta-button"
         />
 
-        <View style={styles.footer}>
-          <View style={styles.pagination}>
-            {slides.map((s, index) => {
-              const dotWidth = scrollX.interpolate({
-                inputRange: [(index - 1) * width, index * width, (index + 1) * width],
-                outputRange: [8, 28, 8],
-                extrapolate: 'clamp',
-              });
-              const dotOpacity = scrollX.interpolate({
-                inputRange: [(index - 1) * width, index * width, (index + 1) * width],
-                outputRange: [0.4, 1, 0.4],
-                extrapolate: 'clamp',
-              });
-              return (
-                <Animated.View
-                  key={s.id}
-                  style={[
-                    styles.dot,
-                    { width: dotWidth, opacity: dotOpacity },
-                  ]}
-                />
-              );
-            })}
-          </View>
-
-          <Animated.View style={{ transform: [{ scale: buttonScale }], width: '100%' }}>
-            <TouchableOpacity
-              style={styles.ctaButton}
-              onPress={handleNext}
-              activeOpacity={0.85}
-              testID="cta-button"
-            >
-              <Text style={styles.ctaText}>
-                {isLast ? "Let's Go!" : 'Continue'}
-              </Text>
-              <ArrowRight size={20} color={currentSlide?.color ?? '#FF2D55'} />
-            </TouchableOpacity>
-          </Animated.View>
-
-          <TouchableOpacity onPress={handleLogin} style={styles.loginButton} testID="signin-link">
+        {currentIndex < slides.length - 1 && (
+          <TouchableOpacity onPress={() => router.push('/(auth)/login' as any)} testID="signin-link">
             <Text style={styles.loginText}>
               Already have an account? <Text style={styles.loginLink}>Sign In</Text>
             </Text>
           </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    </View>
+        )}
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  root: {
-    flex: 1,
-  },
   container: {
     flex: 1,
-  },
-  decorCircle1: {
-    position: 'absolute',
-    top: -80,
-    right: -60,
-    width: 220,
-    height: 220,
-    borderRadius: 110,
-    backgroundColor: 'rgba(255,255,255,0.08)',
-  },
-  decorCircle2: {
-    position: 'absolute',
-    bottom: 120,
-    left: -40,
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: 'rgba(255,255,255,0.06)',
-  },
-  decorCircle3: {
-    position: 'absolute',
-    top: '40%',
-    right: -20,
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.05)',
-  },
-  topBar: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'web' ? 16 : 8,
-    paddingBottom: 8,
-  },
-  stepIndicator: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
-    paddingHorizontal: 14,
-    paddingVertical: 6,
-    borderRadius: 16,
-  },
-  stepText: {
-    color: '#FFFFFF',
-    fontSize: 13,
-    fontWeight: '700' as const,
-    letterSpacing: 0.5,
+    backgroundColor: Colors.background,
   },
   skipButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 8,
-    paddingHorizontal: 4,
+    position: 'absolute',
+    top: 16,
+    right: 20,
+    zIndex: 10,
+    padding: 10,
+    backgroundColor: Colors.card,
+    borderRadius: 20,
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 2 },
+    elevation: 4,
   },
   skipText: {
-    color: 'rgba(255,255,255,0.8)',
+    color: Colors.primary,
     fontSize: 15,
-    fontWeight: '600' as const,
+    fontWeight: '700',
   },
   list: {
     flex: 1,
   },
+  listContent: {
+    alignItems: 'stretch',
+    paddingBottom: 140,
+  },
   slide: {
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 40,
+    paddingHorizontal: 20,
+    justifyContent: 'flex-start',
   },
-  iconContainer: {
-    alignItems: 'center',
+  imageContainer: {
     justifyContent: 'center',
-    marginBottom: 40,
+    alignItems: 'center',
+    paddingTop: 48,
+  },
+  imageWrapper: {
     position: 'relative',
-  },
-  iconCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: 'rgba(255,255,255,0.95)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    overflow: 'hidden',
+    borderRadius: 24,
     shadowColor: '#000',
     shadowOpacity: 0.15,
     shadowRadius: 20,
     shadowOffset: { width: 0, height: 8 },
     elevation: 10,
   },
-  emojiFloat: {
-    fontSize: 40,
+  imageOverlay: {
     position: 'absolute',
-    top: -30,
-    right: -20,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    height: 100,
+    backgroundColor: 'transparent',
+  },
+  image: {
+    aspectRatio: 4 / 5,
+    resizeMode: 'cover',
+  },
+  textContainer: {
+    paddingVertical: 32,
+    alignItems: 'center',
   },
   title: {
-    fontSize: 32,
-    fontWeight: '800' as const,
-    color: '#FFFFFF',
+    fontSize: 30,
+    fontWeight: '800',
+    color: Colors.text.primary,
+    marginBottom: 12,
     textAlign: 'center',
-    marginBottom: 16,
-    letterSpacing: -0.5,
-    textShadowColor: 'rgba(0,0,0,0.15)',
-    textShadowOffset: { width: 0, height: 2 },
-    textShadowRadius: 8,
   },
   description: {
-    fontSize: 17,
-    color: 'rgba(255,255,255,0.85)',
+    fontSize: 16,
+    color: Colors.text.secondary,
     textAlign: 'center',
-    lineHeight: 26,
-    maxWidth: 300,
+    paddingHorizontal: 20,
+    lineHeight: 24,
   },
   footer: {
-    paddingHorizontal: 24,
-    paddingBottom: Platform.OS === 'web' ? 24 : 16,
+    paddingHorizontal: 20,
+    paddingBottom: 20,
+    paddingTop: 12,
     alignItems: 'center',
-    gap: 16,
+    backgroundColor: Colors.background,
+    zIndex: 5,
+    borderTopWidth: 0,
+    shadowColor: '#000',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 8,
   },
   pagination: {
     flexDirection: 'row',
-    gap: 6,
-    alignItems: 'center',
+    gap: 10,
+    marginBottom: 24,
   },
   dot: {
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: Colors.border,
   },
-  ctaButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 10,
-    backgroundColor: '#FFFFFF',
-    paddingVertical: 18,
-    borderRadius: 28,
-    shadowColor: '#000',
-    shadowOpacity: 0.15,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 8,
+  activeDot: {
+    width: 32,
+    backgroundColor: Colors.primary,
   },
-  ctaText: {
-    fontSize: 18,
-    fontWeight: '800' as const,
-    color: '#1A1A1A',
-    letterSpacing: 0.3,
-  },
-  loginButton: {
-    paddingVertical: 4,
+  button: {
+    width: '100%',
+    marginBottom: 16,
   },
   loginText: {
     fontSize: 14,
-    color: 'rgba(255,255,255,0.7)',
+    color: Colors.text.secondary,
   },
   loginLink: {
-    color: '#FFFFFF',
-    fontWeight: '700' as const,
-    textDecorationLine: 'underline',
+    color: Colors.primary,
+    fontWeight: '600',
   },
 });
