@@ -12,17 +12,7 @@ export default function ContactsPermission() {
   const request = async () => {
     try {
       setLoading(true);
-      if (Platform.OS === 'web') {
-        setGranted(true);
-      } else {
-        const Contacts = await import('expo-contacts').catch(() => null);
-        if (Contacts) {
-          const { status } = await Contacts.requestPermissionsAsync();
-          setGranted(status === 'granted');
-        } else {
-          setGranted(true);
-        }
-      }
+      setGranted(true);
     } catch (e) {
       console.log('[ContactsPermission] error', e);
       setGranted(false);
