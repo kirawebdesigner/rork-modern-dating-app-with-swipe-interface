@@ -191,13 +191,17 @@ export default function PremiumScreen() {
     setIsProcessing(true);
 
     try {
-      console.log(`[Premium] Initiating ${selectedTier} upgrade for ${user?.id} with phone ${phoneNumber}`);
+      const billingOpt = BILLING_OPTIONS.find(o => o.key === billingPeriod)!;
+      const totalAmount = getBillingPrice(tierData[selectedTier].priceMonthly, billingPeriod);
+      console.log(`[Premium] Initiating ${selectedTier} upgrade for ${user?.id} with phone ${phoneNumber}, amount: ${totalAmount}, months: ${billingOpt.months}`);
 
       const result = await upgradeMutation.mutateAsync({
         userId: user!.id,
         tier: selectedTier,
         phone: normalizePhone(phoneNumber),
         paymentMethod: 'TELEBIRR',
+        amount: totalAmount,
+        billingMonths: billingOpt.months,
       });
 
       setIsProcessing(false);

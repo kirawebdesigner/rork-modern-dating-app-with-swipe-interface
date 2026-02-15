@@ -733,53 +733,62 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       timestamp: new Date(),
     };
 
-    const newHistory = [...swipeHistory, swipe];
-    setSwipeHistory(newHistory);
-    AsyncStorage.setItem('swipe_history', JSON.stringify(newHistory));
+    setSwipeHistory(prev => {
+      const newHistory = [...prev, swipe];
+      AsyncStorage.setItem('swipe_history', JSON.stringify(newHistory)).catch(() => {});
+      return newHistory;
+    });
 
     setPotentialMatches(prev => prev.filter(u => u.id !== userId));
 
-    if (action === 'like' || action === 'superlike') {
-      if (!TEST_MODE) {
-        sendPushToUser(userId, {
-          title: 'New like',
-          body: 'Someone liked your profile. Open the app to check!',
-        }).catch(e => console.log('[Push] like notify failed', e));
+    if ((action === 'like' || action === 'superlike') && !TEST_MODE) {
+      sendPushToUser(userId, {
+        title: 'New like',
+        body: 'Someone liked your profile. Open the app to check!',
+      }).catch(e => console.log('[Push] like notify failed', e));
+    }
+
+    (async () => {
+      if (TEST_MODE) {
+        console.log('[App] TEST MODE: Skipping swipe sync to server');
+        return;
       }
-      
-      (async () => {
-        if (TEST_MODE) {
-          console.log('[App] TEST MODE: Skipping swipe sync to server');
-          return;
-        }
-        
-        try {
-          const storedPhone = await AsyncStorage.getItem('user_phone');
-          if (!storedPhone) {
-            console.log('[App] swipe: no phone found');
-            return;
-          }
-          
+
+      try {
+        const storedPhone = await AsyncStorage.getItem('user_phone');
+        const storedId = await AsyncStorage.getItem('user_id');
+        let myId = currentProfile?.id ?? storedId ?? null;
+
+        if (!myId && storedPhone) {
           const { data: myProfile } = await supabase
             .from('profiles')
             .select('id')
             .eq('phone', storedPhone)
             .maybeSingle();
-          
-          const myId = myProfile?.id ?? currentProfile?.id ?? null;
-          if (!myId) {
-            console.log('[App] swipe: no user ID found');
-            return;
+          myId = myProfile?.id ?? null;
+        }
+
+        if (!myId) {
+          console.log('[App] swipe: no user ID found');
+          return;
+        }
+
+        console.log('[App] inserting swipe:', myId, '->', userId, action);
+        const { error: swipeError } = await supabase.from('swipes').upsert(
+          { swiper_id: myId, swiped_id: userId, action },
+          { onConflict: 'swiper_id,swiped_id' }
+        );
+        if (swipeError) {
+          console.log('[App] swipe upsert error:', swipeError.message);
+          const { error: insertErr } = await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action });
+          if (insertErr) {
+            console.log('[App] swipe insert fallback error:', insertErr.message);
           }
-          console.log('[App] inserting swipe:', myId, '->', userId, action);
-          const { error: swipeError } = await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action });
-          if (swipeError) {
-            console.log('[App] swipe insert error:', swipeError.message);
-            return;
-          }
-          console.log('[App] swipe inserted successfully');
-          
-          // Check for mutual like to create a match
+        } else {
+          console.log('[App] swipe recorded successfully');
+        }
+
+        if (action === 'like' || action === 'superlike') {
           console.log('[App] Checking for mutual like...');
           const { data: mutualLike, error: mutualErr } = await supabase
             .from('swipes')
@@ -788,107 +797,71 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             .eq('swiped_id', myId)
             .in('action', ['like', 'superlike'])
             .maybeSingle();
-          
+
           if (!mutualErr && mutualLike) {
             console.log('[App] Mutual like found! Creating match...');
-            
-            // Check if match already exists
+
             const { data: existingMatch } = await supabase
               .from('matches')
               .select('id')
               .or(`and(user1_id.eq.${myId},user2_id.eq.${userId}),and(user1_id.eq.${userId},user2_id.eq.${myId})`)
               .maybeSingle();
-            
-            if (!existingMatch) {
-              // Create match with LEAST/GREATEST ordering to match database trigger
+
+            let matchId: string | null = existingMatch?.id ?? null;
+
+            if (!matchId) {
               const user1 = myId < userId ? myId : userId;
               const user2 = myId < userId ? userId : myId;
-              
+
               const { data: newMatch, error: matchInsertErr } = await supabase
                 .from('matches')
-                .insert({
-                  user1_id: user1,
-                  user2_id: user2,
-                  matched_at: new Date().toISOString(),
-                })
+                .insert({ user1_id: user1, user2_id: user2, matched_at: new Date().toISOString() })
                 .select('id')
                 .single();
-              
+
               if (matchInsertErr) {
-                console.log('[App] Failed to create match:', matchInsertErr.message);
-                // Check if match was created by database trigger
+                console.log('[App] Match insert error:', matchInsertErr.message);
                 const { data: triggerMatch } = await supabase
                   .from('matches')
                   .select('id')
                   .or(`and(user1_id.eq.${user1},user2_id.eq.${user2}),and(user1_id.eq.${user2},user2_id.eq.${user1})`)
                   .maybeSingle();
-                
-                if (triggerMatch) {
-                  console.log('[App] Match exists from trigger:', triggerMatch.id);
-                  // Create conversation for existing match
-                  const { data: existingConv } = await supabase
-                    .from('conversations')
-                    .select('id')
-                    .eq('id', triggerMatch.id)
-                    .maybeSingle();
-                  
-                  if (!existingConv) {
-                    await supabase.from('conversations').insert({ id: triggerMatch.id, created_by: myId });
-                    await supabase.from('conversation_participants').insert([
-                      { conversation_id: triggerMatch.id, user_id: myId },
-                      { conversation_id: triggerMatch.id, user_id: userId },
-                    ]);
-                    console.log('[App] Conversation created for trigger match:', triggerMatch.id);
-                  }
-                }
+                matchId = triggerMatch?.id ?? null;
               } else {
-                console.log('[App] Match created successfully:', newMatch?.id);
-                
-                // Create conversation for the match
-                const matchId = newMatch?.id;
-                if (matchId) {
-                  const { error: convErr } = await supabase
-                    .from('conversations')
-                    .insert({ id: matchId, created_by: myId });
-                  
-                  if (!convErr) {
-                    await supabase.from('conversation_participants').insert([
-                      { conversation_id: matchId, user_id: myId },
-                      { conversation_id: matchId, user_id: userId },
-                    ]);
-                    console.log('[App] Conversation created for match:', matchId);
-                  }
-                }
+                matchId = newMatch?.id ?? null;
+                console.log('[App] Match created:', matchId);
               }
             } else {
-              console.log('[App] Match already exists:', existingMatch.id);
-              // Ensure conversation exists for the match
+              console.log('[App] Match already exists:', matchId);
+            }
+
+            if (matchId) {
               const { data: existingConv } = await supabase
                 .from('conversations')
                 .select('id')
-                .eq('id', existingMatch.id)
+                .eq('id', matchId)
                 .maybeSingle();
-              
+
               if (!existingConv) {
-                await supabase.from('conversations').insert({ id: existingMatch.id, created_by: myId });
+                await supabase.from('conversations').insert({ id: matchId, created_by: myId });
                 await supabase.from('conversation_participants').insert([
-                  { conversation_id: existingMatch.id, user_id: myId },
-                  { conversation_id: existingMatch.id, user_id: userId },
+                  { conversation_id: matchId, user_id: myId },
+                  { conversation_id: matchId, user_id: userId },
                 ]);
-                console.log('[App] Conversation created for existing match:', existingMatch.id);
+                console.log('[App] Conversation created for match:', matchId);
               }
             }
           } else {
             console.log('[App] No mutual like yet');
           }
-          
+
           await new Promise(resolve => setTimeout(resolve, 300));
-          
+
           const { data: newMatches, error: matchError } = await supabase
             .from('matches')
             .select('id, user1_id, user2_id, matched_at')
             .or(`user1_id.eq.${myId},user2_id.eq.${myId}`);
-          
+
           if (!matchError && newMatches) {
             console.log('[App] loaded matches after swipe:', newMatches.length);
             const matchesWithUsers = await Promise.all(
@@ -899,9 +872,9 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
                   .select('id,name,age,gender,bio,photos,interests,city')
                   .eq('id', otherId)
                   .maybeSingle();
-                
+
                 if (!otherUser) return null;
-                
+
                 return {
                   id: String(m.id),
                   user: {
@@ -918,41 +891,17 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
                 } as Match;
               })
             );
-            
+
             const validMatches = matchesWithUsers.filter((m): m is Match => m !== null);
             setMatches(validMatches);
             console.log('[App] updated matches state:', validMatches.length);
           }
-        } catch (e) {
-          console.log('[App] swipe sync failed', e);
         }
-      })();
-    }
-    
-    // Also record nope swipes to database to prevent showing them again
-    if (action === 'nope') {
-      (async () => {
-        if (TEST_MODE) return;
-        try {
-          const storedPhone = await AsyncStorage.getItem('user_phone');
-          if (!storedPhone) return;
-          
-          const { data: myProfile } = await supabase
-            .from('profiles')
-            .select('id')
-            .eq('phone', storedPhone)
-            .maybeSingle();
-          
-          const myId = myProfile?.id ?? currentProfile?.id ?? null;
-          if (!myId) return;
-          
-          await supabase.from('swipes').insert({ swiper_id: myId, swiped_id: userId, action: 'nope' });
-        } catch (e) {
-          console.log('[App] nope swipe sync failed', e);
-        }
-      })();
-    }
-  }, [swipeHistory, currentProfile?.id]);
+      } catch (e) {
+        console.log('[App] swipe sync failed', e);
+      }
+    })();
+  }, [currentProfile?.id]);
 
   const setTier = useCallback(async (next: MembershipTier) => {
     await AsyncStorage.setItem('tier', JSON.stringify(next));

@@ -37,16 +37,16 @@ export default publicProcedure
           const amount = verification.amount || transaction.amount;
           let tier = transaction.tier || 'free';
 
-          // Fallback tier logic
           if (tier === 'free') {
             if (amount >= 2600) tier = 'vip';
             else if (amount >= 1500) tier = 'gold';
             else if (amount >= 500) tier = 'silver';
           }
 
+          const billingMonths = transaction.billing_months ?? 1;
           const now = new Date();
           const expiresAt = new Date();
-          expiresAt.setMonth(expiresAt.getMonth() + 1);
+          expiresAt.setMonth(expiresAt.getMonth() + billingMonths);
 
           // Update Membership
           await supabase
@@ -76,12 +76,20 @@ export default publicProcedure
         }
       }
 
+      const { data: txRecord } = await supabase
+        .from('payment_transactions')
+        .select('tier, billing_months')
+        .eq('session_id', input.sessionId)
+        .maybeSingle();
+
       return {
         success: true as const,
         status: verification.status,
         amount: verification.amount,
         transactionId: verification.transactionId,
         paidAt: verification.paidAt,
+        tier: txRecord?.tier ?? null,
+        billingMonths: txRecord?.billing_months ?? 1,
       };
     } catch (error) {
       console.error("[tRPC] Payment verification failed:", error);

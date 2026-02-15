@@ -74,8 +74,9 @@ webhooks.post("/arifpay", async (c) => {
         }
 
         const now = new Date();
+        const billingMonths = transaction.billing_months ?? 1;
         const expiresAt = new Date();
-        expiresAt.setMonth(expiresAt.getMonth() + 1);
+        expiresAt.setMonth(expiresAt.getMonth() + billingMonths);
 
         console.log(`[Webhook] Upgrading user ${userId} to ${tier}`);
 

@@ -48,14 +48,20 @@ export default function PaymentSuccessScreen() {
         setVerified(true);
         setIsVerifying(false);
         
-        const amount = verifyQuery.data.amount || 0;
-        let tier: MembershipTier = 'free';
-        if (amount >= 2600) tier = 'vip';
-        else if (amount >= 1500) tier = 'gold';
-        else if (amount >= 500) tier = 'silver';
+        let detectedTier: MembershipTier = 'free';
+        const serverTier = (verifyQuery.data as any).tier;
+        if (serverTier && serverTier !== 'free') {
+          detectedTier = serverTier as MembershipTier;
+        } else {
+          const amount = verifyQuery.data.amount || 0;
+          if (amount >= 2600) detectedTier = 'vip';
+          else if (amount >= 1500) detectedTier = 'gold';
+          else if (amount >= 500) detectedTier = 'silver';
+        }
         
-        setUpgradedTier(tier);
-        syncMembership(tier);
+        console.log('[PaymentSuccess] Detected tier:', detectedTier);
+        setUpgradedTier(detectedTier);
+        syncMembership(detectedTier);
         reloadProfile().catch(console.error);
       } else if (verifyQuery.error) {
         console.error('[PaymentSuccess] Verification error:', verifyQuery.error);

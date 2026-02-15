@@ -7,13 +7,6 @@ const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://nizdrhdfhdd
 const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg';
 const supabase = createClient(supabaseUrl, supabaseKey);
 
-const TIER_PRICES: Record<string, number> = {
-  free: 0,
-  silver: 500,
-  gold: 1500,
-  vip: 2600,
-};
-
 export const upgradeProcedure = publicProcedure
   .input(
     z.object({
@@ -21,16 +14,19 @@ export const upgradeProcedure = publicProcedure
       tier: z.enum(["free", "silver", "gold", "vip"]),
       paymentMethod: z.string().optional(),
       phone: z.string().optional(),
+      amount: z.number().optional(),
+      billingMonths: z.number().optional(),
     })
   )
   .mutation(async ({ input, ctx }) => {
     console.log("[tRPC Upgrade] Processing upgrade for user:", input.userId);
     console.log("[tRPC Upgrade] Upgrading to tier:", input.tier);
 
-    const amount = TIER_PRICES[input.tier];
-    console.log("[tRPC Upgrade] Amount:", amount, "ETB");
+    const amount = input.amount ?? 0;
+    const billingMonths = input.billingMonths ?? 1;
+    console.log("[tRPC Upgrade] Amount:", amount, "ETB, billing months:", billingMonths);
 
-    if (amount === 0) {
+    if (amount === 0 || input.tier === 'free') {
       console.log("[tRPC Upgrade] Free tier, no payment required");
       return {
         success: true as const,
@@ -103,6 +99,7 @@ export const upgradeProcedure = publicProcedure
           tier: input.tier,
           payment_method: input.paymentMethod || 'CBE',
           status: 'pending',
+          billing_months: billingMonths,
         });
 
       if (txError) {
