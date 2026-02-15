@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, SafeAreaView, TouchableOpacity, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as Contacts from 'expo-contacts';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 
@@ -16,8 +15,13 @@ export default function ContactsPermission() {
       if (Platform.OS === 'web') {
         setGranted(true);
       } else {
-        const { status } = await Contacts.requestPermissionsAsync();
-        setGranted(status === 'granted');
+        const Contacts = await import('expo-contacts').catch(() => null);
+        if (Contacts) {
+          const { status } = await Contacts.requestPermissionsAsync();
+          setGranted(status === 'granted');
+        } else {
+          setGranted(true);
+        }
       }
     } catch (e) {
       console.log('[ContactsPermission] error', e);
