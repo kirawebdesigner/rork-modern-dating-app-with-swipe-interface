@@ -15,18 +15,43 @@ export default function PaymentSuccessScreen() {
   const { reloadProfile } = useAuth();
   const { upgradeTier } = useMembership();
   const params = useLocalSearchParams();
-  const sessionId = typeof params.sessionId === 'string' ? params.sessionId : undefined;
+  const paramSessionId = typeof params.sessionId === 'string' ? params.sessionId : undefined;
   
   const [isVerifying, setIsVerifying] = useState(true);
   const [verified, setVerified] = useState(false);
   const [upgradedTier, setUpgradedTier] = useState<string | null>(null);
+  const [resolvedSessionId, setResolvedSessionId] = useState<string | undefined>(paramSessionId);
+
+  useEffect(() => {
+    if (!paramSessionId) {
+      AsyncStorage.getItem('pending_payment_session').then((stored) => {
+        if (stored) {
+          console.log('[PaymentSuccess] Using stored sessionId:', stored);
+          setResolvedSessionId(stored);
+        } else {
+          console.log('[PaymentSuccess] No sessionId found');
+          setIsVerifying(false);
+          setVerified(true);
+          AsyncStorage.getItem('pending_payment_tier').then((tier) => {
+            if (tier && tier !== 'free') {
+              setUpgradedTier(tier);
+              upgradeTier(tier as MembershipTier).catch(console.error);
+            }
+          }).catch(() => {});
+          reloadProfile().catch(console.error);
+        }
+      }).catch(() => {
+        setIsVerifying(false);
+      });
+    }
+  }, [paramSessionId]);
 
   const verifyQuery = trpc.payment.verify.useQuery(
-    { sessionId: sessionId! }, 
+    { sessionId: resolvedSessionId! }, 
     { 
-      enabled: !!sessionId,
+      enabled: !!resolvedSessionId,
       retry: 3,
-      retryDelay: 1000,
+      retryDelay: 2000,
     }
   );
 
@@ -36,13 +61,15 @@ export default function PaymentSuccessScreen() {
       try {
         await upgradeTier(tier);
         await AsyncStorage.setItem('membership_tier', JSON.stringify(tier));
+        await AsyncStorage.removeItem('pending_payment_session');
+        await AsyncStorage.removeItem('pending_payment_tier');
         console.log('[PaymentSuccess] Membership synced successfully');
       } catch (err) {
         console.error('[PaymentSuccess] Failed to sync membership:', err);
       }
     };
 
-    if (sessionId) {
+    if (resolvedSessionId) {
       if (verifyQuery.data?.success) {
         console.log('[PaymentSuccess] Payment verified:', verifyQuery.data);
         setVerified(true);
@@ -66,13 +93,16 @@ export default function PaymentSuccessScreen() {
       } else if (verifyQuery.error) {
         console.error('[PaymentSuccess] Verification error:', verifyQuery.error);
         setIsVerifying(false);
+        AsyncStorage.getItem('pending_payment_tier').then((tier) => {
+          if (tier && tier !== 'free') {
+            setUpgradedTier(tier);
+            upgradeTier(tier as MembershipTier).catch(console.error);
+            setVerified(true);
+          }
+        }).catch(() => {});
       }
-    } else {
-      setIsVerifying(false);
-      setVerified(true);
-      reloadProfile().catch(console.error);
     }
-  }, [sessionId, verifyQuery.data, verifyQuery.error, reloadProfile, upgradeTier]);
+  }, [resolvedSessionId, verifyQuery.data, verifyQuery.error, reloadProfile, upgradeTier]);
 
   return (
     <SafeAreaView style={styles.container}>

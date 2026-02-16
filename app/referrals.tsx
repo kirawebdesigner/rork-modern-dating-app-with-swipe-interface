@@ -5,7 +5,7 @@ import { ArrowLeft, Gift, Copy, CheckCircle2, Send, Users, Crown, Sparkles } fro
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
 import { supabase } from '@/lib/supabase';
-import * as Clipboard from 'expo-clipboard';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useMembership } from '@/hooks/membership-context';
 import { useI18n } from '@/hooks/i18n-context';
 import Constants from 'expo-constants';
@@ -79,7 +79,7 @@ export default function ReferralsScreen() {
 
   const copyLink = useCallback(async () => {
     try {
-      await Clipboard.setStringAsync(refLink);
+      await copyToClipboard(refLink);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch (e) {
@@ -91,7 +91,7 @@ export default function ReferralsScreen() {
     try {
       const message = `Join me on Zewijuna! Use my link to sign up and we both get rewarded: ${refLink}`;
       if (Platform.OS === 'web') {
-        await Clipboard.setStringAsync(message);
+        await copyToClipboard(message);
         Alert.alert('Copied!', 'Share message copied to clipboard.');
       } else {
         await Share.share({ message, title: 'Join Zewijuna' });

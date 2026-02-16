@@ -49,6 +49,13 @@ function RootLayoutNav() {
       <Stack.Screen name="terms" />
       <Stack.Screen name="privacy-policy" />
       <Stack.Screen name="permissions-info" />
+      <Stack.Screen name="payment-success" />
+      <Stack.Screen name="payment-cancel" />
+      <Stack.Screen name="payment-error" />
+      <Stack.Screen name="settings" />
+      <Stack.Screen name="boost" />
+      <Stack.Screen name="language" />
+      <Stack.Screen name="profile-views" />
     </Stack>
   );
 }

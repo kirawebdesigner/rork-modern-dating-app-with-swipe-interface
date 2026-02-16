@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { User, Match, SwipeAction, MembershipTier, ThemeId } from '@/types';
 import { sendPushToUser } from '@/lib/notifications';
 import { supabase, TEST_MODE } from '@/lib/supabase';
@@ -60,6 +60,11 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     longitude: undefined,
     showVerifiedOnly: false,
   });
+  const dataLoadedRef = useRef(false);
+  const currentProfileRef = useRef<User | null>(null);
+  const filtersRef = useRef(filters);
+  currentProfileRef.current = currentProfile;
+  filtersRef.current = filters;
 
   const normalizeProfile = useCallback((p: User | null): User | null => {
     if (!p) return null;
@@ -85,35 +90,15 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     console.log('[App] applyFilters called with', users.length, 'users');
     const swipedIds = new Set(swiped.map(s => s.userId));
     const blockedSet = new Set(blocked);
+    const myProfile = currentProfileRef.current;
     const filtered = users.filter(u => {
-      if (swipedIds.has(u.id)) {
-        console.log('[App] Filtering out swiped user:', u.id);
-        return false;
-      }
-      if (blockedSet.has(u.id)) {
-        console.log('[App] Filtering out blocked user:', u.id);
-        return false;
-      }
-      if (currentProfile?.id && u.id === currentProfile.id) {
-        console.log('[App] Filtering out current user:', u.id);
-        return false;
-      }
-      if (f.interestedIn === 'girl' && u.gender !== 'girl') {
-        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
-        return false;
-      }
-      if (f.interestedIn === 'boy' && u.gender !== 'boy') {
-        console.log('[App] Filtering out user (gender mismatch):', u.id, u.gender);
-        return false;
-      }
-      if (currentProfile?.gender && u.interestedIn && u.interestedIn !== currentProfile.gender) {
-        console.log('[App] Filtering out user (interested_in mismatch):', u.id, u.interestedIn, 'vs', currentProfile.gender);
-        return false;
-      }
-      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) {
-        console.log('[App] Filtering out user (age):', u.id, u.age);
-        return false;
-      }
+      if (swipedIds.has(u.id)) return false;
+      if (blockedSet.has(u.id)) return false;
+      if (myProfile?.id && u.id === myProfile.id) return false;
+      if (f.interestedIn === 'girl' && u.gender !== 'girl') return false;
+      if (f.interestedIn === 'boy' && u.gender !== 'boy') return false;
+      if (myProfile?.gender && u.interestedIn && u.interestedIn !== myProfile.gender) return false;
+      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) return false;
       if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
       if (f.showVerifiedOnly && !u.verified) return false;
       if (f.education && !(u.education ?? '').toLowerCase().includes(f.education.toLowerCase())) return false;
@@ -131,13 +116,18 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     });
     console.log('[App] Filtered to', filtered.length, 'users');
     return filtered;
-  }, [currentProfile]);
+  }, []);
 
   const refilterPotential = useCallback(() => {
     setPotentialMatches(applyFilters(allProfiles, filters, swipeHistory, blockedIds));
   }, [allProfiles, filters, swipeHistory, blockedIds, applyFilters]);
 
   const loadAppData = useCallback(async () => {
+    if (dataLoadedRef.current) {
+      console.log('[App] loadAppData already loaded, skipping');
+      return;
+    }
+    dataLoadedRef.current = true;
     try {
       console.log('[App] loadAppData starting...');
       const [profile, storedTier, storedCredits, history, storedFilters, storedBlocked, storedPhone, storedId] = await Promise.all([
@@ -574,14 +564,20 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       }
     } catch (error) {
       console.error('Error loading app data:', error);
+      dataLoadedRef.current = false;
     }
-  }, [currentProfile, filters, normalizeProfile, applyFilters]);
+  }, [normalizeProfile, applyFilters]);
 
   useEffect(() => {
     const timer = setTimeout(() => {
       loadAppData().catch(e => console.error('[App] loadAppData failed:', e));
     }, 100);
     return () => clearTimeout(timer);
+  }, [loadAppData]);
+
+  const reloadData = useCallback(() => {
+    dataLoadedRef.current = false;
+    loadAppData().catch(e => console.error('[App] reloadData failed:', e));
   }, [loadAppData]);
 
   useEffect(() => {
@@ -597,10 +593,12 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         if (storedPhone && !storedProfile) {
           console.log('[App] User logged in but no profile in cache, reloading...');
           retryCount++;
+          dataLoadedRef.current = false;
           await loadAppData();
-        } else if (storedPhone && (!currentProfile || currentProfile.id === '')) {
+        } else if (storedPhone && (!currentProfileRef.current || currentProfileRef.current.id === '')) {
           console.log('[App] User logged in but profile state not set, reloading...');
           retryCount++;
+          dataLoadedRef.current = false;
           await loadAppData();
         }
       } catch (e) {
@@ -612,7 +610,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     checkAndReload();
     
     return () => clearInterval(interval);
-  }, [currentProfile, loadAppData]);
+  }, [loadAppData]);
 
   useEffect(() => {
     refilterPotential();

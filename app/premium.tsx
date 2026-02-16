@@ -208,6 +208,10 @@ export default function PremiumScreen() {
 
       if (result.success && result.requiresPayment && result.paymentUrl) {
         console.log('[Premium] Redirecting to:', result.paymentUrl);
+        if (result.sessionId) {
+          await AsyncStorage.setItem('pending_payment_session', result.sessionId);
+          await AsyncStorage.setItem('pending_payment_tier', selectedTier);
+        }
         Linking.openURL(result.paymentUrl);
         Alert.alert('Payment', 'Redirecting to payment page. You will receive a confirmation on your phone.', [{ text: 'OK' }]);
       } else if (result.success && !result.requiresPayment) {

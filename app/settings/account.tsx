@@ -6,7 +6,7 @@ import Colors from '@/constants/colors';
 import { ArrowLeft, Mail, KeyRound, Trash2, FileDown } from 'lucide-react-native';
 import { useI18n } from '@/hooks/i18n-context';
 import { supabase } from '@/lib/supabase';
-import * as Clipboard from 'expo-clipboard';
+import { copyToClipboard } from '@/lib/clipboard';
 import { useAuth } from '@/hooks/auth-context';
 
 export default function AccountSettingsScreen() {
@@ -67,7 +67,7 @@ export default function AccountSettingsScreen() {
         exportedAt: new Date().toISOString(),
       };
       const text = JSON.stringify(exportObj, null, 2);
-      await Clipboard.setStringAsync(text);
+      await copyToClipboard(text);
       Alert.alert(t('Copied'), t('Your data JSON is copied to clipboard'));
     } catch (e: any) {
       Alert.alert(t('Error'), e?.message ?? t('Failed to export data'));
