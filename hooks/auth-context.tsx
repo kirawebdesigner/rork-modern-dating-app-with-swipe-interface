@@ -182,10 +182,21 @@ const createProfile = async (userId: string, email: string | null, name: string)
   }
 };
 
+const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+  return Promise.race([
+    promise,
+    new Promise<T>((resolve) => setTimeout(() => {
+      console.log('[Auth] Operation timed out after', ms, 'ms');
+      resolve(fallback);
+    }, ms)),
+  ]);
+};
+
 export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() => {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const isLoggingOutRef = useRef(false);
+  const initDoneRef = useRef(false);
 
   const synchronizeUser = useCallback(async () => {
     if (isLoggingOutRef.current) {
@@ -194,11 +205,12 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     }
     setIsLoading(true);
     try {
-      const cachedProfile = deserializeProfile(await AsyncStorage.getItem(USER_STORAGE_KEY));
+      const cachedRaw = await withTimeout(AsyncStorage.getItem(USER_STORAGE_KEY), 3000, null);
+      const cachedProfile = deserializeProfile(cachedRaw);
+      const cachedUserId = await withTimeout(AsyncStorage.getItem('user_id'), 2000, null);
       
       if (TEST_MODE) {
-        const cachedUserId = await AsyncStorage.getItem('user_id');
-        const cachedUserEmail = await AsyncStorage.getItem('user_email');
+        const cachedUserEmail = await withTimeout(AsyncStorage.getItem('user_email'), 2000, null);
         
         if (!cachedUserId) {
           console.log('[Auth] TEST MODE: No cached user, waiting for signup/login');
@@ -217,76 +229,87 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
         setUser(next);
         return;
       }
+
+      if (cachedProfile && cachedUserId) {
+        console.log('[Auth] Restoring cached user immediately:', cachedUserId);
+        setUser({
+          id: cachedUserId,
+          email: cachedProfile.email ?? '',
+          name: cachedProfile.name ?? 'User',
+          profile: cachedProfile,
+        });
+      }
       
       let currentUser = null;
       try {
-        const result = await supabase.auth.getUser();
-        currentUser = result?.data?.user ?? null;
+        const sessionResult = await withTimeout(
+          supabase.auth.getSession(),
+          5000,
+          { data: { session: null }, error: null }
+        );
         
-        if (!currentUser && cachedProfile) {
-          const cachedUserId = await AsyncStorage.getItem('user_id');
-          if (cachedUserId) {
-            console.log('[Auth] No auth session but have cached profile, using cache');
-            setUser({
-              id: cachedUserId,
-              email: cachedProfile.email ?? '',
-              name: cachedProfile.name ?? 'User',
-              profile: cachedProfile,
-            });
-            return;
-          }
+        if (sessionResult?.data?.session?.user) {
+          currentUser = sessionResult.data.session.user;
+          console.log('[Auth] Got user from session:', currentUser.id);
+        } else {
+          const userResult = await withTimeout(
+            supabase.auth.getUser(),
+            5000,
+            null
+          );
+          currentUser = userResult?.data?.user ?? null;
+        }
+        
+        if (!currentUser && cachedProfile && cachedUserId) {
+          console.log('[Auth] No auth session but have cached profile, using cache');
+          return;
         }
       } catch (fetchErr) {
         console.log('[Auth] Network error fetching user (using cached):', fetchErr);
-        if (cachedProfile) {
-          const cachedUserId = await AsyncStorage.getItem('user_id');
-          if (cachedUserId) {
-            setUser({
-              id: cachedUserId,
-              email: cachedProfile.email ?? '',
-              name: cachedProfile.name ?? 'User',
-              profile: cachedProfile,
-            });
-            return;
-          }
+        if (cachedProfile && cachedUserId) {
+          return;
         }
         setUser(null);
         return;
       }
 
       if (!currentUser) {
-        setUser(null);
-        await persistProfile(null);
+        if (!cachedUserId) {
+          setUser(null);
+          await persistProfile(null).catch(() => {});
+        }
         return;
       }
 
       const profile = cachedProfile && cachedProfile.id === currentUser.id
         ? cachedProfile
-        : await fetchProfile(currentUser.id);
+        : await withTimeout(fetchProfile(currentUser.id), 5000, null);
 
       if (!profile) {
-        await createProfile(currentUser.id, currentUser.email ?? null, currentUser.email?.split('@')[0] ?? 'User');
+        await createProfile(currentUser.id, currentUser.email ?? null, currentUser.email?.split('@')[0] ?? 'User').catch(() => {});
       }
 
-      const finalProfile = profile ?? await fetchProfile(currentUser.id);
+      const finalProfile = profile ?? await withTimeout(fetchProfile(currentUser.id), 5000, null);
       if (finalProfile) {
-        await persistProfile(finalProfile);
+        await persistProfile(finalProfile).catch(() => {});
       }
 
-      await AsyncStorage.setItem('user_id', currentUser.id);
+      await AsyncStorage.setItem('user_id', currentUser.id).catch(() => {});
       if (finalProfile?.phone) {
-        await AsyncStorage.setItem('user_phone', finalProfile.phone);
+        await AsyncStorage.setItem('user_phone', finalProfile.phone).catch(() => {});
       } else {
-        await AsyncStorage.removeItem('user_phone');
+        await AsyncStorage.removeItem('user_phone').catch(() => {});
       }
 
       const next: AuthUser = {
         id: currentUser.id,
         email: currentUser.email ?? '',
         name: finalProfile?.name ?? currentUser.email?.split('@')[0] ?? 'User',
-        profile: finalProfile ?? undefined,
+        profile: finalProfile ?? cachedProfile ?? undefined,
       };
       setUser(next);
+    } catch (e) {
+      console.log('[Auth] synchronizeUser error:', e);
     } finally {
       setIsLoading(false);
     }
@@ -295,15 +318,32 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
   useEffect(() => {
     let isMounted = true;
 
+    const forceLoadingOff = setTimeout(() => {
+      if (isMounted && isLoading) {
+        console.log('[Auth] Force loading off after timeout');
+        setIsLoading(false);
+      }
+    }, 8000);
+
     const init = async () => {
       if (!isMounted) return;
-      await synchronizeUser();
+      try {
+        await synchronizeUser();
+      } catch (e) {
+        console.log('[Auth] init sync error:', e);
+        if (isMounted) setIsLoading(false);
+      }
+      initDoneRef.current = true;
     };
 
     init();
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(async () => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event) => {
       if (!isMounted) return;
+      if (!initDoneRef.current) {
+        console.log('[Auth] Skipping onAuthStateChange before init completes');
+        return;
+      }
       try {
         await synchronizeUser();
       } catch (e) {
@@ -313,6 +353,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
 
     return () => {
       isMounted = false;
+      clearTimeout(forceLoadingOff);
       subscription.subscription.unsubscribe();
     };
   }, [synchronizeUser]);

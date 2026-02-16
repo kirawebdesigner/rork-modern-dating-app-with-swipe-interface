@@ -28,11 +28,65 @@ const supabaseAnonKey = envAnon ?? DEFAULT_ANON;
 
 export const isSupabaseConfigured = true;
 
-const storage = Platform.OS === 'web' ? undefined : AsyncStorage;
+const createStorageAdapter = () => {
+  if (Platform.OS === 'web') {
+    return {
+      getItem: (key: string): string | null => {
+        try {
+          return localStorage.getItem(key);
+        } catch {
+          return null;
+        }
+      },
+      setItem: (key: string, value: string): void => {
+        try {
+          localStorage.setItem(key, value);
+        } catch (e) {
+          console.log('[Supabase] localStorage setItem error:', e);
+        }
+      },
+      removeItem: (key: string): void => {
+        try {
+          localStorage.removeItem(key);
+        } catch (e) {
+          console.log('[Supabase] localStorage removeItem error:', e);
+        }
+      },
+    };
+  }
+
+  return {
+    getItem: async (key: string): Promise<string | null> => {
+      try {
+        const value = await AsyncStorage.getItem(key);
+        return value;
+      } catch (e) {
+        console.log('[Supabase] Storage getItem error for', key, e);
+        return null;
+      }
+    },
+    setItem: async (key: string, value: string): Promise<void> => {
+      try {
+        await AsyncStorage.setItem(key, value);
+      } catch (e) {
+        console.log('[Supabase] Storage setItem error for', key, e);
+      }
+    },
+    removeItem: async (key: string): Promise<void> => {
+      try {
+        await AsyncStorage.removeItem(key);
+      } catch (e) {
+        console.log('[Supabase] Storage removeItem error for', key, e);
+      }
+    },
+  };
+};
+
+const supabaseStorage = createStorageAdapter();
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    storage,
+    storage: supabaseStorage,
     autoRefreshToken: true,
     persistSession: true,
     detectSessionInUrl: Platform.OS === 'web',

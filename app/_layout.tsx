@@ -96,33 +96,54 @@ export default function RootLayout() {
   useEffect(() => {
     let mounted = true;
 
+    const withTimeout = <T,>(promise: Promise<T>, ms: number, fallback: T): Promise<T> => {
+      return Promise.race([
+        promise,
+        new Promise<T>((resolve) => setTimeout(() => resolve(fallback), ms)),
+      ]);
+    };
+
+    const hardTimeout = setTimeout(() => {
+      if (mounted && !isReady) {
+        console.log('[RootLayout] Hard timeout reached, forcing app ready');
+        setIsReady(true);
+        SplashScreen.hideAsync().catch(() => {});
+      }
+    }, 5000);
+
     const init = async () => {
       try {
         console.log('[RootLayout] Initializing...');
         
-        const already = await AsyncStorage.getItem('referrer_code');
+        const already = await withTimeout(
+          AsyncStorage.getItem('referrer_code'),
+          2000,
+          null
+        );
         if (!already) {
-          if (Platform.OS === 'web') {
-            const params = new URLSearchParams(window.location.search);
-            const ref = params.get('ref');
-            if (ref) await AsyncStorage.setItem('referrer_code', ref);
-          } else {
-            const url = await Linking.getInitialURL();
-            if (url) {
-              const { queryParams } = Linking.parse(url);
-              const ref = (queryParams?.ref as string | undefined) ?? null;
+          try {
+            if (Platform.OS === 'web') {
+              const params = new URLSearchParams(window.location.search);
+              const ref = params.get('ref');
               if (ref) await AsyncStorage.setItem('referrer_code', ref);
+            } else {
+              const url = await withTimeout(Linking.getInitialURL(), 2000, null);
+              if (url) {
+                const { queryParams } = Linking.parse(url);
+                const ref = (queryParams?.ref as string | undefined) ?? null;
+                if (ref) await AsyncStorage.setItem('referrer_code', ref);
+              }
             }
+          } catch (e) {
+            console.log('[RootLayout] Referrer check error (non-fatal):', e);
           }
         }
 
-        await new Promise(resolve => setTimeout(resolve, 100));
-
         registerForPushNotificationsAsync().then(async (token) => {
           console.log('[RootLayout] Push token:', token);
-          const uid = await AsyncStorage.getItem('user_id');
+          const uid = await AsyncStorage.getItem('user_id').catch(() => null);
           if (uid && token) {
-            await savePushTokenToServer(uid);
+            await savePushTokenToServer(uid).catch(() => {});
           }
         }).catch(e => console.log('[RootLayout] Push setup error', e));
 
@@ -132,7 +153,7 @@ export default function RootLayout() {
 
         if (mounted) {
           setIsReady(true);
-          await SplashScreen.hideAsync();
+          await SplashScreen.hideAsync().catch(() => {});
         }
       } catch (e) {
         console.error('[RootLayout] Init failed:', e);
@@ -147,6 +168,7 @@ export default function RootLayout() {
 
     return () => {
       mounted = false;
+      clearTimeout(hardTimeout);
     };
   }, []);
 

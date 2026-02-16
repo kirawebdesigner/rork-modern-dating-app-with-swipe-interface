@@ -13,8 +13,10 @@ import {
   StatusBar,
   Platform,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { useAuth } from '@/hooks/auth-context';
@@ -61,10 +63,12 @@ export default function OnboardingScreen() {
   const { width } = useWindowDimensions();
   const listRef = useRef<FlatList<Slide>>(null);
   const [currentIndex, setCurrentIndex] = useState<number>(0);
-  const { isAuthenticated } = useAuth();
+  const [checkingCached, setCheckingCached] = useState<boolean>(true);
+  const { isAuthenticated, isLoading: authLoading } = useAuth();
   const { user } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.9)).current;
+  const redirectedRef = useRef(false);
 
   const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: { index: number | null }[] }) => {
     const idx = viewableItems?.[0]?.index ?? 0;
@@ -101,13 +105,51 @@ export default function OnboardingScreen() {
 
   useEffect(() => {
     let mounted = true;
+    const checkCachedSession = async () => {
+      try {
+        const cachedUserId = await AsyncStorage.getItem('user_id');
+        const cachedProfile = await AsyncStorage.getItem('user_profile');
+        
+        if (cachedUserId && cachedProfile) {
+          const profile = JSON.parse(cachedProfile);
+          const completed = Boolean(profile?.completed);
+          console.log('[Onboarding] Found cached session:', { cachedUserId, completed });
+          
+          if (!redirectedRef.current) {
+            redirectedRef.current = true;
+            if (completed) {
+              router.replace('/(tabs)' as any);
+            } else {
+              router.replace('/profile-setup' as any);
+            }
+          }
+          return;
+        }
+        console.log('[Onboarding] No cached session, showing onboarding');
+      } catch (e) {
+        console.log('[Onboarding] cached session check failed:', e);
+      }
+      if (mounted) setCheckingCached(false);
+    };
+    checkCachedSession();
+
+    const fallback = setTimeout(() => {
+      if (mounted) setCheckingCached(false);
+    }, 2000);
+
+    return () => { mounted = false; clearTimeout(fallback); };
+  }, [router]);
+
+  useEffect(() => {
+    let mounted = true;
     const redirectIfReady = async () => {
       try {
-        if (!mounted || !isAuthenticated) return;
+        if (!mounted || !isAuthenticated || redirectedRef.current) return;
 
         const completed = Boolean(user?.profile?.completed);
         console.log('[Onboarding] Redirect check:', { isAuthenticated, completed });
 
+        redirectedRef.current = true;
         if (completed) {
           console.log('[Onboarding] Profile completed, redirecting to tabs');
           router.replace('/(tabs)' as any);
@@ -121,12 +163,14 @@ export default function OnboardingScreen() {
         }
       } catch (e) {
         console.log('[Onboarding] redirect check failed', e);
+        redirectedRef.current = false;
       }
     };
-    redirectIfReady();
-    const t = setTimeout(redirectIfReady, 400);
-    return () => { mounted = false; clearTimeout(t); };
-  }, [isAuthenticated, user, router]);
+    if (!authLoading) {
+      redirectIfReady();
+    }
+    return () => { mounted = false; };
+  }, [isAuthenticated, authLoading, user, router]);
 
   const handleNext = () => {
     console.log('[Onboarding] CTA pressed at index', currentIndex);
@@ -185,6 +229,14 @@ export default function OnboardingScreen() {
       }),
     ]).start();
   }, [fadeAnim, scaleAnim]);
+
+  if (checkingCached) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color={Colors.primary} />
+      </View>
+    );
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -271,6 +323,12 @@ export default function OnboardingScreen() {
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.background,
+  },
   container: {
     flex: 1,
     backgroundColor: Colors.background,
