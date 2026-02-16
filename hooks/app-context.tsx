@@ -86,15 +86,16 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     }
   }, []);
 
-  const applyFilters = useCallback((users: User[], f: FiltersState, swiped: SwipeAction[], blocked: string[]) => {
-    console.log('[App] applyFilters called with', users.length, 'users');
+  const applyFilters = useCallback((users: User[], f: FiltersState, swiped: SwipeAction[], blocked: string[], myId?: string | null) => {
+    console.log('[App] applyFilters called with', users.length, 'users, myId:', myId);
     const swipedIds = new Set(swiped.map(s => s.userId));
     const blockedSet = new Set(blocked);
     const myProfile = currentProfileRef.current;
+    const effectiveMyId = myId ?? myProfile?.id;
     const filtered = users.filter(u => {
       if (swipedIds.has(u.id)) return false;
       if (blockedSet.has(u.id)) return false;
-      if (myProfile?.id && u.id === myProfile.id) return false;
+      if (effectiveMyId && u.id === effectiveMyId) return false;
       if (f.interestedIn === 'girl' && u.gender !== 'girl') return false;
       if (f.interestedIn === 'boy' && u.gender !== 'boy') return false;
       if (myProfile?.gender && u.interestedIn && u.interestedIn !== myProfile.gender) return false;
@@ -119,7 +120,8 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, []);
 
   const refilterPotential = useCallback(() => {
-    setPotentialMatches(applyFilters(allProfiles, filters, swipeHistory, blockedIds));
+    const myId = currentProfileRef.current?.id ?? null;
+    setPotentialMatches(applyFilters(allProfiles, filters, swipeHistory, blockedIds, myId));
   }, [allProfiles, filters, swipeHistory, blockedIds, applyFilters]);
 
   const loadAppData = useCallback(async () => {
@@ -143,6 +145,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
       let myUserId: string | null = storedId;
       let localHistory = history ? JSON.parse(history) : [];
+      let resolvedInterestedIn: InterestedIn | null = null;
 
       if (profile) {
         const parsedProfile = normalizeProfile(JSON.parse(profile));
@@ -294,7 +297,8 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             setCurrentProfileState(mappedMe);
             await AsyncStorage.setItem('user_profile', JSON.stringify(mappedMe));
             if (!storedFilters) {
-              const defaultInterestedIn: InterestedIn = mappedMe.gender === 'girl' ? 'boy' : 'girl';
+              const defaultInterestedIn: InterestedIn = (mappedMe.interestedIn as InterestedIn | undefined) ?? (mappedMe.gender === 'girl' ? 'boy' : 'girl');
+              resolvedInterestedIn = defaultInterestedIn;
               setFiltersState(prev => ({ ...prev, interestedIn: defaultInterestedIn }));
               await AsyncStorage.setItem('filters_state', JSON.stringify({
                 ...(JSON.parse((await AsyncStorage.getItem('filters_state')) ?? '{}') || {}),
@@ -405,18 +409,24 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           },
         ];
         
+        const cp = currentProfileRef.current;
+        const mockInterestedIn: InterestedIn = storedFilters 
+          ? JSON.parse(storedFilters).interestedIn 
+          : (cp?.interestedIn as InterestedIn | undefined) ?? (cp?.gender === 'girl' ? 'boy' : 'girl');
+        
         const filteredMock = mockProfiles.filter(p => {
-          if (currentProfile?.gender === 'girl' && p.gender === 'boy') return true;
-          if (currentProfile?.gender === 'boy' && p.gender === 'girl') return true;
-          if (!currentProfile) return true;
+          if (cp?.id && p.id === cp.id) return false;
+          if (mockInterestedIn === 'girl' && p.gender === 'girl') return true;
+          if (mockInterestedIn === 'boy' && p.gender === 'boy') return true;
+          if (!cp) return true;
           return false;
         });
         
         setAllProfiles(filteredMock);
         const filtered = applyFilters(filteredMock, {
           ...filters,
-          interestedIn: (storedFilters ? JSON.parse(storedFilters).interestedIn : (currentProfile ? ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl')) : filters.interestedIn)) as InterestedIn,
-        }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'));
+          interestedIn: mockInterestedIn,
+        }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'), myUserId);
         setPotentialMatches(filtered);
         return;
       }
@@ -472,17 +482,26 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
             profileTheme: (row.profile_theme as ThemeId | null) ?? null,
             completed: Boolean((row as any).completed),
           } as User));
+        let effectiveInterestedIn: InterestedIn = filters.interestedIn;
         if (storedFilters) {
-          setFiltersState(JSON.parse(storedFilters));
-        } else if (currentProfile) {
-          const defaultInterestedIn: InterestedIn = ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl'));
-          setFiltersState(prev => ({ ...prev, interestedIn: defaultInterestedIn }));
+          const parsedFilters = JSON.parse(storedFilters);
+          setFiltersState(parsedFilters);
+          effectiveInterestedIn = parsedFilters.interestedIn;
+        } else {
+          const cp = currentProfileRef.current;
+          if (cp) {
+            const defaultInterestedIn: InterestedIn = ((cp.interestedIn as InterestedIn | undefined) ?? (cp.gender === 'girl' ? 'boy' : 'girl'));
+            effectiveInterestedIn = defaultInterestedIn;
+            setFiltersState(prev => ({ ...prev, interestedIn: defaultInterestedIn }));
+          } else if (resolvedInterestedIn) {
+            effectiveInterestedIn = resolvedInterestedIn;
+          }
         }
         setAllProfiles(mapped);
         const filtered = applyFilters(mapped, {
           ...filters,
-          interestedIn: (storedFilters ? JSON.parse(storedFilters).interestedIn : (currentProfile ? ((currentProfile.interestedIn as InterestedIn | undefined) ?? (currentProfile.gender === 'girl' ? 'boy' : 'girl')) : filters.interestedIn)) as InterestedIn,
-        }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'));
+          interestedIn: effectiveInterestedIn,
+        }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'), myUserId);
         setPotentialMatches(filtered);
       }
 
@@ -576,9 +595,18 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, [loadAppData]);
 
   const reloadData = useCallback(() => {
+    console.log('[App] reloadData called, resetting dataLoaded flag');
     dataLoadedRef.current = false;
     loadAppData().catch(e => console.error('[App] reloadData failed:', e));
   }, [loadAppData]);
+
+  useEffect(() => {
+    if (currentProfile?.completed && potentialMatches.length === 0 && allProfiles.length === 0) {
+      console.log('[App] Profile completed but no profiles loaded, triggering reload');
+      dataLoadedRef.current = false;
+      loadAppData().catch(e => console.error('[App] auto-reload failed:', e));
+    }
+  }, [currentProfile?.completed]);
 
   useEffect(() => {
     let retryCount = 0;
