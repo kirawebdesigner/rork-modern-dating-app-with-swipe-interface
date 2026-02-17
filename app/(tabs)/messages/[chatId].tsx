@@ -297,9 +297,17 @@ export default function ChatScreen() {
                 data={messages}
                 keyExtractor={(m) => m.id}
                 renderItem={renderItem}
-                contentContainerStyle={styles.listContent}
+                contentContainerStyle={[styles.listContent, messages.length === 0 && styles.emptyListContent]}
                 testID="chat-list"
                 showsVerticalScrollIndicator={false}
+                style={styles.flex}
+                ListEmptyComponent={
+                  <View style={styles.emptyChat}>
+                    <Text style={styles.emptyChatEmoji}>👋</Text>
+                    <Text style={styles.emptyChatTitle}>Say hello!</Text>
+                    <Text style={styles.emptyChatText}>Send the first message to start the conversation</Text>
+                  </View>
+                }
               />
             )}
 
@@ -441,6 +449,32 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 16,
     paddingBottom: 16,
+  },
+  emptyListContent: {
+    flex: 1,
+    justifyContent: 'center' as const,
+  },
+  emptyChat: {
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    paddingHorizontal: 40,
+    paddingVertical: 60,
+  },
+  emptyChatEmoji: {
+    fontSize: 48,
+    marginBottom: 16,
+  },
+  emptyChatTitle: {
+    fontSize: 20,
+    fontWeight: '700' as const,
+    color: '#1A1A1A',
+    marginBottom: 8,
+  },
+  emptyChatText: {
+    fontSize: 15,
+    color: '#9CA3AF',
+    textAlign: 'center' as const,
+    lineHeight: 22,
   },
   dateSeparator: {
     flexDirection: 'row',

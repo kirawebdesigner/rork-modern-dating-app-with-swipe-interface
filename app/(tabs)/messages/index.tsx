@@ -178,8 +178,7 @@ export default function MessagesScreen() {
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={styles.activitiesScrollContent}
           >
-            {newMatches.length > 0 && renderActivityItem(newMatches[0], 0, true)}
-            {newMatches.map((item, index) => renderActivityItem(item, index + 1, false))}
+            {newMatches.map((item, index) => renderActivityItem(item, index, false))}
           </ScrollView>
         </View>
       )}
@@ -240,17 +239,19 @@ export default function MessagesScreen() {
           <FlatList
             data={conversations}
             renderItem={renderConversation}
-            keyExtractor={(item) => item.id}
+            keyExtractor={(item) => item.id || `match-${item.otherUserId}`}
             ListHeaderComponent={renderHeader}
             contentContainerStyle={styles.listContainer}
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={renderSeparator}
             ListEmptyComponent={
-              newMatches.length > 0 ? (
-                <View style={styles.noConversationsContainer}>
+              <View style={styles.noConversationsContainer}>
+                {newMatches.length > 0 ? (
+                  <Text style={styles.emptyDescription}>Tap a match above to start chatting!</Text>
+                ) : (
                   <Text style={styles.emptyDescription}>No active conversations yet.</Text>
-                </View>
-              ) : null
+                )}
+              </View>
             }
           />
         )}

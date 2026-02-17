@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect } from 'react';
+import React, { useState, useCallback, useEffect, useMemo } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -130,10 +130,27 @@ export default function MatchesScreen() {
     return date.toLocaleDateString();
   }, []);
 
-  const allItems: MatchItem[] = [
-    ...likesData,
-    ...contextMatches.map(m => ({ ...m.user, matchId: m.id } as MatchItem))
-  ];
+  const allItems: MatchItem[] = useMemo(() => {
+    const seen = new Set<string>();
+    const result: MatchItem[] = [];
+    
+    for (const item of likesData) {
+      if (item.id && !seen.has(item.id)) {
+        seen.add(item.id);
+        result.push(item);
+      }
+    }
+    
+    for (const m of contextMatches) {
+      const mapped = { ...m.user, matchId: m.id } as MatchItem;
+      if (mapped.id && !seen.has(mapped.id)) {
+        seen.add(mapped.id);
+        result.push(mapped);
+      }
+    }
+    
+    return result;
+  }, [likesData, contextMatches]);
 
   const sortedItems = [...allItems].sort((a, b) => {
     const dateA = a.likedAt?.getTime() ?? 0;
@@ -141,12 +158,12 @@ export default function MatchesScreen() {
     return sortNewest ? dateB - dateA : dateA - dateB;
   });
 
-  const renderCard = (item: MatchItem) => {
+  const renderCard = (item: MatchItem, cardIndex: number) => {
     const isMatch = 'matchId' in item && item.matchId;
 
     return (
       <TouchableOpacity
-        key={item.id}
+        key={`${item.id || 'unknown'}-${cardIndex}`}
         style={styles.card}
         onPress={() => isMatch ? onOpenMatchChat(item.matchId!) : onViewProfile(item.id)}
         activeOpacity={0.92}
@@ -202,7 +219,7 @@ export default function MatchesScreen() {
 
     return rows.map((row, rowIndex) => (
       <View key={rowIndex} style={styles.row}>
-        {row.map(item => renderCard(item))}
+        {row.map((item, idx) => renderCard(item, rowIndex * 2 + idx))}
         {row.length === 1 && <View style={styles.cardPlaceholder} />}
       </View>
     ));

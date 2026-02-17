@@ -54,6 +54,7 @@ export default function ProfileDetails() {
   const { t } = useI18n();
 
   const [fetchedUser, setFetchedUser] = useState<User | null>(null);
+  const [imageError, setImageError] = useState<boolean>(false);
 
   const user: User | undefined = useMemo(() => {
     const found = potentialMatches.find((u) => u.id === String(id));
@@ -255,15 +256,25 @@ export default function ProfileDetails() {
             }}
             testID="photos-gallery"
           >
-            {user.photos.map((uri) => (
+            {(user.photos.length > 0 ? user.photos : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop']).map((uri, idx) => (
               <Image
-                key={uri}
-                source={{ uri }}
+                key={`photo-${idx}-${uri}`}
+                source={{ uri: uri || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
                 style={styles.heroImage}
                 resizeMode="cover"
+                onError={() => {
+                  console.log('[ProfileDetails] Image failed to load:', uri);
+                  setImageError(true);
+                }}
               />
             ))}
           </ScrollView>
+
+          {imageError && user.photos.length > 0 && (
+            <View style={styles.imageFallback}>
+              <Text style={styles.imageFallbackText}>{user.name?.substring(0, 1)?.toUpperCase() ?? '?'}</Text>
+            </View>
+          )}
 
           {user.photos.length > 1 && (
             <View style={styles.photoIndicators}>
@@ -628,6 +639,24 @@ const styles = StyleSheet.create({
   heroImage: {
     width: SCREEN_WIDTH,
     height: HERO_HEIGHT,
+    backgroundColor: '#F0F0F0',
+  },
+  imageFallback: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: '#FFE5E9',
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
+    zIndex: -1,
+  },
+  imageFallbackText: {
+    fontSize: 72,
+    fontWeight: '800' as const,
+    color: '#FF2D55',
+    opacity: 0.5,
   },
   photoIndicators: {
     position: 'absolute' as const,
