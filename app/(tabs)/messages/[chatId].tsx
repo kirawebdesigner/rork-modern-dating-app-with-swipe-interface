@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert, StatusBar, Image } from 'react-native';
-import { ChevronLeft, Send, ShieldAlert, MoreVertical, Smile, Mic, Check, Phone, Video } from 'lucide-react-native';
+import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert, StatusBar, Image, Linking, ActionSheetIOS } from 'react-native';
+import { ChevronLeft, Send, ShieldAlert, MoreVertical, Smile, Mic, Check, Phone, Flag, Ban, Trash2 } from 'lucide-react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Message } from '@/types';
@@ -44,6 +45,8 @@ export default function ChatScreen() {
   const [otherId, setOtherId] = useState<string | null>(null);
   const [otherName, setOtherName] = useState<string>('Chat');
   const [otherAvatar, setOtherAvatar] = useState<string | null>(null);
+  const [otherPhone, setOtherPhone] = useState<string | null>(null);
+  const insets = useSafeAreaInsets();
 
   const { messages, loading, error, sendMessage } = useRealtimeMessages(chatId ?? null, uid, otherId);
 
@@ -125,6 +128,12 @@ export default function ChatScreen() {
           if (photos && photos.length > 0) {
             setOtherAvatar(photos[0]);
           }
+          const { data: phoneProf } = await supabase
+            .from('profiles')
+            .select('phone')
+            .eq('id', other)
+            .maybeSingle();
+          if (phoneProf?.phone) setOtherPhone(phoneProf.phone as string);
         }
       } catch (e) {
         console.error('[Chat] init error', e);
@@ -150,6 +159,135 @@ export default function ChatScreen() {
   const handleBack = useCallback(() => {
     router.back();
   }, [router]);
+
+  const handleCall = useCallback(() => {
+    Alert.alert(
+      'Call ' + otherName,
+      'Voice calling will be available soon. You can reach out via message for now.',
+      [
+        { text: 'OK', style: 'cancel' },
+        ...(otherPhone ? [{
+          text: 'Call via Phone',
+          onPress: () => {
+            Linking.openURL(`tel:${otherPhone}`).catch(() => {
+              Alert.alert('Unable to make call', 'Phone calling is not supported on this device.');
+            });
+          },
+        }] : []),
+      ]
+    );
+  }, [otherName, otherPhone]);
+
+  const handleMoreOptions = useCallback(() => {
+    const options = [
+      {
+        text: 'View Profile',
+        onPress: () => {
+          if (otherId) {
+            router.push(`/(tabs)/profile-details/${otherId}` as any);
+          }
+        },
+      },
+      {
+        text: 'Clear Chat',
+        onPress: () => {
+          Alert.alert(
+            'Clear Chat',
+            'Are you sure you want to clear this conversation?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Clear',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    if (chatId) {
+                      await supabase.from('messages').delete().eq('conversation_id', chatId);
+                      Alert.alert('Chat cleared');
+                    }
+                  } catch (e) {
+                    console.log('[Chat] Clear chat error:', e);
+                  }
+                },
+              },
+            ]
+          );
+        },
+      },
+      {
+        text: 'Report User',
+        onPress: () => {
+          Alert.alert(
+            'Report User',
+            'Are you sure you want to report this user?',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Report',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await supabase.from('reports').insert({
+                      reported_id: otherId,
+                      reason: 'Reported from chat',
+                      created_at: new Date().toISOString(),
+                    });
+                    Alert.alert('Report Submitted', 'Thank you for your report. We will review it.');
+                  } catch (e) {
+                    console.log('[Chat] Report error:', e);
+                  }
+                },
+              },
+            ]
+          );
+        },
+      },
+      {
+        text: 'Block User',
+        onPress: () => {
+          Alert.alert(
+            'Block User',
+            `Are you sure you want to block ${otherName}? You won't see each other anymore.`,
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Block',
+                style: 'destructive',
+                onPress: () => {
+                  Alert.alert('User Blocked', `${otherName} has been blocked.`);
+                  router.back();
+                },
+              },
+            ]
+          );
+        },
+      },
+    ];
+
+    if (Platform.OS === 'ios') {
+      ActionSheetIOS.showActionSheetWithOptions(
+        {
+          options: ['Cancel', 'View Profile', 'Clear Chat', 'Report User', 'Block User'],
+          cancelButtonIndex: 0,
+          destructiveButtonIndex: 4,
+        },
+        (buttonIndex) => {
+          if (buttonIndex > 0 && buttonIndex <= options.length) {
+            options[buttonIndex - 1].onPress();
+          }
+        }
+      );
+    } else {
+      Alert.alert(
+        'Options',
+        undefined,
+        [
+          ...options.map(opt => ({ text: opt.text, onPress: opt.onPress })),
+          { text: 'Cancel', style: 'cancel' as const },
+        ]
+      );
+    }
+  }, [otherId, otherName, chatId, router]);
 
   const onSend = useCallback(async () => {
     if (!input.trim()) return;
@@ -267,10 +405,10 @@ export default function ChatScreen() {
             </TouchableOpacity>
 
             <View style={styles.headerActions}>
-              <TouchableOpacity style={styles.headerActionBtn}>
+              <TouchableOpacity style={styles.headerActionBtn} onPress={handleCall} testID="chat-call">
                 <Phone size={18} color="#1A1A1A" />
               </TouchableOpacity>
-              <TouchableOpacity style={styles.headerActionBtn}>
+              <TouchableOpacity style={styles.headerActionBtn} onPress={handleMoreOptions} testID="chat-more">
                 <MoreVertical size={18} color="#1A1A1A" />
               </TouchableOpacity>
             </View>
@@ -311,7 +449,7 @@ export default function ChatScreen() {
               />
             )}
 
-            <View style={styles.composerContainer}>
+            <View style={[styles.composerContainer, { paddingBottom: Math.max(insets.bottom + 70, Platform.OS === 'ios' ? 100 : 90) }]}>
               <View style={styles.inputWrapper}>
                 <TouchableOpacity style={styles.emojiBtn}>
                   <Smile size={22} color="#9CA3AF" />

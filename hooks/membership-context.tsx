@@ -1,6 +1,6 @@
 import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useEffect, useState, useCallback, useMemo } from 'react';
+import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { MembershipTier, MembershipFeatures, UserCredits, MonthlyAllowances } from '@/types';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import { useAuth } from './auth-context';
@@ -389,43 +389,61 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     return true;
   }, [credits, tier]);
 
+  const remainingDailyMessagesRef = useRef(remainingDailyMessages);
+  remainingDailyMessagesRef.current = remainingDailyMessages;
+  const remainingProfileViewsRef = useRef(remainingProfileViews);
+  remainingProfileViewsRef.current = remainingProfileViews;
+  const remainingRightSwipesRef = useRef(remainingRightSwipes);
+  remainingRightSwipesRef.current = remainingRightSwipes;
+  const remainingComplimentsRef = useRef(remainingCompliments);
+  remainingComplimentsRef.current = remainingCompliments;
+
   const useDaily = useCallback(async (type: 'messages' | 'views' | 'rightSwipes' | 'compliments'): Promise<boolean> => {
     const f = TIER_FEATURES[tier];
     
     if (type === 'messages') {
       if (tier === 'vip') return true;
       if (f.dailyMessages === 99999) return true;
-      if (remainingDailyMessages <= 0) return false;
-      setRemainingDailyMessages(prev => prev - 1);
+      if (remainingDailyMessagesRef.current <= 0) return false;
+      setRemainingDailyMessages(prev => Math.max(0, prev - 1));
       return true;
     }
     
     if (type === 'views') {
       if (tier === 'vip') return true;
       if (f.profileViews === 'unlimited') return true;
-      if (typeof remainingProfileViews === 'number' && remainingProfileViews <= 0) return false;
-      if (typeof remainingProfileViews === 'number') setRemainingProfileViews(remainingProfileViews - 1);
+      const current = remainingProfileViewsRef.current;
+      if (typeof current === 'number' && current <= 0) return false;
+      if (typeof current === 'number') {
+        setRemainingProfileViews(prev => typeof prev === 'number' ? Math.max(0, prev - 1) : prev);
+      }
       return true;
     }
     
     if (type === 'rightSwipes') {
       if (tier === 'vip' || tier === 'gold') return true;
       if (f.dailyRightSwipes === 'unlimited') return true;
-      if (typeof remainingRightSwipes === 'number' && remainingRightSwipes <= 0) return false;
-      if (typeof remainingRightSwipes === 'number') setRemainingRightSwipes(remainingRightSwipes - 1);
+      const current = remainingRightSwipesRef.current;
+      if (typeof current === 'number' && current <= 0) return false;
+      if (typeof current === 'number') {
+        setRemainingRightSwipes(prev => typeof prev === 'number' ? Math.max(0, prev - 1) : prev);
+      }
       return true;
     }
     
     if (type === 'compliments') {
       if (tier === 'vip') return true;
       if (f.dailyCompliments === 99999) return true;
-      if (typeof remainingCompliments === 'number' && remainingCompliments <= 0) return false;
-      if (typeof remainingCompliments === 'number') setRemainingCompliments(remainingCompliments - 1);
+      const current = remainingComplimentsRef.current;
+      if (typeof current === 'number' && current <= 0) return false;
+      if (typeof current === 'number') {
+        setRemainingCompliments(prev => typeof prev === 'number' ? Math.max(0, prev - 1) : prev);
+      }
       return true;
     }
     
     return false;
-  }, [remainingDailyMessages, remainingProfileViews, remainingRightSwipes, remainingCompliments, tier]);
+  }, [tier]);
 
   const grantMonthlyAllowancesIfNeeded = useCallback(async () => {
     const now = new Date();

@@ -12,6 +12,7 @@ import {
   Dimensions,
   Linking,
   Platform,
+  ActivityIndicator,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Colors from '@/constants/colors';
@@ -55,6 +56,7 @@ export default function ProfileDetails() {
 
   const [fetchedUser, setFetchedUser] = useState<User | null>(null);
   const [imageError, setImageError] = useState<boolean>(false);
+  const [fetchingUser, setFetchingUser] = useState<boolean>(false);
 
   const user: User | undefined = useMemo(() => {
     const found = potentialMatches.find((u) => u.id === String(id));
@@ -67,7 +69,9 @@ export default function ProfileDetails() {
     if (!id) return;
     const found = potentialMatches.find((u) => u.id === String(id));
     if (found) return;
+    if (fetchedUser && fetchedUser.id === String(id)) return;
     console.log('[ProfileDetails] User not in potentialMatches, fetching from DB:', id);
+    setFetchingUser(true);
     (async () => {
       try {
         const { data, error } = await supabase
@@ -76,6 +80,7 @@ export default function ProfileDetails() {
           .eq('id', String(id))
           .maybeSingle();
         if (!error && data) {
+          const rawPhotos = Array.isArray(data.photos) ? (data.photos as string[]).filter(p => p && p.length > 0) : [];
           const mapped: User = {
             id: String(data.id),
             name: String(data.name ?? 'User'),
@@ -83,7 +88,7 @@ export default function ProfileDetails() {
             gender: (data.gender as 'boy' | 'girl') ?? 'boy',
             interestedIn: (data.interested_in as 'boy' | 'girl' | null) ?? undefined,
             bio: String(data.bio ?? ''),
-            photos: Array.isArray(data.photos) && data.photos.length > 0 ? (data.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640'],
+            photos: rawPhotos.length > 0 ? rawPhotos : [],
             interests: Array.isArray(data.interests) ? (data.interests as string[]) : [],
             location: { city: String(data.city ?? '') },
             heightCm: typeof data.height_cm === 'number' ? Number(data.height_cm) : undefined,
@@ -92,10 +97,14 @@ export default function ProfileDetails() {
             instagram: data.instagram ? String(data.instagram) : undefined,
           };
           setFetchedUser(mapped);
-          console.log('[ProfileDetails] Fetched user from DB:', mapped.name);
+          console.log('[ProfileDetails] Fetched user from DB:', mapped.name, 'photos:', mapped.photos.length);
+        } else {
+          console.log('[ProfileDetails] No user found or error:', error?.message);
         }
       } catch (e) {
         console.log('[ProfileDetails] Fetch user failed:', e);
+      } finally {
+        setFetchingUser(false);
       }
     })();
   }, [id, potentialMatches]);
@@ -194,8 +203,17 @@ export default function ProfileDetails() {
           </TouchableOpacity>
         </View>
         <View style={styles.center}>
-          <Text style={styles.emptyTitle}>{t('Profile not found')}</Text>
-          <Text style={styles.emptySubtitle}>{t('This profile may no longer be available')}</Text>
+          {fetchingUser ? (
+            <>
+              <ActivityIndicator size="large" color={Colors.primary} />
+              <Text style={styles.emptySubtitle}>{t('Loading profile...')}</Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.emptyTitle}>{t('Profile not found')}</Text>
+              <Text style={styles.emptySubtitle}>{t('This profile may no longer be available')}</Text>
+            </>
+          )}
         </View>
       </View>
     );
@@ -242,36 +260,42 @@ export default function ProfileDetails() {
     <View style={styles.container}>
       <ScrollView
         showsVerticalScrollIndicator={false}
-        bounces={false}
-        contentContainerStyle={{ paddingBottom: 40 }}
+        bounces={true}
+        contentContainerStyle={{ paddingBottom: 120 }}
       >
         <View style={styles.heroContainer}>
-          <ScrollView
-            horizontal
-            pagingEnabled
-            showsHorizontalScrollIndicator={false}
-            onMomentumScrollEnd={(e) => {
-              const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
-              setActivePhotoIndex(idx);
-            }}
-            testID="photos-gallery"
-          >
-            {(user.photos.length > 0 ? user.photos : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop']).map((uri, idx) => (
-              <Image
-                key={`photo-${idx}-${uri}`}
-                source={{ uri: uri || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
-                style={styles.heroImage}
-                resizeMode="cover"
-                onError={() => {
-                  console.log('[ProfileDetails] Image failed to load:', uri);
-                  setImageError(true);
-                }}
-              />
-            ))}
-          </ScrollView>
+          {user.photos.length > 0 ? (
+            <ScrollView
+              horizontal
+              pagingEnabled
+              showsHorizontalScrollIndicator={false}
+              onMomentumScrollEnd={(e) => {
+                const idx = Math.round(e.nativeEvent.contentOffset.x / SCREEN_WIDTH);
+                setActivePhotoIndex(idx);
+              }}
+              testID="photos-gallery"
+            >
+              {user.photos.map((uri, idx) => (
+                <Image
+                  key={`photo-${idx}-${uri}`}
+                  source={{ uri: uri || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
+                  style={styles.heroImage}
+                  resizeMode="cover"
+                  onError={() => {
+                    console.log('[ProfileDetails] Image failed to load:', uri);
+                    setImageError(true);
+                  }}
+                />
+              ))}
+            </ScrollView>
+          ) : (
+            <View style={[styles.heroImage, styles.imageFallback]}>
+              <Text style={styles.imageFallbackText}>{user.name?.substring(0, 1)?.toUpperCase() ?? '?'}</Text>
+            </View>
+          )}
 
           {imageError && user.photos.length > 0 && (
-            <View style={styles.imageFallback}>
+            <View style={[StyleSheet.absoluteFill, styles.imageFallback]}>
               <Text style={styles.imageFallbackText}>{user.name?.substring(0, 1)?.toUpperCase() ?? '?'}</Text>
             </View>
           )}
@@ -642,15 +666,9 @@ const styles = StyleSheet.create({
     backgroundColor: '#F0F0F0',
   },
   imageFallback: {
-    position: 'absolute' as const,
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
     backgroundColor: '#FFE5E9',
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-    zIndex: -1,
   },
   imageFallbackText: {
     fontSize: 72,
