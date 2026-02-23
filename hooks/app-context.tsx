@@ -29,6 +29,7 @@ interface AppContextType {
   tier: MembershipTier;
   credits: number;
   filters: FiltersState;
+  isLoadingProfiles: boolean;
   setFilters: (next: FiltersState) => Promise<void>;
   setCurrentProfile: (profile: User) => Promise<void>;
   updateProfile: (patch: Partial<User>) => Promise<void>;
@@ -39,6 +40,7 @@ interface AppContextType {
   blockedIds: string[];
   unlockTheme: (theme: ThemeId) => Promise<void>;
   setProfileTheme: (theme: ThemeId | null) => Promise<void>;
+  refreshProfiles: () => Promise<void>;
 }
 
 export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
@@ -61,6 +63,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     showVerifiedOnly: false,
   });
   const dataLoadedRef = useRef(false);
+  const [isLoadingProfiles, setIsLoadingProfiles] = useState<boolean>(true);
   const currentProfileRef = useRef<User | null>(null);
   const filtersRef = useRef(filters);
   currentProfileRef.current = currentProfile;
@@ -87,7 +90,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, []);
 
   const applyFilters = useCallback((users: User[], f: FiltersState, swiped: SwipeAction[], blocked: string[], myId?: string | null) => {
-    console.log('[App] applyFilters called with', users.length, 'users, myId:', myId);
+    console.log('[App] applyFilters called with', users.length, 'users, myId:', myId, 'filters:', JSON.stringify(f));
     const swipedIds = new Set(swiped.map(s => s.userId));
     const blockedSet = new Set(blocked);
     const myProfile = currentProfileRef.current;
@@ -98,9 +101,15 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (effectiveMyId && u.id === effectiveMyId) return false;
       if (f.interestedIn === 'girl' && u.gender !== 'girl') return false;
       if (f.interestedIn === 'boy' && u.gender !== 'boy') return false;
-      if (myProfile?.gender && u.interestedIn && u.interestedIn !== myProfile.gender) return false;
-      if (u.age && (u.age < f.ageMin || u.age > f.ageMax)) return false;
+      if (u.age && u.age > 0 && (u.age < f.ageMin || u.age > f.ageMax)) return false;
       if (typeof u.location.distance === 'number' && u.location.distance > f.distanceKm) return false;
+      const locLabel = (f.locationLabel ?? '').trim().toLowerCase();
+      if (locLabel && locLabel !== 'ethiopia' && locLabel !== '') {
+        const userCity = (u.location.city ?? '').toLowerCase();
+        if (userCity && !userCity.includes(locLabel) && !locLabel.includes(userCity)) {
+          return false;
+        }
+      }
       if (f.showVerifiedOnly && !u.verified) return false;
       if (f.education && !(u.education ?? '').toLowerCase().includes(f.education.toLowerCase())) return false;
       if (f.heightRange) {
@@ -115,13 +124,15 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       if (f.specificLocation && !(u.location.city ?? '').toLowerCase().includes(f.specificLocation.toLowerCase())) return false;
       return true;
     });
-    console.log('[App] Filtered to', filtered.length, 'users');
+    console.log('[App] Filtered to', filtered.length, 'users from', users.length, 'total');
     return filtered;
   }, []);
 
   const refilterPotential = useCallback(() => {
     const myId = currentProfileRef.current?.id ?? null;
-    setPotentialMatches(applyFilters(allProfiles, filters, swipeHistory, blockedIds, myId));
+    console.log('[App] refilterPotential: allProfiles=', allProfiles.length, 'swipeHistory=', swipeHistory.length, 'blocked=', blockedIds.length);
+    const result = applyFilters(allProfiles, filters, swipeHistory, blockedIds, myId);
+    setPotentialMatches(result);
   }, [allProfiles, filters, swipeHistory, blockedIds, applyFilters]);
 
   const loadAppData = useCallback(async () => {
@@ -130,6 +141,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       return;
     }
     dataLoadedRef.current = true;
+    setIsLoadingProfiles(true);
     try {
       console.log('[App] loadAppData starting...');
       const [profile, storedTier, storedCredits, history, storedFilters, storedBlocked, storedPhone, storedId] = await Promise.all([
@@ -584,6 +596,8 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     } catch (error) {
       console.error('Error loading app data:', error);
       dataLoadedRef.current = false;
+    } finally {
+      setIsLoadingProfiles(false);
     }
   }, [normalizeProfile, applyFilters]);
 
@@ -598,6 +612,19 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     console.log('[App] reloadData called, resetting dataLoaded flag');
     dataLoadedRef.current = false;
     loadAppData().catch(e => console.error('[App] reloadData failed:', e));
+  }, [loadAppData]);
+
+  const refreshProfiles = useCallback(async () => {
+    console.log('[App] refreshProfiles called');
+    setIsLoadingProfiles(true);
+    dataLoadedRef.current = false;
+    try {
+      await loadAppData();
+    } catch (e) {
+      console.error('[App] refreshProfiles failed:', e);
+    } finally {
+      setIsLoadingProfiles(false);
+    }
   }, [loadAppData]);
 
   useEffect(() => {
@@ -739,9 +766,18 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, [computeCompleted]);
 
   const setFilters = useCallback(async (next: FiltersState) => {
+    console.log('[App] setFilters called:', JSON.stringify(next));
     await AsyncStorage.setItem('filters_state', JSON.stringify(next));
+    const prevGender = filtersRef.current.interestedIn;
     setFiltersState(next);
-  }, []);
+    if (next.interestedIn !== prevGender || allProfiles.length === 0) {
+      console.log('[App] Gender filter changed or no profiles, triggering reload');
+      dataLoadedRef.current = false;
+      setTimeout(() => {
+        loadAppData().catch(e => console.error('[App] filter reload failed:', e));
+      }, 100);
+    }
+  }, [allProfiles.length, loadAppData]);
 
   const blockUser = useCallback(async (userId: string) => {
     setBlockedIds(prev => {
@@ -1027,6 +1063,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     tier,
     credits,
     filters,
+    isLoadingProfiles,
     setFilters,
     setCurrentProfile,
     updateProfile,
@@ -1037,5 +1074,6 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     blockedIds,
     unlockTheme,
     setProfileTheme: setProfileThemeFn,
-  }), [currentProfile, potentialMatches, matches, swipeHistory, tier, credits, filters, setFilters, setCurrentProfile, updateProfile, swipeUser, setTier, addCredits, blockUser, blockedIds, unlockTheme, setProfileThemeFn]);
+    refreshProfiles,
+  }), [currentProfile, potentialMatches, matches, swipeHistory, tier, credits, filters, isLoadingProfiles, setFilters, setCurrentProfile, updateProfile, swipeUser, setTier, addCredits, blockUser, blockedIds, unlockTheme, setProfileThemeFn, refreshProfiles]);
 });

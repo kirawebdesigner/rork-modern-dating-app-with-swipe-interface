@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, RefreshControl } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { User } from '@/types';
@@ -36,13 +37,37 @@ export default function MatchesScreen() {
   const loadLikes = async () => {
     try {
       setLoading(true);
-      const { data: authUser } = await supabase.auth.getUser();
-      const myId = authUser?.user?.id ?? null;
+      let myId: string | null = null;
+      try {
+        const { data: authUser } = await supabase.auth.getUser();
+        myId = authUser?.user?.id ?? null;
+      } catch (e) {
+        console.log('[Likes] auth.getUser failed:', e);
+      }
+      if (!myId) {
+        myId = await AsyncStorage.getItem('user_id');
+      }
+      if (!myId) {
+        const storedPhone = await AsyncStorage.getItem('user_phone');
+        if (storedPhone) {
+          try {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('phone', storedPhone)
+              .maybeSingle();
+            myId = profile?.id ?? null;
+          } catch (e) {
+            console.log('[Likes] profile lookup failed:', e);
+          }
+        }
+      }
       if (!myId) {
         console.log('[Likes] no user ID');
         setLikesData([]);
         return;
       }
+      console.log('[Likes] loading likes for user:', myId);
 
       const { data: swipes, error } = await supabase
         .from('swipes')
@@ -272,18 +297,38 @@ export default function MatchesScreen() {
           <Text style={styles.loadingText}>Loading...</Text>
         </View>
       ) : allItems.length === 0 ? (
-        <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconCircle}>
-            <Heart size={36} color="#FF2D55" />
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={loadLikes}
+              tintColor="#FF2D55"
+              colors={['#FF2D55']}
+            />
+          }
+        >
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconCircle}>
+              <Heart size={36} color="#FF2D55" />
+            </View>
+            <Text style={styles.emptyTitle}>No matches yet</Text>
+            <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
           </View>
-          <Text style={styles.emptyTitle}>No matches yet</Text>
-          <Text style={styles.emptyText}>Start swiping to find your perfect match!</Text>
-        </View>
+        </ScrollView>
       ) : (
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          refreshControl={
+            <RefreshControl
+              refreshing={loading}
+              onRefresh={loadLikes}
+              tintColor="#FF2D55"
+              colors={['#FF2D55']}
+            />
+          }
         >
           {renderGrid(sortedItems)}
         </ScrollView>
@@ -510,5 +555,8 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: '#9CA3AF',
     marginTop: 12,
+  },
+  emptyScrollContent: {
+    flex: 1,
   },
 });

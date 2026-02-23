@@ -10,7 +10,7 @@ import {
   TextInput,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ArrowLeft, Check, MapPin, Lock } from 'lucide-react-native';
+import { ArrowLeft, Check, MapPin, Lock, RotateCcw } from 'lucide-react-native';
 import Colors from '@/constants/colors';
 import GradientButton from '@/components/GradientButton';
 import { useApp } from '@/hooks/app-context';
@@ -52,6 +52,17 @@ export default function DiscoveryFilters() {
     setLocalFilters(prev => ({ ...prev, distanceKm: Math.max(1, Math.min(100, distance)) }));
   };
 
+  const handleReset = () => {
+    setLocalFilters({
+      interestedIn: filters.interestedIn || 'girl',
+      locationLabel: 'Ethiopia',
+      distanceKm: 50,
+      ageMin: 18,
+      ageMax: 60,
+      showVerifiedOnly: false,
+    });
+  };
+
   const advancedDisabled = !features.advancedFilters;
 
   return (
@@ -61,7 +72,9 @@ export default function DiscoveryFilters() {
           <ArrowLeft size={24} color={Colors.primary} />
         </TouchableOpacity>
         <Text style={styles.title}>Discovery Filters</Text>
-        <View style={styles.placeholder} />
+        <TouchableOpacity onPress={handleReset} style={styles.resetButton}>
+          <RotateCcw size={20} color={Colors.primary} />
+        </TouchableOpacity>
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
@@ -285,8 +298,13 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: Colors.text.primary,
   },
-  placeholder: {
+  resetButton: {
     width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: Colors.backgroundSecondary,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   content: {
     flex: 1,

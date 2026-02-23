@@ -9,8 +9,11 @@ import {
   TouchableOpacity,
   Platform,
   Alert,
+  ActivityIndicator,
+  RefreshControl,
+  ScrollView,
 } from 'react-native';
-import { X, Heart, Star, MapPin, Filter, Rocket, Undo2, Sparkles } from 'lucide-react-native';
+import { X, Heart, Star, MapPin, Filter, Rocket, Undo2, Sparkles, RefreshCw } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useI18n } from '@/hooks/i18n-context';
@@ -23,7 +26,7 @@ const { width: screenWidth } = Dimensions.get('window');
 const SWIPE_THRESHOLD = screenWidth * 0.25;
 
 export default function DiscoverScreen() {
-  const { potentialMatches, swipeUser, filters, swipeHistory } = useApp();
+  const { potentialMatches, swipeUser, filters, swipeHistory, isLoadingProfiles, refreshProfiles } = useApp();
   const { t } = useI18n();
   const { tier, features, remainingProfileViews, useDaily, remainingRightSwipes, useSuperLike } = useMembership();
   const router = useRouter();
@@ -321,30 +324,56 @@ export default function DiscoverScreen() {
         </TouchableOpacity>
       )}
 
-      {!currentUser ? (
+      {isLoadingProfiles && potentialMatches.length === 0 ? (
         <View style={styles.emptyContainer}>
-          <View style={styles.emptyIconWrap}>
-            <Heart size={40} color="#FF2D55" />
-          </View>
-          <Text style={styles.emptyText}>{t('No more profiles!')}</Text>
-          <Text style={styles.emptySubtext}>{t('Check back later for more matches')}</Text>
-          <TouchableOpacity
-            style={styles.emptyBoostBtn}
-            onPress={() => router.push('/premium' as any)}
-            testID="empty-upgrade"
-            activeOpacity={0.8}
-          >
-            <LinearGradient
-              colors={['#FF2D55', '#FF6B8A']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.emptyBoostGradient}
-            >
-              <Rocket size={16} color="#FFF" />
-              <Text style={styles.emptyBoostText}>{t('Boost visibility')}</Text>
-            </LinearGradient>
-          </TouchableOpacity>
+          <ActivityIndicator size="large" color="#FF2D55" />
+          <Text style={styles.loadingText}>{t('Finding people near you...')}</Text>
         </View>
+      ) : !currentUser ? (
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={isLoadingProfiles}
+              onRefresh={refreshProfiles}
+              tintColor="#FF2D55"
+              colors={['#FF2D55']}
+            />
+          }
+        >
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconWrap}>
+              <Heart size={40} color="#FF2D55" />
+            </View>
+            <Text style={styles.emptyText}>{t('No more profiles!')}</Text>
+            <Text style={styles.emptySubtext}>{t('Pull down to refresh or check back later')}</Text>
+            <TouchableOpacity
+              style={styles.refreshBtn}
+              onPress={refreshProfiles}
+              testID="refresh-profiles"
+              activeOpacity={0.8}
+            >
+              <RefreshCw size={18} color="#FF2D55" />
+              <Text style={styles.refreshBtnText}>{t('Refresh')}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={styles.emptyBoostBtn}
+              onPress={() => router.push('/premium' as any)}
+              testID="empty-upgrade"
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#FF2D55', '#FF6B8A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.emptyBoostGradient}
+              >
+                <Rocket size={16} color="#FFF" />
+                <Text style={styles.emptyBoostText}>{t('Boost visibility')}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : (
         <>
           <View style={styles.cardsContainer} testID="cards-container" accessibilityLabel="Cards">
@@ -636,6 +665,32 @@ const styles = StyleSheet.create({
     color: '#9CA3AF',
     textAlign: 'center',
     lineHeight: 22,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#9CA3AF',
+    marginTop: 16,
+    fontWeight: '500' as const,
+  },
+  emptyScrollContent: {
+    flex: 1,
+  },
+  refreshBtn: {
+    flexDirection: 'row' as const,
+    alignItems: 'center' as const,
+    gap: 8,
+    marginTop: 16,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    borderWidth: 2,
+    borderColor: '#FFE5EA',
+    backgroundColor: '#FFF',
+  },
+  refreshBtnText: {
+    fontSize: 15,
+    fontWeight: '600' as const,
+    color: '#FF2D55',
   },
   emptyBoostBtn: {
     marginTop: 20,
