@@ -15,7 +15,8 @@ export default function PaymentSuccessScreen() {
   const { reloadProfile } = useAuth();
   const { upgradeTier } = useMembership();
   const params = useLocalSearchParams();
-  const paramSessionId = typeof params.sessionId === 'string' ? params.sessionId : undefined;
+  const paramSessionId = typeof params.sessionId === 'string' ? params.sessionId : 
+    (typeof params.session_id === 'string' ? params.session_id : undefined);
   
   const [isVerifying, setIsVerifying] = useState(true);
   const [verified, setVerified] = useState(false);

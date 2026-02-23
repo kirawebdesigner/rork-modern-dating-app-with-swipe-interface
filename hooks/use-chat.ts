@@ -86,7 +86,12 @@ export function useRealtimeMessages(conversationId: string | null, currentUserId
     }, (payload) => {
       const row = payload.new as unknown as DbMessageRow;
       const msg = mapRow(row);
-      setMessages(prev => [...prev, msg]);
+      setMessages(prev => {
+        const exists = prev.some(m => m.id === msg.id);
+        if (exists) return prev;
+        const withoutTemp = prev.filter(m => !m.id.startsWith('temp-') || m.senderId !== msg.senderId || m.text !== msg.text);
+        return [...withoutTemp, msg];
+      });
     });
     channel.subscribe((status) => { if (status === 'SUBSCRIBED') console.log('[Chat] subscribed messages'); });
     channelRef.current = channel;
@@ -117,19 +122,38 @@ export function useRealtimeMessages(conversationId: string | null, currentUserId
       sanitized = sanitized.replace(re, '###');
     }
 
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const optimisticMsg: Message = {
+      id: tempId,
+      senderId: currentUserId,
+      receiverId: otherUserId ?? '',
+      text: sanitized,
+      timestamp: new Date(),
+      read: false,
+    };
+
+    setMessages(prev => [...prev, optimisticMsg]);
+    console.log('[Chat] Optimistic message added:', tempId);
+
     const insert = {
       conversation_id: conversationId,
       sender_id: currentUserId,
       content: sanitized,
     };
     try {
-      const { error } = await supabase.from('messages').insert(insert);
+      const { data, error } = await supabase.from('messages').insert(insert).select('id, conversation_id, sender_id, content, created_at').single();
       if (error) throw error;
+      if (data) {
+        const realMsg = mapRow(data as unknown as DbMessageRow);
+        setMessages(prev => prev.map(m => m.id === tempId ? realMsg : m));
+        console.log('[Chat] Optimistic message replaced with real:', data.id);
+      }
     } catch (e: any) {
       console.log('[Chat] Send message error:', e?.message);
+      setMessages(prev => prev.filter(m => m.id !== tempId));
       throw new Error('Failed to send message. Check your connection.');
     }
-  }, [conversationId, currentUserId]);
+  }, [conversationId, currentUserId, otherUserId, mapRow]);
 
   return { messages, loading, error, sendMessage };
 }

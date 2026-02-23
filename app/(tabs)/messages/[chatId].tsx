@@ -449,7 +449,7 @@ export default function ChatScreen() {
               />
             )}
 
-            <View style={[styles.composerContainer, { paddingBottom: Math.max(insets.bottom + 70, Platform.OS === 'ios' ? 100 : 90) }]}>
+            <View style={[styles.composerContainer, { paddingBottom: Math.max(insets.bottom + 8, 12) }]}>
               <View style={styles.inputWrapper}>
                 <TouchableOpacity style={styles.emojiBtn}>
                   <Smile size={22} color="#9CA3AF" />

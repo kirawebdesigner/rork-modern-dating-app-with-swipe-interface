@@ -112,7 +112,7 @@ export const upgradeProcedure = publicProcedure
     const successUrl = `${baseUrl}/payment-success`;
     const cancelUrl = `${baseUrl}/payment-cancel`;
     const errorUrl = `${baseUrl}/payment-error`;
-    const notifyUrl = `${baseUrl}/api/webhooks/arifpay`;
+    const notifyUrl = `${baseUrl}/webhooks/arifpay`;
 
     const email = phone.includes('@') ? phone : `${input.userId}@app.com`;
     const nonce = `${input.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
