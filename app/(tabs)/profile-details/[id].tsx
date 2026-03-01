@@ -161,12 +161,12 @@ export default function ProfileDetails() {
 
       let convId: string | null = null;
       if (existingParts && existingParts.length > 0) {
-        const group = existingParts.reduce<Record<string, number>>((acc, r: any) => {
+        const group = existingParts.reduce<Record<string, number>>((acc: Record<string, number>, r: any) => {
           const cid = String(r.conversation_id);
           acc[cid] = (acc[cid] ?? 0) + 1;
           return acc;
         }, {});
-        const found = Object.entries(group).find(([, count]: [string, number]) => count >= 2);
+        const found = Object.entries(group).find(([, count]) => (count as number) >= 2);
         if (found) convId = String(found[0]);
       }
 

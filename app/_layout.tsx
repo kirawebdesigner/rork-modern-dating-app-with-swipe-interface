@@ -38,8 +38,7 @@ function RootLayoutNav() {
       <Stack.Screen name="onboarding" />
       <Stack.Screen name="(auth)" />
       <Stack.Screen name="profile-setup" />
-      <Stack.Screen name="permissions/contacts" />
-      <Stack.Screen name="permissions/notifications" />
+      <Stack.Screen name="permissions" />
       <Stack.Screen name="(tabs)" />
       <Stack.Screen name="premium" options={{ presentation: "modal" }} />
       <Stack.Screen name="profile-settings" />
