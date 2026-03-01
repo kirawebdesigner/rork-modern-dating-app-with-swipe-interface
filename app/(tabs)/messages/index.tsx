@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, Image, SafeAreaView, StatusBar, TextInput, ScrollView } from 'react-native';
-import { MessageCircle, Crown, ChevronRight, Search, SlidersHorizontal, Sparkles } from 'lucide-react-native';
+import { MessageCircle, Search, SlidersHorizontal, Sparkles } from 'lucide-react-native';
 import { useMembership } from '@/hooks/membership-context';
 import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-context';

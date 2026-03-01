@@ -245,19 +245,19 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
         const sessionResult = await withTimeout(
           supabase.auth.getSession(),
           5000,
-          { data: { session: null }, error: null }
+          { data: { session: null }, error: null } as any
         );
         
         if (sessionResult?.data?.session?.user) {
-          currentUser = sessionResult.data.session.user;
+          currentUser = (sessionResult as any).data.session.user;
           console.log('[Auth] Got user from session:', currentUser.id);
         } else {
           const userResult = await withTimeout(
             supabase.auth.getUser(),
             5000,
-            null
+            null as any
           );
-          currentUser = userResult?.data?.user ?? null;
+          currentUser = (userResult as any)?.data?.user ?? null;
         }
         
         if (!currentUser && cachedProfile && cachedUserId) {
@@ -338,7 +338,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
 
     init();
 
-    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event) => {
+    const { data: subscription } = supabase.auth.onAuthStateChange(async (_event: string) => {
       if (!isMounted) return;
       if (!initDoneRef.current) {
         console.log('[Auth] Skipping onAuthStateChange before init completes');
@@ -542,7 +542,7 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
       if (profile.phone) {
         await AsyncStorage.setItem('user_phone', profile.phone);
       }
-      setUser((prev) => {
+      setUser((prev: AuthUser | null) => {
         if (!prev) return prev;
         return {
           ...prev,

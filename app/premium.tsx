@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -13,8 +13,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
-import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, Shield, Calendar, ChevronDown, Sparkles } from 'lucide-react-native';
-import Colors from '@/constants/colors';
+import { X, Check, Crown, Eye, Heart, Zap, MessageCircle, Filter, EyeOff, Star, Shield, Sparkles } from 'lucide-react-native';
 import GradientButton from '@/components/GradientButton';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
@@ -269,6 +268,7 @@ export default function PremiumScreen() {
 
   const selectedBillingOption = BILLING_OPTIONS.find(o => o.key === billingPeriod)!;
   const selectedTotalPrice = selectedTier !== 'free' ? getBillingPrice(tierData[selectedTier].priceMonthly, billingPeriod) : 0;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const selectedPerMonth = selectedTier !== 'free' ? getPerMonthPrice(tierData[selectedTier].priceMonthly, billingPeriod) : 0;
 
   return (
@@ -396,7 +396,6 @@ export default function PremiumScreen() {
                 {isSelected && (
                   <View style={styles.tierFeatures}>
                     {tierInfo.features.map((feature, index) => {
-                      const IconComponent = feature.icon;
                       return (
                         <View key={index} style={styles.featureRow}>
                           <View style={[styles.featureCheck, feature.included ? styles.featureCheckActive : styles.featureCheckDisabled]}>

@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, FlatList, TouchableOpacity, TextInput, KeyboardAvoidingView, Platform, SafeAreaView, ActivityIndicator, Alert, StatusBar, Image, Linking, ActionSheetIOS } from 'react-native';
-import { ChevronLeft, Send, ShieldAlert, MoreVertical, Smile, Mic, Check, Phone, Flag, Ban, Trash2 } from 'lucide-react-native';
+import { ChevronLeft, Send, ShieldAlert, MoreVertical, Smile, Mic, Check, Phone } from 'lucide-react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Colors from '@/constants/colors';
 import { useLocalSearchParams, useRouter } from 'expo-router';

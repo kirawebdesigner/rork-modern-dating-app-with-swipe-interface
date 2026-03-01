@@ -51,7 +51,7 @@ export default function ProfileDetails() {
   const router = useRouter();
   const { potentialMatches, blockUser, swipeUser } = useApp();
   const { user: me } = useAuth();
-  const { remainingProfileViews, tier, useDaily } = useMembership();
+  const { remainingProfileViews, tier, useDaily: consumeDaily } = useMembership();
   const { t } = useI18n();
 
   const [fetchedUser, setFetchedUser] = useState<User | null>(null);
@@ -113,7 +113,7 @@ export default function ProfileDetails() {
   useEffect(() => {
     if (user && !hasCountedRef.current) {
       hasCountedRef.current = true;
-      void useDaily('views').catch((e: unknown) =>
+      void consumeDaily('views').catch((e: unknown) =>
         console.log('[ProfileDetails] view count error', e),
       );
     }
@@ -166,7 +166,7 @@ export default function ProfileDetails() {
           acc[cid] = (acc[cid] ?? 0) + 1;
           return acc;
         }, {});
-        const found = Object.entries(group).find(([, count]) => count >= 2);
+        const found = Object.entries(group).find(([, count]: [string, number]) => count >= 2);
         if (found) convId = String(found[0]);
       }
 
@@ -534,7 +534,7 @@ export default function ProfileDetails() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => {
-                  const ok = await useDaily('compliments');
+                  const ok = await consumeDaily('compliments');
                   if (!ok) {
                     Alert.alert(
                       t('Limit reached'),

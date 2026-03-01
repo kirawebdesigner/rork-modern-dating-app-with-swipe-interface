@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, Platform, TextInput, Modal, Animated } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Switch, ScrollView, Alert, Platform, TextInput, Modal } from 'react-native';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
 import Colors from '@/constants/colors';

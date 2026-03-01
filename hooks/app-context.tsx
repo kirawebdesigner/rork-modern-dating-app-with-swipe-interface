@@ -954,7 +954,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
               })
             );
 
-            const validMatches = matchesWithUsers.filter((m): m is Match => m !== null);
+            const validMatches = matchesWithUsers.filter((m: Match | null): m is Match => m !== null);
             setMatches(validMatches);
             console.log('[App] updated matches state:', validMatches.length);
           }
