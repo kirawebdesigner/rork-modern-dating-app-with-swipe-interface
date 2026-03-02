@@ -50,40 +50,29 @@ const createTrpcClient = () => {
                 },
               });
               clearTimeout(timeoutId);
-              
+
               if (!response.ok) {
-                const text = await response.text();
-                console.log('[tRPC] Non-OK response:', response.status, text.slice(0, 300));
-                let errorBody: any;
-                try {
-                  errorBody = JSON.parse(text);
-                } catch {
-                  errorBody = {
-                    error: {
-                      message: text || `Server returned status ${response.status}`,
-                      data: { code: 'INTERNAL_SERVER_ERROR' },
-                    },
-                  };
-                }
-                return new Response(JSON.stringify(errorBody), {
-                  status: response.status,
-                  headers: { 'Content-Type': 'application/json' },
-                });
+                console.log('[tRPC] Non-OK response status:', response.status);
               }
-              
+
               return response;
             } catch (error: any) {
               console.log('[tRPC] Fetch error (network may be unavailable):', error?.message || error);
               const msg = error?.name === 'AbortError'
                 ? 'Request timed out. Please try again.'
                 : 'Network unavailable. Please check your connection.';
-              return new Response(
-                JSON.stringify({
-                  error: {
-                    message: msg,
-                    data: { code: 'INTERNAL_SERVER_ERROR' },
+              const trpcError = {
+                error: {
+                  message: msg,
+                  code: -32603,
+                  data: {
+                    code: 'INTERNAL_SERVER_ERROR',
+                    httpStatus: 503,
                   },
-                }),
+                },
+              };
+              return new Response(
+                JSON.stringify([trpcError]),
                 {
                   status: 503,
                   headers: { 'Content-Type': 'application/json' },
