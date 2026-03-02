@@ -38,7 +38,7 @@ export default protectedProcedure
     console.log("[tRPC] TEST MODE: Credits added successfully");
 
     return {
-      success: true as const,
+      success: true,
       amount: totalAmount,
       testMode: true,
       message: 'Credits added successfully (test mode)',
@@ -68,7 +68,7 @@ export default protectedProcedure
       console.log("[tRPC] Payment checkout created:", checkout);
 
       return {
-        success: true as const,
+        success: true,
         checkoutUrl: checkout.checkoutUrl,
         sessionId: checkout.sessionId,
         transactionId: checkout.transactionId,

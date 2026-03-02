@@ -11,5 +11,5 @@ export default protectedProcedure
 
     console.log("[tRPC] Unlock theme for", userId, input.theme);
 
-    return { success: true as const };
+    return { success: true };
   });

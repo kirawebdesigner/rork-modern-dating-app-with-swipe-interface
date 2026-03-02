@@ -72,7 +72,7 @@ const createTrpcClient = () => {
                 },
               };
               return new Response(
-                JSON.stringify([trpcError]),
+                JSON.stringify(trpcError),
                 {
                   status: 503,
                   headers: { 'Content-Type': 'application/json' },

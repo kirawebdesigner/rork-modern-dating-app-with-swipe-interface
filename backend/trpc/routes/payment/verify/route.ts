@@ -83,7 +83,7 @@ export default publicProcedure
         .maybeSingle();
 
       return {
-        success: true as const,
+        success: true,
         status: verification.status,
         amount: verification.amount,
         transactionId: verification.transactionId,

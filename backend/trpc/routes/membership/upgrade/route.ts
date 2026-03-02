@@ -58,13 +58,13 @@ export const upgradeProcedure = publicProcedure
     if (amount === 0 || input.tier === 'free') {
       console.log("[tRPC Upgrade] Free tier, no payment required");
       return {
-        success: true as const,
+        success: true,
         newTier: input.tier,
-        requiresPayment: false as const,
-        paymentUrl: null as string | null,
-        sessionId: null as string | null,
+        requiresPayment: false,
+        paymentUrl: null,
+        sessionId: null,
         amount: 0,
-        error: null as string | null,
+        error: null,
       };
     }
 
@@ -247,13 +247,13 @@ export const upgradeProcedure = publicProcedure
     console.log("[tRPC Upgrade] Payment URL:", paymentUrl);
 
     return {
-      success: true as const,
-      requiresPayment: true as const,
+      success: true,
+      requiresPayment: true,
       paymentUrl,
       sessionId,
       amount,
       newTier: input.tier,
-      error: null as string | null,
+      error: null,
     };
   });
 
