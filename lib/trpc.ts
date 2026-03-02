@@ -40,7 +40,7 @@ const createTrpcClient = () => {
           fetch: async (input, init) => {
             try {
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 15000);
+              const timeoutId = setTimeout(() => controller.abort(), 30000);
               const response = await fetch(input, {
                 ...init,
                 signal: controller.signal,
@@ -50,13 +50,45 @@ const createTrpcClient = () => {
                 },
               });
               clearTimeout(timeoutId);
+              
+              if (!response.ok) {
+                const text = await response.text();
+                console.log('[tRPC] Non-OK response:', response.status, text.slice(0, 300));
+                let errorBody: any;
+                try {
+                  errorBody = JSON.parse(text);
+                } catch {
+                  errorBody = {
+                    error: {
+                      message: text || `Server returned status ${response.status}`,
+                      data: { code: 'INTERNAL_SERVER_ERROR' },
+                    },
+                  };
+                }
+                return new Response(JSON.stringify(errorBody), {
+                  status: response.status,
+                  headers: { 'Content-Type': 'application/json' },
+                });
+              }
+              
               return response;
-            } catch (error) {
-              console.log('[tRPC] Fetch error (network may be unavailable):', error);
-              return new Response(JSON.stringify({ error: { message: 'Network unavailable' } }), {
-                status: 503,
-                headers: { 'Content-Type': 'application/json' },
-              });
+            } catch (error: any) {
+              console.log('[tRPC] Fetch error (network may be unavailable):', error?.message || error);
+              const msg = error?.name === 'AbortError'
+                ? 'Request timed out. Please try again.'
+                : 'Network unavailable. Please check your connection.';
+              return new Response(
+                JSON.stringify({
+                  error: {
+                    message: msg,
+                    data: { code: 'INTERNAL_SERVER_ERROR' },
+                  },
+                }),
+                {
+                  status: 503,
+                  headers: { 'Content-Type': 'application/json' },
+                },
+              );
             }
           },
         }),
