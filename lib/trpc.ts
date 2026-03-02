@@ -20,6 +20,27 @@ const getBaseUrl = () => {
   return normalizedUrl;
 };
 
+const buildSuperjsonErrorResponse = (message: string, httpStatus: number): Response => {
+  const errorPayload = {
+    error: {
+      message,
+      code: -32603,
+      data: {
+        code: 'INTERNAL_SERVER_ERROR',
+        httpStatus,
+      },
+    },
+  };
+  const serialized = superjson.serialize(errorPayload);
+  return new Response(
+    JSON.stringify({ result: serialized }),
+    {
+      status: httpStatus,
+      headers: { 'Content-Type': 'application/json' },
+    },
+  );
+};
+
 const createTrpcClient = () => {
   let apiUrl: string;
   try {
@@ -53,6 +74,22 @@ const createTrpcClient = () => {
 
               if (!response.ok) {
                 console.log('[tRPC] Non-OK response status:', response.status);
+                const text = await response.text();
+                console.log('[tRPC] Response body preview:', text.slice(0, 300));
+
+                try {
+                  JSON.parse(text);
+                  return new Response(text, {
+                    status: response.status,
+                    headers: response.headers,
+                  });
+                } catch {
+                  console.log('[tRPC] Non-JSON error response, wrapping as tRPC error');
+                  return buildSuperjsonErrorResponse(
+                    `Server returned status ${response.status}`,
+                    response.status,
+                  );
+                }
               }
 
               return response;
@@ -61,23 +98,7 @@ const createTrpcClient = () => {
               const msg = error?.name === 'AbortError'
                 ? 'Request timed out. Please try again.'
                 : 'Network unavailable. Please check your connection.';
-              const trpcError = {
-                error: {
-                  message: msg,
-                  code: -32603,
-                  data: {
-                    code: 'INTERNAL_SERVER_ERROR',
-                    httpStatus: 503,
-                  },
-                },
-              };
-              return new Response(
-                JSON.stringify(trpcError),
-                {
-                  status: 503,
-                  headers: { 'Content-Type': 'application/json' },
-                },
-              );
+              return buildSuperjsonErrorResponse(msg, 503);
             }
           },
         }),
@@ -85,7 +106,6 @@ const createTrpcClient = () => {
     });
   } catch (error) {
     console.error('[tRPC] Failed to create client:', error);
-    // Return a minimal client that won't crash
     return trpc.createClient({
       links: [
         httpLink<AppRouter>({

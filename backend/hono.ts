@@ -37,6 +37,11 @@ app.onError((err, c) => {
   console.error("[Hono] Error:", err);
   console.error("[Hono] Error stack:", err.stack);
 
+  if (c.req.path.startsWith('/trpc') || c.req.path.startsWith('/api/trpc')) {
+    console.log("[Hono] tRPC route error - letting tRPC handle it");
+    throw err;
+  }
+
   return c.json(
     {
       error: true,
