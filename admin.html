@@ -1,0 +1,1138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zewijuna Admin Dashboard</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap"
+        rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        :root {
+            --bg: #0a0a1a;
+            --bg2: #12122a;
+            --card: #1a1a3e;
+            --card-h: #222255;
+            --bdr: rgba(255, 255, 255, .06);
+            --t1: #f0f0ff;
+            --t2: #8888aa;
+            --t3: #555577;
+            --pink: #ff4d8d;
+            --purple: #a855f7;
+            --blue: #3b82f6;
+            --cyan: #22d3ee;
+            --green: #22c55e;
+            --orange: #f97316;
+            --gold: #fbbf24;
+            --r: 16px;
+            --rs: 10px
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--bg);
+            color: var(--t1);
+            min-height: 100vh
+        }
+
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at 20% 80%, rgba(255, 77, 141, .04) 0%, transparent 50%), radial-gradient(circle at 80% 20%, rgba(168, 85, 247, .04) 0%, transparent 50%);
+            z-index: -1
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(20px)
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0)
+            }
+        }
+
+        @keyframes spin {
+            to {
+                transform: rotate(360deg)
+            }
+        }
+
+        #login-screen {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 20px
+        }
+
+        .login-card {
+            background: var(--card);
+            border: 1px solid var(--bdr);
+            border-radius: 24px;
+            padding: 48px;
+            width: 100%;
+            max-width: 440px;
+            box-shadow: 0 4px 24px rgba(0, 0, 0, .3);
+            animation: fadeIn .6s ease-out
+        }
+
+        .login-card h1 {
+            font-size: 28px;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--pink), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            text-align: center;
+            margin-bottom: 8px
+        }
+
+        .login-card .sub {
+            color: var(--t2);
+            font-size: 14px;
+            text-align: center;
+            margin-bottom: 32px
+        }
+
+        .fg {
+            margin-bottom: 20px
+        }
+
+        .fg label {
+            display: block;
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--t2);
+            margin-bottom: 8px;
+            text-transform: uppercase;
+            letter-spacing: .5px
+        }
+
+        .fg input,
+        .filter-input,
+        .search-box {
+            width: 100%;
+            padding: 12px 14px;
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid var(--bdr);
+            border-radius: var(--rs);
+            color: var(--t1);
+            font-size: 14px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            transition: all .3s
+        }
+
+        .fg input:focus,
+        .filter-input:focus,
+        .search-box:focus {
+            border-color: var(--pink);
+            box-shadow: 0 0 0 3px rgba(255, 77, 141, .1)
+        }
+
+        .fg input::placeholder,
+        .search-box::placeholder {
+            color: var(--t3)
+        }
+
+        .btn-pink {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, var(--pink), #ff6b9d);
+            border: none;
+            border-radius: var(--rs);
+            color: #fff;
+            font-size: 15px;
+            font-weight: 600;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all .3s;
+            margin-top: 8px
+        }
+
+        .btn-pink:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(255, 77, 141, .3)
+        }
+
+        .btn-pink:disabled {
+            opacity: .6;
+            cursor: not-allowed;
+            transform: none
+        }
+
+        .login-error {
+            color: #ff4d4d;
+            font-size: 13px;
+            margin-top: 12px;
+            text-align: center;
+            display: none
+        }
+
+        .hint {
+            margin-top: 20px;
+            padding: 12px;
+            background: rgba(168, 85, 247, .1);
+            border-radius: var(--rs);
+            border: 1px solid rgba(168, 85, 247, .2);
+            font-size: 12px;
+            color: var(--t2);
+            line-height: 1.5
+        }
+
+        .hint code {
+            color: var(--purple);
+            background: rgba(168, 85, 247, .15);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px
+        }
+
+        #dashboard {
+            display: none
+        }
+
+        .hdr {
+            padding: 16px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            border-bottom: 1px solid var(--bdr);
+            background: rgba(10, 10, 26, .8);
+            backdrop-filter: blur(20px);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            flex-wrap: wrap;
+            gap: 12px
+        }
+
+        .hdr h1 {
+            font-size: 20px;
+            font-weight: 700;
+            background: linear-gradient(135deg, var(--pink), var(--purple));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent
+        }
+
+        .hdr-badge {
+            background: rgba(255, 77, 141, .15);
+            color: var(--pink);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            border-radius: 12px;
+            text-transform: uppercase
+        }
+
+        .hdr-r {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex-wrap: wrap
+        }
+
+        .hdr-r .ts {
+            font-size: 12px;
+            color: var(--t3)
+        }
+
+        .btn-s {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 14px;
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid var(--bdr);
+            border-radius: var(--rs);
+            color: var(--t2);
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer;
+            transition: all .3s
+        }
+
+        .btn-s:hover {
+            background: rgba(255, 255, 255, .08);
+            color: var(--t1)
+        }
+
+        .btn-out {
+            padding: 8px 14px;
+            background: rgba(255, 77, 77, .1);
+            border: 1px solid rgba(255, 77, 77, .2);
+            border-radius: var(--rs);
+            color: #ff6b6b;
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer
+        }
+
+        .content {
+            padding: 24px 32px;
+            max-width: 1440px;
+            margin: 0 auto
+        }
+
+        .sec {
+            font-size: 17px;
+            font-weight: 700;
+            margin: 24px 0 16px;
+            display: flex;
+            align-items: center;
+            gap: 10px
+        }
+
+        .sec::before {
+            content: '';
+            width: 4px;
+            height: 20px;
+            border-radius: 2px;
+            background: linear-gradient(135deg, var(--pink), var(--purple))
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 24px
+        }
+
+        .card {
+            background: var(--card);
+            border: 1px solid var(--bdr);
+            border-radius: var(--r);
+            padding: 20px;
+            position: relative;
+            overflow: hidden;
+            transition: all .3s;
+            animation: fadeIn .5s ease-out both
+        }
+
+        .card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, .3)
+        }
+
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 3px
+        }
+
+        .card.pk::before {
+            background: linear-gradient(135deg, var(--pink), #ff6b9d)
+        }
+
+        .card.pp::before {
+            background: linear-gradient(135deg, var(--purple), #c084fc)
+        }
+
+        .card.bl::before {
+            background: linear-gradient(135deg, var(--blue), #60a5fa)
+        }
+
+        .card.gn::before {
+            background: linear-gradient(135deg, var(--green), #4ade80)
+        }
+
+        .card.gd::before {
+            background: linear-gradient(135deg, var(--gold), #fde68a)
+        }
+
+        .card.cy::before {
+            background: linear-gradient(135deg, var(--cyan), #67e8f9)
+        }
+
+        .card .ic {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-bottom: 12px
+        }
+
+        .card.pk .ic {
+            background: rgba(255, 77, 141, .15)
+        }
+
+        .card.pp .ic {
+            background: rgba(168, 85, 247, .15)
+        }
+
+        .card.bl .ic {
+            background: rgba(59, 130, 246, .15)
+        }
+
+        .card.gn .ic {
+            background: rgba(34, 197, 94, .15)
+        }
+
+        .card.gd .ic {
+            background: rgba(251, 191, 36, .15)
+        }
+
+        .card.cy .ic {
+            background: rgba(34, 211, 238, .15)
+        }
+
+        .card .lb {
+            font-size: 12px;
+            color: var(--t2);
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            margin-bottom: 6px
+        }
+
+        .card .vl {
+            font-size: 28px;
+            font-weight: 800;
+            line-height: 1
+        }
+
+        .card.pk .vl {
+            color: var(--pink)
+        }
+
+        .card.pp .vl {
+            color: var(--purple)
+        }
+
+        .card.bl .vl {
+            color: var(--blue)
+        }
+
+        .card.gn .vl {
+            color: var(--green)
+        }
+
+        .card.gd .vl {
+            color: var(--gold)
+        }
+
+        .card.cy .vl {
+            color: var(--cyan)
+        }
+
+        .card .sb {
+            font-size: 11px;
+            color: var(--t3);
+            margin-top: 4px
+        }
+
+        .cgrid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(380px, 1fr));
+            gap: 20px;
+            margin-bottom: 24px
+        }
+
+        .ccard {
+            background: var(--card);
+            border: 1px solid var(--bdr);
+            border-radius: var(--r);
+            padding: 20px
+        }
+
+        .ccard h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--t2)
+        }
+
+        .cwrap {
+            position: relative;
+            height: 260px
+        }
+
+        .tcard {
+            background: var(--card);
+            border: 1px solid var(--bdr);
+            border-radius: var(--r);
+            padding: 20px;
+            margin-bottom: 24px;
+            overflow: hidden
+        }
+
+        .tcard h3 {
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 16px;
+            color: var(--t2)
+        }
+
+        .filters {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            margin-bottom: 16px;
+            align-items: center
+        }
+
+        .filters select {
+            padding: 10px 12px;
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid var(--bdr);
+            border-radius: var(--rs);
+            color: var(--t1);
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            outline: none;
+            cursor: pointer;
+            min-width: 140px
+        }
+
+        .filters select:focus {
+            border-color: var(--pink)
+        }
+
+        .search-box {
+            max-width: 300px
+        }
+
+        .tscroll {
+            overflow-x: auto
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px
+        }
+
+        thead th {
+            text-align: left;
+            padding: 10px 12px;
+            font-weight: 600;
+            color: var(--t2);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            font-size: 10px;
+            border-bottom: 1px solid var(--bdr);
+            white-space: nowrap;
+            cursor: pointer;
+            user-select: none
+        }
+
+        thead th:hover {
+            color: var(--t1)
+        }
+
+        tbody td {
+            padding: 10px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, .03);
+            white-space: nowrap
+        }
+
+        tbody tr:hover {
+            background: rgba(255, 255, 255, .02)
+        }
+
+        .badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: .3px
+        }
+
+        .b-free {
+            background: rgba(136, 136, 170, .15);
+            color: var(--t2)
+        }
+
+        .b-silver {
+            background: rgba(192, 192, 192, .15);
+            color: #c0c0c0
+        }
+
+        .b-gold {
+            background: rgba(251, 191, 36, .15);
+            color: var(--gold)
+        }
+
+        .b-vip {
+            background: rgba(255, 77, 141, .15);
+            color: var(--pink)
+        }
+
+        .b-ok {
+            background: rgba(34, 197, 94, .15);
+            color: var(--green)
+        }
+
+        .b-no {
+            background: rgba(249, 115, 22, .15);
+            color: var(--orange)
+        }
+
+        .b-m {
+            background: rgba(59, 130, 246, .12);
+            color: var(--blue)
+        }
+
+        .b-f {
+            background: rgba(255, 77, 141, .12);
+            color: var(--pink)
+        }
+
+        .pag {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 16px;
+            flex-wrap: wrap;
+            gap: 8px
+        }
+
+        .pag span {
+            font-size: 13px;
+            color: var(--t2)
+        }
+
+        .pag-btns {
+            display: flex;
+            gap: 6px
+        }
+
+        .pag-btns button {
+            padding: 6px 14px;
+            background: rgba(255, 255, 255, .05);
+            border: 1px solid var(--bdr);
+            border-radius: 8px;
+            color: var(--t2);
+            font-size: 12px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer
+        }
+
+        .pag-btns button:hover:not(:disabled) {
+            background: rgba(255, 255, 255, .1);
+            color: var(--t1)
+        }
+
+        .pag-btns button:disabled {
+            opacity: .4;
+            cursor: not-allowed
+        }
+
+        .pag-btns button.active {
+            background: var(--pink);
+            color: #fff;
+            border-color: var(--pink)
+        }
+
+        .loading {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 10, 26, .9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            flex-direction: column;
+            gap: 16px
+        }
+
+        .loading.on {
+            display: flex
+        }
+
+        .spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(255, 77, 141, .15);
+            border-top-color: var(--pink);
+            border-radius: 50%;
+            animation: spin .8s linear infinite
+        }
+
+        .loading p {
+            color: var(--t2);
+            font-size: 14px
+        }
+
+        .user-detail {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 10, 26, .85);
+            backdrop-filter: blur(10px);
+            z-index: 200;
+            align-items: center;
+            justify-content: center;
+            padding: 20px
+        }
+
+        .user-detail.on {
+            display: flex
+        }
+
+        .ud-card {
+            background: var(--card);
+            border: 1px solid var(--bdr);
+            border-radius: 20px;
+            padding: 32px;
+            max-width: 600px;
+            width: 100%;
+            max-height: 85vh;
+            overflow-y: auto;
+            position: relative;
+            animation: fadeIn .3s ease-out
+        }
+
+        .ud-close {
+            position: absolute;
+            top: 16px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: var(--t2);
+            font-size: 20px;
+            cursor: pointer;
+            padding: 4px 8px
+        }
+
+        .ud-close:hover {
+            color: var(--t1)
+        }
+
+        .ud-name {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 4px
+        }
+
+        .ud-email {
+            font-size: 14px;
+            color: var(--t2);
+            margin-bottom: 20px
+        }
+
+        .ud-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px
+        }
+
+        .ud-field {
+            padding: 12px;
+            background: rgba(255, 255, 255, .03);
+            border-radius: var(--rs);
+            border: 1px solid rgba(255, 255, 255, .04)
+        }
+
+        .ud-field .uf-label {
+            font-size: 11px;
+            color: var(--t3);
+            text-transform: uppercase;
+            letter-spacing: .5px;
+            margin-bottom: 4px
+        }
+
+        .ud-field .uf-value {
+            font-size: 14px;
+            font-weight: 500;
+            word-break: break-all
+        }
+
+        .export-btn {
+            padding: 8px 14px;
+            background: rgba(34, 197, 94, .15);
+            border: 1px solid rgba(34, 197, 94, .3);
+            border-radius: var(--rs);
+            color: var(--green);
+            font-size: 13px;
+            font-family: 'Inter', sans-serif;
+            cursor: pointer
+        }
+
+        .export-btn:hover {
+            background: rgba(34, 197, 94, .25)
+        }
+
+        @media(max-width:768px) {
+            .content {
+                padding: 16px
+            }
+
+            .grid {
+                grid-template-columns: repeat(2, 1fr);
+                gap: 10px
+            }
+
+            .cgrid {
+                grid-template-columns: 1fr
+            }
+
+            .card .vl {
+                font-size: 22px
+            }
+
+            .hdr {
+                padding: 12px 16px
+            }
+
+            .filters {
+                flex-direction: column
+            }
+
+            .search-box {
+                max-width: 100%
+            }
+
+            .ud-grid {
+                grid-template-columns: 1fr
+            }
+        }
+
+        @media(max-width:480px) {
+            .grid {
+                grid-template-columns: 1fr
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="loading" id="loader">
+        <div class="spinner"></div>
+        <p>Loading dashboard...</p>
+    </div>
+
+    <div class="user-detail" id="userDetail" onclick="if(event.target===this)closeDetail()">
+        <div class="ud-card" id="udCard"><button class="ud-close" onclick="closeDetail()">✕</button>
+            <div id="udContent"></div>
+        </div>
+    </div>
+
+    <div id="login-screen">
+        <div class="login-card">
+            <h1>💕 Zewijuna Admin</h1>
+            <p class="sub">Enter your Supabase credentials to access analytics</p>
+            <form id="loginForm">
+                <div class="fg"><label>Supabase URL</label><input type="url" id="sbUrl"
+                        placeholder="https://xxxxx.supabase.co" required></div>
+                <div class="fg"><label>Service Role Key</label><input type="password" id="sbKey"
+                        placeholder="eyJhbGciOiJIUzI1NiIs..." required></div>
+                <button type="submit" class="btn-pink" id="connectBtn">Connect to Dashboard</button>
+                <p class="login-error" id="loginErr"></p>
+            </form>
+            <div class="hint">⚠️ Use the <strong>Service Role Key</strong> (not anon key) to bypass RLS.<br>Find it in:
+                <code>Settings → API → service_role</code></div>
+        </div>
+    </div>
+
+    <div id="dashboard">
+        <header class="hdr">
+            <div style="display:flex;align-items:center;gap:14px">
+                <h1>💕 Zewijuna</h1><span class="hdr-badge">Admin</span>
+            </div>
+            <div class="hdr-r">
+                <span class="ts" id="lastUp"></span>
+                <button class="btn-s" id="refBtn" onclick="loadAll()">🔄 Refresh</button>
+                <button class="btn-out" onclick="logout()">Logout</button>
+            </div>
+        </header>
+        <div class="content">
+
+            <h2 class="sec">Overview</h2>
+            <div class="grid" id="statsGrid"></div>
+
+            <h2 class="sec">Analytics</h2>
+            <div class="cgrid">
+                <div class="ccard">
+                    <h3>📊 Membership Distribution</h3>
+                    <div class="cwrap"><canvas id="chMem"></canvas></div>
+                </div>
+                <div class="ccard">
+                    <h3>👫 Gender Distribution</h3>
+                    <div class="cwrap"><canvas id="chGen"></canvas></div>
+                </div>
+                <div class="ccard">
+                    <h3>📈 Daily Signups (30 Days)</h3>
+                    <div class="cwrap"><canvas id="chSig"></canvas></div>
+                </div>
+                <div class="ccard">
+                    <h3>💰 Daily Revenue (30 Days)</h3>
+                    <div class="cwrap"><canvas id="chRev"></canvas></div>
+                </div>
+            </div>
+
+            <h2 class="sec">Engagement</h2>
+            <div class="grid" id="engGrid"></div>
+
+            <div class="cgrid">
+                <div class="ccard">
+                    <h3>🏙️ Top Cities</h3>
+                    <div class="cwrap"><canvas id="chCity"></canvas></div>
+                </div>
+                <div class="ccard">
+                    <h3>💰 Revenue by Tier</h3>
+                    <div class="cwrap"><canvas id="chTRev"></canvas></div>
+                </div>
+            </div>
+
+            <h2 class="sec">All Users</h2>
+            <div class="tcard">
+                <div
+                    style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;flex-wrap:wrap;gap:10px">
+                    <h3 style="margin:0">👥 User Management (<span id="userCount">0</span> users)</h3>
+                    <button class="export-btn" onclick="exportCSV()">📥 Export CSV</button>
+                </div>
+                <div class="filters">
+                    <input type="text" class="search-box" id="searchBox" placeholder="🔍 Search by name, email, city..."
+                        oninput="filterUsers()">
+                    <select id="fTier" onchange="filterUsers()">
+                        <option value="">All Tiers</option>
+                        <option value="free">Free</option>
+                        <option value="silver">Silver</option>
+                        <option value="gold">Gold</option>
+                        <option value="vip">VIP</option>
+                    </select>
+                    <select id="fGender" onchange="filterUsers()">
+                        <option value="">All Genders</option>
+                        <option value="boy">Male</option>
+                        <option value="girl">Female</option>
+                    </select>
+                    <select id="fStatus" onchange="filterUsers()">
+                        <option value="">All Profiles</option>
+                        <option value="complete">Complete</option>
+                        <option value="incomplete">Incomplete</option>
+                    </select>
+                    <select id="fSort" onchange="filterUsers()">
+                        <option value="newest">Newest First</option>
+                        <option value="oldest">Oldest First</option>
+                        <option value="name">Name A-Z</option>
+                        <option value="active">Recently Active</option>
+                    </select>
+                </div>
+                <div class="tscroll">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Name</th>
+                                <th>Email</th>
+                                <th>Phone</th>
+                                <th>Gender</th>
+                                <th>Age</th>
+                                <th>City</th>
+                                <th>Tier</th>
+                                <th>Profile</th>
+                                <th>Active</th>
+                                <th>Joined</th>
+                                <th>Details</th>
+                            </tr>
+                        </thead>
+                        <tbody id="usersTbody"></tbody>
+                    </table>
+                </div>
+                <div class="pag"><span id="pagInfo">Showing 0-0 of 0</span>
+                    <div class="pag-btns" id="pagBtns"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        let db = null, CH = {}, allUsers = [], filteredUsers = [], currentPage = 1; const PER_PAGE = 25;
+        const sUrl = localStorage.getItem('zw_url'), sKey = localStorage.getItem('zw_key');
+        if (sUrl && sKey) { document.getElementById('sbUrl').value = sUrl; document.getElementById('sbKey').value = sKey }
+
+        document.getElementById('loginForm').addEventListener('submit', async e => {
+            e.preventDefault(); const url = document.getElementById('sbUrl').value.trim(), key = document.getElementById('sbKey').value.trim(), btn = document.getElementById('connectBtn'), err = document.getElementById('loginErr');
+            btn.disabled = true; btn.textContent = 'Connecting...'; err.style.display = 'none';
+            try {
+                db = window.supabase.createClient(url, key); const { count, error } = await db.from('profiles').select('*', { count: 'exact', head: true }); if (error) throw error;
+                localStorage.setItem('zw_url', url); localStorage.setItem('zw_key', key);
+                document.getElementById('login-screen').style.display = 'none'; document.getElementById('dashboard').style.display = 'block'; await loadAll();
+            } catch (e) { err.textContent = 'Connection failed: ' + (e.message || 'Invalid credentials'); err.style.display = 'block' }
+            finally { btn.disabled = false; btn.textContent = 'Connect to Dashboard' }
+        });
+        if (sUrl && sKey) document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+
+        function logout() { localStorage.removeItem('zw_url'); localStorage.removeItem('zw_key'); location.reload() }
+        function fmtN(n) { if (n == null) return '0'; if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'; if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'; return n.toLocaleString() }
+        function fmtC(n) { return 'ETB ' + Number(n || 0).toLocaleString('en-US', { minimumFractionDigits: 2 }) }
+        function sow() { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(d.getDate() - d.getDay()); return d }
+        function som() { const d = new Date(); d.setHours(0, 0, 0, 0); d.setDate(1); return d }
+        function fmtD(d) { return d ? new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) : '-' }
+        function fmtRel(d) { if (!d) return '-'; const ms = Date.now() - new Date(d).getTime(), m = Math.floor(ms / 60000); if (m < 60) return m + 'm ago'; const h = Math.floor(m / 60); if (h < 24) return h + 'h ago'; return Math.floor(h / 24) + 'd ago' }
+
+        async function loadAll() {
+            document.getElementById('loader').classList.add('on');
+            try {
+                await Promise.all([loadStats(), loadEng(), loadCharts(), loadAllUsers()]);
+                document.getElementById('lastUp').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+            } catch (e) { console.error(e) }
+            document.getElementById('loader').classList.remove('on')
+        }
+
+        async function loadStats() {
+            const [t, f, s, g, v, td, wk, mo, a24] = await Promise.all([
+                db.from('profiles').select('*', { count: 'exact', head: true }),
+                db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'free'),
+                db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'silver'),
+                db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'gold'),
+                db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'vip'),
+                db.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', new Date(new Date().setHours(0, 0, 0, 0)).toISOString()),
+                db.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', sow().toISOString()),
+                db.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', som().toISOString()),
+                db.from('profiles').select('*', { count: 'exact', head: true }).gte('last_active', new Date(Date.now() - 864e5).toISOString())]);
+            const { data: rv } = await db.from('payment_transactions').select('amount').eq('status', 'completed');
+            const rev = (rv || []).reduce((s, r) => s + Number(r.amount), 0), paid = (s.count || 0) + (g.count || 0) + (v.count || 0);
+            const items = [
+                { i: '👥', l: 'Total Users', v: fmtN(t.count), s: fmtN(td.count) + ' today', c: 'pk' },
+                { i: '🆓', l: 'Free Users', v: fmtN(f.count), s: ((f.count / (t.count || 1)) * 100).toFixed(1) + '%', c: 'bl' },
+                { i: '💎', l: 'Paid Users', v: fmtN(paid), s: ((paid / (t.count || 1)) * 100).toFixed(1) + '% conversion', c: 'pp' },
+                { i: '🥈', l: 'Silver', v: fmtN(s.count), s: 'subscribers', c: 'cy' },
+                { i: '🥇', l: 'Gold', v: fmtN(g.count), s: 'subscribers', c: 'gd' },
+                { i: '👑', l: 'VIP', v: fmtN(v.count), s: 'subscribers', c: 'pk' },
+                { i: '💰', l: 'Revenue', v: fmtC(rev), s: (rv?.length || 0) + ' payments', c: 'gn' },
+                { i: '📅', l: 'This Week', v: fmtN(wk.count), s: 'signups', c: 'bl' },
+                { i: '📆', l: 'This Month', v: fmtN(mo.count), s: 'signups', c: 'pp' },
+                { i: '🟢', l: 'Active 24h', v: fmtN(a24.count), s: 'online', c: 'gn' }];
+            document.getElementById('statsGrid').innerHTML = items.map(s => `<div class="card ${s.c}"><div class="ic">${s.i}</div><div class="lb">${s.l}</div><div class="vl">${s.v}</div><div class="sb">${s.s}</div></div>`).join('')
+        }
+
+        async function loadEng() {
+            const [sw, lk, sl, mt, cv, mg, rf, pv] = await Promise.all([
+                db.from('swipes').select('*', { count: 'exact', head: true }),
+                db.from('swipes').select('*', { count: 'exact', head: true }).eq('action', 'like'),
+                db.from('swipes').select('*', { count: 'exact', head: true }).eq('action', 'superlike'),
+                db.from('matches').select('*', { count: 'exact', head: true }),
+                db.from('conversations').select('*', { count: 'exact', head: true }),
+                db.from('messages').select('*', { count: 'exact', head: true }),
+                db.from('referrals').select('*', { count: 'exact', head: true }),
+                db.from('profile_views').select('*', { count: 'exact', head: true })]);
+            const items = [
+                { i: '👆', l: 'Swipes', v: fmtN(sw.count), s: fmtN(lk.count) + ' likes', c: 'pk' },
+                { i: '⭐', l: 'Super Likes', v: fmtN(sl.count), s: 'sent', c: 'gd' },
+                { i: '💕', l: 'Matches', v: fmtN(mt.count), s: 'connections', c: 'pp' },
+                { i: '💬', l: 'Messages', v: fmtN(mg.count), s: fmtN(cv.count) + ' convos', c: 'bl' },
+                { i: '👀', l: 'Profile Views', v: fmtN(pv.count), s: 'views', c: 'cy' },
+                { i: '🔗', l: 'Referrals', v: fmtN(rf.count), s: 'used', c: 'gn' }];
+            document.getElementById('engGrid').innerHTML = items.map(s => `<div class="card ${s.c}"><div class="ic">${s.i}</div><div class="lb">${s.l}</div><div class="vl">${s.v}</div><div class="sb">${s.s}</div></div>`).join('')
+        }
+
+        async function loadCharts() {
+            const [fr, sr, gr, vr] = await Promise.all([db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'free'), db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'silver'), db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'gold'), db.from('memberships').select('*', { count: 'exact', head: true }).eq('tier', 'vip')]);
+            const [mr, fmr] = await Promise.all([db.from('profiles').select('*', { count: 'exact', head: true }).eq('gender', 'boy'), db.from('profiles').select('*', { count: 'exact', head: true }).eq('gender', 'girl')]);
+            mkDo('chMem', ['Free', 'Silver', 'Gold', 'VIP'], [fr.count || 0, sr.count || 0, gr.count || 0, vr.count || 0], ['#8888aa', '#c0c0c0', '#fbbf24', '#ff4d8d']);
+            mkDo('chGen', ['Male', 'Female'], [mr.count || 0, fmr.count || 0], ['#3b82f6', '#ff4d8d']);
+            const ago = new Date(Date.now() - 30 * 864e5).toISOString();
+            const { data: sd } = await db.from('profiles').select('created_at').gte('created_at', ago).order('created_at', { ascending: true });
+            const sg = {}; (sd || []).forEach(p => { const d = new Date(p.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); sg[d] = (sg[d] || 0) + 1 });
+            const lb = [], vl = []; for (let i = 29; i >= 0; i--) { const d = new Date(Date.now() - i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); lb.push(d); vl.push(sg[d] || 0) }
+            mkLine('chSig', lb, vl, '#a855f7');
+            const { data: rd } = await db.from('payment_transactions').select('amount,completed_at').eq('status', 'completed').gte('completed_at', ago).order('completed_at', { ascending: true });
+            const rg = {}; (rd || []).forEach(p => { const d = new Date(p.completed_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); rg[d] = (rg[d] || 0) + Number(p.amount) });
+            const rl = [], rv = []; for (let i = 29; i >= 0; i--) { const d = new Date(Date.now() - i * 864e5).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }); rl.push(d); rv.push(rg[d] || 0) }
+            mkBar('chRev', rl, rv, 'rgba(34,197,94,.6)', '#22c55e');
+            const { data: cd } = await db.from('profiles').select('city'); const cc = {}; (cd || []).forEach(p => { const c = p.city || 'Unknown'; cc[c] = (cc[c] || 0) + 1 });
+            const cs = Object.entries(cc).sort((a, b) => b[1] - a[1]).slice(0, 10);
+            mkBarH('chCity', cs.map(s => s[0]), cs.map(s => s[1]), ['rgba(255,77,141,.7)', 'rgba(168,85,247,.7)', 'rgba(59,130,246,.7)', 'rgba(34,211,238,.7)', 'rgba(34,197,94,.7)', 'rgba(251,191,36,.7)', 'rgba(249,115,22,.7)', 'rgba(239,68,68,.7)', 'rgba(139,92,246,.7)', 'rgba(20,184,166,.7)']);
+            const { data: td } = await db.from('payment_transactions').select('tier,amount').eq('status', 'completed'); const tg = {}; (td || []).forEach(p => { const t = p.tier || '?'; tg[t] = (tg[t] || 0) + Number(p.amount) });
+            mkBar('chTRev', ['Silver', 'Gold', 'VIP'], [tg.silver || 0, tg.gold || 0, tg.vip || 0], ['#c0c0c0B3', '#fbbf24B3', '#ff4d8dB3'], ['#c0c0c0', '#fbbf24', '#ff4d8d'])
+        }
+
+        function mkDo(id, labels, data, bg) { const c = document.getElementById(id).getContext('2d'); if (CH[id]) CH[id].destroy(); CH[id] = new Chart(c, { type: 'doughnut', data: { labels, datasets: [{ data, backgroundColor: bg, borderWidth: 0, hoverOffset: 10 }] }, options: { responsive: true, maintainAspectRatio: false, cutout: '65%', plugins: { legend: { position: 'bottom', labels: { color: '#8888aa', padding: 16, font: { family: 'Inter', size: 11 } } } } } }) }
+        function mkLine(id, labels, data, color) { const c = document.getElementById(id).getContext('2d'); if (CH[id]) CH[id].destroy(); const g = c.createLinearGradient(0, 0, 0, 260); g.addColorStop(0, color + '4D'); g.addColorStop(1, color + '03'); CH[id] = new Chart(c, { type: 'line', data: { labels, datasets: [{ data, borderColor: color, backgroundColor: g, fill: true, tension: .4, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#555577', maxRotation: 45, font: { size: 9 } }, grid: { color: 'rgba(255,255,255,.03)' } }, y: { ticks: { color: '#555577', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,.03)' }, beginAtZero: true } }, plugins: { legend: { display: false } } } }) }
+        function mkBar(id, labels, data, bg, bc) { const c = document.getElementById(id).getContext('2d'); if (CH[id]) CH[id].destroy(); CH[id] = new Chart(c, { type: 'bar', data: { labels, datasets: [{ data, backgroundColor: Array.isArray(bg) ? bg : bg, borderColor: Array.isArray(bc) ? bc : bc, borderWidth: 1, borderRadius: 6 }] }, options: { responsive: true, maintainAspectRatio: false, scales: { x: { ticks: { color: '#8888aa', font: { size: 10 } }, grid: { display: false } }, y: { ticks: { color: '#555577', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,.03)' }, beginAtZero: true } }, plugins: { legend: { display: false } } } }) }
+        function mkBarH(id, labels, data, bg) { const c = document.getElementById(id).getContext('2d'); if (CH[id]) CH[id].destroy(); CH[id] = new Chart(c, { type: 'bar', data: { labels, datasets: [{ data, backgroundColor: bg, borderRadius: 6, borderWidth: 0 }] }, options: { responsive: true, maintainAspectRatio: false, indexAxis: 'y', scales: { x: { ticks: { color: '#555577', font: { size: 9 } }, grid: { color: 'rgba(255,255,255,.03)' } }, y: { ticks: { color: '#8888aa', font: { size: 10 } }, grid: { display: false } } }, plugins: { legend: { display: false } } } }) }
+
+        async function loadAllUsers() {
+            let all = [], from = 0, batchSize = 1000, done = false;
+            while (!done) {
+                const { data, error } = await db.from('profiles').select('id,name,email,phone,gender,age,city,completed,verified,is_premium,bio,interests,instagram,education,height_cm,last_active,referral_code,created_at').order('created_at', { ascending: false }).range(from, from + batchSize - 1);
+                if (error || !data || data.length === 0) { done = true } else { all = all.concat(data); if (data.length < batchSize) done = true; else from += batchSize }
+            }
+            const ids = all.map(u => u.id); let mems = []; from = 0; done = false;
+            while (!done) {
+                const { data } = await db.from('memberships').select('user_id,tier,message_credits,boost_credits,superlike_credits,expires_at').range(from, from + batchSize - 1);
+                if (!data || data.length === 0) { done = true } else { mems = mems.concat(data); if (data.length < batchSize) done = true; else from += batchSize }
+            }
+            const mm = {}; mems.forEach(m => mm[m.user_id] = m);
+            allUsers = all.map(u => ({ ...u, tier: (mm[u.id] || {}).tier || 'free', credits: mm[u.id] || {}, membership_expires: (mm[u.id] || {}).expires_at }));
+            filterUsers()
+        }
+
+        function filterUsers() {
+            const q = document.getElementById('searchBox').value.toLowerCase(), tier = document.getElementById('fTier').value, gender = document.getElementById('fGender').value, status = document.getElementById('fStatus').value, sort = document.getElementById('fSort').value;
+            filteredUsers = allUsers.filter(u => {
+                if (q && !(u.name || '').toLowerCase().includes(q) && !(u.email || '').toLowerCase().includes(q) && !(u.city || '').toLowerCase().includes(q) && !(u.phone || '').toLowerCase().includes(q)) return false;
+                if (tier && u.tier !== tier) return false;
+                if (gender && u.gender !== gender) return false;
+                if (status === 'complete' && !u.completed) return false;
+                if (status === 'incomplete' && u.completed) return false;
+                return true
+            });
+            if (sort === 'oldest') filteredUsers.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+            else if (sort === 'name') filteredUsers.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+            else if (sort === 'active') filteredUsers.sort((a, b) => new Date(b.last_active || 0) - new Date(a.last_active || 0));
+            else filteredUsers.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+            currentPage = 1; renderTable()
+        }
+
+        function renderTable() {
+            const total = filteredUsers.length, pages = Math.ceil(total / PER_PAGE) || 1; if (currentPage > pages) currentPage = pages;
+            const start = (currentPage - 1) * PER_PAGE, end = Math.min(start + PER_PAGE, total), slice = filteredUsers.slice(start, end);
+            document.getElementById('userCount').textContent = total;
+            document.getElementById('pagInfo').textContent = `Showing ${total ? start + 1 : 0}-${end} of ${total}`;
+            const tbody = document.getElementById('usersTbody');
+            tbody.innerHTML = slice.map(u => {
+                const gb = u.gender === 'boy' ? '<span class="badge b-m">Male</span>' : u.gender === 'girl' ? '<span class="badge b-f">Female</span>' : '-';
+                const tb = `<span class="badge b-${u.tier}">${u.tier}</span>`;
+                const pb = u.completed ? '<span class="badge b-ok">✓</span>' : '<span class="badge b-no">✗</span>';
+                return `<tr><td><strong>${u.name || '-'}</strong></td><td>${u.email || '-'}</td><td>${u.phone || '-'}</td><td>${gb}</td><td>${u.age || '-'}</td><td>${u.city || '-'}</td><td>${tb}</td><td>${pb}</td><td>${fmtRel(u.last_active)}</td><td>${fmtD(u.created_at)}</td><td><button class="btn-s" onclick='showDetail(${JSON.stringify(u).replace(/'/g, "&#39;")})' style="padding:4px 10px;font-size:11px">👁</button></td></tr>`
+            }).join('');
+            const btns = document.getElementById('pagBtns'); let bh = '';
+            bh += `<button ${currentPage <= 1 ? 'disabled' : ''} onclick="goPage(${currentPage - 1})">← Prev</button>`;
+            const maxB = 7; let s = Math.max(1, currentPage - 3), e = Math.min(pages, s + maxB - 1); if (e - s < maxB - 1) s = Math.max(1, e - maxB + 1);
+            for (let i = s; i <= e; i++)bh += `<button class="${i === currentPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+            bh += `<button ${currentPage >= pages ? 'disabled' : ''} onclick="goPage(${currentPage + 1})">Next →</button>`;
+            btns.innerHTML = bh
+        }
+
+        function goPage(p) { currentPage = p; renderTable(); document.querySelector('.tcard').scrollIntoView({ behavior: 'smooth' }) }
+
+        function showDetail(u) {
+            const d = document.getElementById('udContent');
+            const fields = [['Name', u.name], ['Email', u.email], ['Phone', u.phone || '-'], ['Gender', u.gender === 'boy' ? 'Male' : u.gender === 'girl' ? 'Female' : '-'], ['Age', u.age || '-'], ['City', u.city || '-'], ['Bio', u.bio || '-'], ['Education', u.education || '-'], ['Height', u.height_cm ? u.height_cm + 'cm' : '-'], ['Instagram', u.instagram || '-'], ['Interests', (u.interests || []).join(', ') || '-'], ['Tier', u.tier], ['Profile', u.completed ? 'Complete' : 'Incomplete'], ['Verified', u.verified ? 'Yes' : 'No'], ['Premium', u.is_premium ? 'Yes' : 'No'], ['Referral Code', u.referral_code || '-'], ['Last Active', fmtRel(u.last_active)], ['Joined', fmtD(u.created_at)], ['Membership Expires', u.membership_expires ? fmtD(u.membership_expires) : '-']];
+            d.innerHTML = `<div class="ud-name">${u.name || 'Unknown'}</div><div class="ud-email">${u.email || '-'}</div><div class="ud-grid">${fields.map(f => `<div class="ud-field"><div class="uf-label">${f[0]}</div><div class="uf-value">${f[1]}</div></div>`).join('')}</div>`;
+            document.getElementById('userDetail').classList.add('on')
+        }
+        function closeDetail() { document.getElementById('userDetail').classList.remove('on') }
+
+        function exportCSV() {
+            const headers = ['Name', 'Email', 'Phone', 'Gender', 'Age', 'City', 'Tier', 'Profile', 'Verified', 'Premium', 'Instagram', 'Education', 'Bio', 'Last Active', 'Joined'];
+            const rows = filteredUsers.map(u => [u.name, u.email, u.phone, u.gender === 'boy' ? 'Male' : 'Female', u.age, u.city, u.tier, u.completed ? 'Complete' : 'Incomplete', u.verified ? 'Yes' : 'No', u.is_premium ? 'Yes' : 'No', u.instagram, u.education, u.bio, u.last_active, u.created_at].map(v => '"' + (v || '').toString().replace(/"/g, '""') + '"'));
+            const csv = [headers.join(','), ...rows.map(r => r.join(','))].join('\n');
+            const blob = new Blob([csv], { type: 'text/csv' }); const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'zewijuna_users_' + new Date().toISOString().slice(0, 10) + '.csv'; a.click()
+        }
+    </script>
+</body>
+
+</html>
