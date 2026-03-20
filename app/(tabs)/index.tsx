@@ -34,12 +34,19 @@ export default function DiscoverScreen() {
   const countedViewsRef = useRef<Set<string>>(new Set());
   const position = useRef(new Animated.ValueXY()).current;
   const [isAnimating, setIsAnimating] = useState<boolean>(false);
+  const [outOfViews, setOutOfViews] = useState<boolean>(false);
   const [localSwipedIds, setLocalSwipedIds] = useState<Set<string>>(() => {
     const initial = new Set<string>();
     swipeHistory.forEach(s => initial.add(s.userId));
     return initial;
   });
   const [rewindStack, setRewindStack] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (features.profileViews === 'unlimited' || (typeof remainingProfileViews === 'number' && remainingProfileViews > 0)) {
+      setOutOfViews(false);
+    }
+  }, [features.profileViews, remainingProfileViews]);
 
   const swipedIdsSet = useMemo(() => {
     const set = new Set(localSwipedIds);
@@ -110,16 +117,31 @@ export default function DiscoverScreen() {
     });
   }, [currentUser]);
 
-  const onSwipeComplete = useCallback((direction: 'left' | 'right') => {
+  const onSwipeComplete = useCallback(async (direction: 'left' | 'right') => {
     const action = direction === 'right' ? 'like' : 'nope';
     if (currentUser) {
       setLocalSwipedIds(prev => new Set(prev).add(currentUser.id));
       setRewindStack(prev => [currentUser.id, ...prev].slice(0, 50));
-      swipeUser(currentUser.id, action);
+      const userName = currentUser.name;
+      position.setValue({ x: 0, y: 0 });
+      setIsAnimating(false);
+
+      const matchResult = await swipeUser(currentUser.id, action);
+      if (matchResult && matchResult.isMatch && matchResult.matchId) {
+        Alert.alert(
+          "It's a Match! 🎉",
+          `You and ${userName.split(' ')[0]} liked each other. Start a conversation now?`,
+          [
+            { text: "Keep Swiping", style: "cancel" },
+            { text: "Chat Now", onPress: () => router.push(`/(tabs)/messages/${matchResult.matchId}` as any) }
+          ]
+        );
+      }
+    } else {
+      position.setValue({ x: 0, y: 0 });
+      setIsAnimating(false);
     }
-    position.setValue({ x: 0, y: 0 });
-    setIsAnimating(false);
-  }, [currentUser, swipeUser, position]);
+  }, [currentUser, swipeUser, position, router]);
 
   const resetPosition = useCallback(() => {
     Animated.spring(position, {
@@ -156,16 +178,19 @@ export default function DiscoverScreen() {
   isAnimatingRef.current = isAnimating;
 
   useEffect(() => {
-    if (currentUser?.id && !countedViewsRef.current.has(currentUser.id)) {
-      countedViewsRef.current.add(currentUser.id);
-      useDailyRef.current('views').then((ok) => {
-        console.log('[Discover] view counted for', currentUser.id, 'ok=', ok);
-        if (!ok) {
-          console.log('[Discover] Profile view limit reached');
-        }
-      }).catch((e) => console.log('[Discover] view count error', e));
+    if (currentUser?.id && !outOfViews) {
+      if (!countedViewsRef.current.has(currentUser.id)) {
+        countedViewsRef.current.add(currentUser.id);
+        useDailyRef.current('views').then((ok) => {
+          console.log('[Discover] view counted for', currentUser.id, 'ok=', ok);
+          if (!ok) {
+            console.log('[Discover] Profile view limit reached');
+            setOutOfViews(true);
+          }
+        }).catch((e) => console.log('[Discover] view count error', e));
+      }
     }
-  }, [currentUser?.id]);
+  }, [currentUser?.id, outOfViews]);
 
   const panResponder = useRef(
     PanResponder.create({
@@ -202,7 +227,7 @@ export default function DiscoverScreen() {
       forceSwipe('left');
       return;
     }
-    
+
     if (action === 'like') {
       const ok = await useDailyRef.current('rightSwipes');
       if (!ok) {
@@ -212,7 +237,7 @@ export default function DiscoverScreen() {
       forceSwipe('right');
       return;
     }
-    
+
     if (action === 'superlike') {
       if (tier === 'free') {
         showUpgradePrompt('super likes');
@@ -231,12 +256,24 @@ export default function DiscoverScreen() {
         toValue: { x: 0, y: -screenWidth },
         duration: 300,
         useNativeDriver: false,
-      }).start(() => {
+      }).start(async () => {
         setLocalSwipedIds(prev => new Set(prev).add(currentUser.id));
         setRewindStack(prev => [currentUser.id, ...prev].slice(0, 50));
-        swipeUser(currentUser.id, 'superlike');
+        const userName = currentUser.name;
         position.setValue({ x: 0, y: 0 });
         setIsAnimating(false);
+
+        const matchResult = await swipeUser(currentUser.id, 'superlike');
+        if (matchResult && matchResult.isMatch && matchResult.matchId) {
+          Alert.alert(
+            "It's a Match! 🎉",
+            `You and ${userName.split(' ')[0]} liked each other. Start a conversation now?`,
+            [
+              { text: "Keep Swiping", style: "cancel" },
+              { text: "Chat Now", onPress: () => router.push(`/(tabs)/messages/${matchResult.matchId}` as any) }
+            ]
+          );
+        }
       });
     }
   }, [isAnimating, currentUser, tier, showUpgradePrompt, forceSwipe, swipeUser, position, router]);
@@ -329,6 +366,37 @@ export default function DiscoverScreen() {
           <ActivityIndicator size="large" color="#FF2D55" />
           <Text style={styles.loadingText}>{t('Finding people near you...')}</Text>
         </View>
+      ) : outOfViews ? (
+        <ScrollView
+          contentContainerStyle={styles.emptyScrollContent}
+          refreshControl={
+            <RefreshControl refreshing={isLoadingProfiles} onRefresh={refreshProfiles} tintColor="#FF2D55" />
+          }
+        >
+          <View style={styles.emptyContainer}>
+            <View style={styles.emptyIconWrap}>
+              <Sparkles size={40} color="#FF2D55" />
+            </View>
+            <Text style={styles.emptyText}>{t("Out of Views!")}</Text>
+            <Text style={styles.emptySubtext}>{t("You've hit your daily profile view limit. Upgrade for unlimited browsing or wait until tomorrow.")}</Text>
+            <TouchableOpacity
+              style={styles.emptyBoostBtn}
+              onPress={() => router.push('/premium' as any)}
+              testID="empty-upgrade"
+              activeOpacity={0.8}
+            >
+              <LinearGradient
+                colors={['#FF2D55', '#FF6B8A']}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.emptyBoostGradient}
+              >
+                <Sparkles size={16} color="#FFF" />
+                <Text style={styles.emptyBoostText}>{t('Upgrade Now')}</Text>
+              </LinearGradient>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
       ) : !currentUser ? (
         <ScrollView
           contentContainerStyle={styles.emptyScrollContent}

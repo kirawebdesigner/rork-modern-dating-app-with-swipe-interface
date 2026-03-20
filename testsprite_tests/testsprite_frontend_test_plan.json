@@ -1,0 +1,934 @@
+[
+  {
+    "id": "TC001",
+    "title": "Onboarding walkthrough: click through cards then Get Started goes to Signup",
+    "description": "Verifies a user can progress through the onboarding walkthrough screens and reach the Signup page via Get Started.",
+    "category": "Onboarding",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /onboarding"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Welcome\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Next\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Walkthrough\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Next\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Get Started\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      }
+    ]
+  },
+  {
+    "id": "TC002",
+    "title": "Onboarding: Get Started from first screen navigates directly to Signup",
+    "description": "Verifies the Get Started action from the initial onboarding screen navigates to the Signup page without requiring walkthrough completion.",
+    "category": "Onboarding",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /onboarding"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Get Started\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Get Started\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify page title contains \"Sign Up\""
+      }
+    ]
+  },
+  {
+    "id": "TC003",
+    "title": "Onboarding: Back action returns to previous walkthrough card",
+    "description": "Verifies that a user can move forward and then go back to the previous onboarding card using the back control on the walkthrough UI.",
+    "category": "Onboarding",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /onboarding"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Next\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Back\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Back\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Welcome\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC004",
+    "title": "Onboarding: Skip control navigates to Signup (if available)",
+    "description": "Verifies that using a Skip option (if present) bypasses the walkthrough and navigates to the Signup page.",
+    "category": "Onboarding",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /onboarding"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Skip\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Skip\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      }
+    ]
+  },
+  {
+    "id": "TC005",
+    "title": "Onboarding content: key privacy/security message is visible during walkthrough",
+    "description": "Verifies the onboarding content includes a visible privacy/security-related message during the walkthrough.",
+    "category": "Onboarding",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /onboarding"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Next\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Privacy\" is visible"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Next\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Security\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC006",
+    "title": "Sign up with valid email and password navigates to Profile Setup",
+    "description": "Verifies that a new user can sign up with email/password and is taken to the profile setup screen after success.",
+    "category": "User Authentication (Login & Signup)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"newuser+e2e1@example.com\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"ValidPass123!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign Up\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"successful\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/profile-setup\""
+      }
+    ]
+  },
+  {
+    "id": "TC007",
+    "title": "Sign up with blank password shows validation error and stays on Signup",
+    "description": "Verifies that password is required on signup and the user remains on the signup page when it is missing.",
+    "category": "User Authentication (Login & Signup)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"newuser+e2e2@example.com\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign Up\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"password\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      }
+    ]
+  },
+  {
+    "id": "TC008",
+    "title": "Login with valid credentials navigates to Discovery (Home)",
+    "description": "Verifies that an existing user can sign in with email/password and is taken to the main discovery screen.",
+    "category": "User Authentication (Login & Signup)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign In\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Discovery\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC009",
+    "title": "Login with wrong password shows authentication error",
+    "description": "Verifies that an incorrect password prevents login and displays an authentication error on the login screen.",
+    "category": "User Authentication (Login & Signup)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"existinguser@example.com\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"WrongPassword!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign In\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"error\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      }
+    ]
+  },
+  {
+    "id": "TC010",
+    "title": "Login with blank email shows validation error and does not proceed",
+    "description": "Verifies that email is required on login and the user remains on the login page when it is missing.",
+    "category": "User Authentication (Login & Signup)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"SomePassword123!\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign In\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"email\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      }
+    ]
+  },
+  {
+    "id": "TC011",
+    "title": "Signup page allows navigation to Login page",
+    "description": "Verifies that a user can move from the signup screen to the login screen using the on-page navigation link.",
+    "category": "User Authentication (Login & Signup)",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /signup"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign In\" link"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Sign In\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC012",
+    "title": "Login page allows navigation to Signup page",
+    "description": "Verifies that a user can move from the login screen to the signup screen using the on-page navigation link.",
+    "category": "User Authentication (Login & Signup)",
+    "priority": "Low",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/login\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign Up\" link"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/signup\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Sign Up\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC013",
+    "title": "Complete profile setup successfully and reach Discovery",
+    "description": "Verifies a user can fill required profile details, save, and land on the main discovery screen.",
+    "category": "Profile Setup",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/profile\" or \"/onboarding\" or \"/profile-setup\" or \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile Setup\" or \"Complete your profile\" (if shown) to open profile setup"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/profile-setup\""
+      },
+      {
+        "type": "action",
+        "description": "Type \"Zewijuna Test User\" into the display name field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"Practicing Muslim, family-oriented, and looking for a serious relationship.\" into the bio/description field"
+      },
+      {
+        "type": "action",
+        "description": "Select an option in preferences (such as age range, location radius, or intentions) if visible"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      }
+    ]
+  },
+  {
+    "id": "TC014",
+    "title": "Profile setup: required field validation prevents save",
+    "description": "Verifies leaving a required field blank shows validation and keeps the user on profile setup.",
+    "category": "Profile Setup",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile Setup\" or \"Complete your profile\" (if shown) to open profile setup"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/profile-setup\""
+      },
+      {
+        "type": "action",
+        "description": "Leave the display name field empty"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"required\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/profile-setup\""
+      }
+    ]
+  },
+  {
+    "id": "TC015",
+    "title": "Discovery loads and shows an initial profile card",
+    "description": "Verifies that the discovery screen loads and renders a candidate profile card for browsing.",
+    "category": "Discovery / Swiping",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"profile card\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Like\" is visible"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Pass\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC016",
+    "title": "View profile page and open Edit screen",
+    "description": "Verifies the user can access the Profile page and enter the Edit profile screen from settings.",
+    "category": "Profile (View & Settings)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/profile\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Edit\" button"
+      }
+    ]
+  },
+  {
+    "id": "TC017",
+    "title": "Edit bio and save; updated bio appears on profile",
+    "description": "Verifies the user can update their bio and see the new bio reflected on the Profile page after saving.",
+    "category": "Profile (View & Settings)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Edit\" button"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"Updated bio for automated test\" into the Bio field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Updated bio for automated test\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC018",
+    "title": "Attempt to save bio with empty value; inline validation shown",
+    "description": "Verifies the Edit profile form prevents saving when the bio field is cleared (if required) and shows a visible validation message.",
+    "category": "Profile (View & Settings)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Edit\" button"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"\" into the Bio field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Bio\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC019",
+    "title": "Change email and save; verification/validation message displayed",
+    "description": "Verifies the user can attempt to change their email and the UI displays a visible verification/validation required message after saving.",
+    "category": "Profile (View & Settings)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Edit\" button"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"new.email+test@example.com\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"verification\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC020",
+    "title": "Change email to invalid format; visible validation error shown",
+    "description": "Verifies the Edit profile form validates email format and shows a visible error for an invalid email.",
+    "category": "Profile (View & Settings)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Edit\" button"
+      },
+      {
+        "type": "action",
+        "description": "Fill \"not-an-email\" into the Email field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Save\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"email\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC021",
+    "title": "Toggle a preference in settings; preference appears saved",
+    "description": "Verifies the user can toggle a settings preference and sees an immediate visible saved/updated state.",
+    "category": "Profile (View & Settings)",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "action",
+        "description": "Scroll to the Settings or Preferences section"
+      },
+      {
+        "type": "action",
+        "description": "Click a preference toggle (for example, \"Show me on discovery\" or any available preference switch)"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text \"Saved\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC022",
+    "title": "Preference toggle persists after leaving and returning to Profile",
+    "description": "Verifies that after toggling a preference, navigating away and back shows the preference still in the updated state.",
+    "category": "Profile (View & Settings)",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "action",
+        "description": "Scroll to the Settings or Preferences section"
+      },
+      {
+        "type": "action",
+        "description": "Click a preference toggle (choose one that is clearly labeled)"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Messages\" in the tab bar or main navigation"
+      },
+      {
+        "type": "action",
+        "description": "Click on \"Profile\" in the tab bar or main navigation"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify text of the toggled preference label is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC023",
+    "title": "Upgrade Now is available only after selecting a plan",
+    "description": "Verifies the user must select a plan before being able to proceed with the upgrade action.",
+    "category": "Premium Membership & Payments",
+    "priority": "High",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Premium\" entry in the app navigation/menu"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/premium"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify element \"Upgrade Now\" is visible"
+      }
+    ]
+  },
+  {
+    "id": "TC024",
+    "title": "Switching between plans updates the selected plan on screen",
+    "description": "Verifies that selecting different premium tiers updates the UI to reflect the currently selected plan before upgrading.",
+    "category": "Premium Membership & Payments",
+    "priority": "Medium",
+    "steps": [
+      {
+        "type": "action",
+        "description": "Navigate to /login"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_USER}}\" into the email/username field"
+      },
+      {
+        "type": "action",
+        "description": "Type \"{{LOGIN_PASSWORD}}\" into the password field"
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Sign in\" button"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/\""
+      },
+      {
+        "type": "action",
+        "description": "Click the \"Premium\" entry in the app navigation/menu"
+      },
+      {
+        "type": "assertion",
+        "description": "Verify URL contains \"/premium"
+      },
+      {
+        "type": "action",
+        "description": "Click on one premium plan option (e.g., the first visible tier)"
+      }
+    ]
+  }
+]

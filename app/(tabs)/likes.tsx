@@ -1,5 +1,5 @@
 import React, { useState, useCallback, useEffect, useMemo } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Image, Dimensions, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,6 +9,8 @@ import { supabase } from '@/lib/supabase';
 import { useApp } from '@/hooks/app-context';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useMembership } from '@/hooks/membership-context';
+import { useI18n } from '@/hooks/i18n-context';
+import { getValidPhoto } from '@/lib/photo';
 
 const { width } = Dimensions.get('window');
 const PADDING = 16;
@@ -24,8 +26,9 @@ interface MatchItem extends User {
 export default function MatchesScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const { matches: contextMatches } = useApp();
-  const { tier } = useMembership();
+  const { matches: contextMatches, swipeUser } = useApp();
+  const { tier, useDaily: consumeDaily, useSuperLike: consumeSuperLike } = useMembership();
+  const { t } = useI18n();
   const [likesData, setLikesData] = useState<MatchItem[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [sortNewest, setSortNewest] = useState<boolean>(true);
@@ -140,6 +143,36 @@ export default function MatchesScreen() {
     router.push(`/(tabs)/profile-details/${userId}` as any);
   }, [router]);
 
+  const handleSwipe = useCallback(async (userId: string, action: 'like' | 'nope' | 'superlike') => {
+    try {
+      if (action === 'like') {
+        const ok = await consumeDaily('rightSwipes');
+        if (!ok) {
+          Alert.alert(t('Upgrade Required'), t("You're out of likes for today!"), [
+            { text: t('OK'), style: 'cancel' },
+            { text: t('Upgrade Now'), onPress: () => router.push('/premium' as any) },
+          ]);
+          return;
+        }
+      } else if (action === 'superlike') {
+        const ok = await consumeSuperLike();
+        if (!ok) {
+          Alert.alert(t('Out of Super Likes'), t('Get more Super Likes to stand out!'), [
+            { text: t('Cancel'), style: 'cancel' },
+            { text: t('Get More'), onPress: () => router.push('/premium' as any) },
+          ]);
+          return;
+        }
+      }
+
+      swipeUser(userId, action);
+      // Optimistically update UI
+      setLikesData(prev => prev.filter(item => item.id !== userId));
+    } catch (e) {
+      console.log('[Likes] handleSwipe error:', e);
+    }
+  }, [swipeUser, consumeDaily, consumeSuperLike, t, router]);
+
   const formatTimeAgo = useCallback((date?: Date) => {
     if (!date) return '';
     const now = new Date();
@@ -183,6 +216,10 @@ export default function MatchesScreen() {
     return sortNewest ? dateB - dateA : dateA - dateB;
   });
 
+  const getPhotoURI = (photos?: string[] | null) => {
+    return getValidPhoto(photos);
+  };
+
   const renderCard = (item: MatchItem, cardIndex: number) => {
     const isMatch = 'matchId' in item && item.matchId;
 
@@ -195,7 +232,7 @@ export default function MatchesScreen() {
         testID={`match-card-${item.id}`}
       >
         <Image
-          source={{ uri: item.photos?.[0] || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
+          source={{ uri: getPhotoURI(item.photos) }}
           style={styles.cardImage}
         />
 
@@ -212,11 +249,17 @@ export default function MatchesScreen() {
         </View>
 
         <View style={styles.cardActions}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => {}}>
+          <TouchableOpacity 
+            style={styles.actionBtn} 
+            onPress={() => handleSwipe(item.id, 'nope')}
+          >
             <X size={18} color="#FFFFFF" strokeWidth={2.5} />
           </TouchableOpacity>
           <View style={styles.actionDivider} />
-          <TouchableOpacity style={styles.actionBtn} onPress={() => isMatch ? onOpenMatchChat(item.matchId!) : onViewProfile(item.id)}>
+          <TouchableOpacity 
+            style={styles.actionBtn} 
+            onPress={() => isMatch ? onOpenMatchChat(item.matchId!) : handleSwipe(item.id, 'like')}
+          >
             <Heart size={18} color="#FFFFFF" fill="#FFFFFF" />
           </TouchableOpacity>
         </View>

@@ -2,10 +2,8 @@ import createContextHook from '@nkzw/create-context-hook';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useEffect, useState, useCallback, useMemo, useRef } from 'react';
 import { MembershipTier, MembershipFeatures, UserCredits, MonthlyAllowances } from '@/types';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { supabase, isSupabaseConfigured, TEST_MODE } from '@/lib/supabase';
 import { useAuth } from './auth-context';
-
-const TEST_MODE = false;
 
 const TIER_FEATURES: Record<MembershipTier, MembershipFeatures> = {
   free: {
@@ -162,9 +160,9 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       }
       const storedId = await AsyncStorage.getItem('user_id');
       const storedPhone = await AsyncStorage.getItem('user_phone');
-      
+
       let userId = authUser?.id ?? storedId ?? null;
-      
+
       if (!userId && storedPhone) {
         try {
           const profileResult = await supabase
@@ -177,14 +175,14 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
           console.log('[Membership] Network error fetching profile for sync:', e?.message);
         }
       }
-      
+
       if (!userId) {
         console.log('[Membership] No user ID found, skipping server sync');
         return;
       }
-      
+
       console.log('[Membership] Syncing to server for user:', userId);
-      
+
       const payload = {
         user_id: userId,
         phone_number: storedPhone ?? null,
@@ -207,7 +205,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         const { error: upsertErr } = await supabase
           .from('memberships')
           .upsert(payload as any, { onConflict: 'user_id' });
-        
+
         if (upsertErr) {
           console.log('[Membership] Supabase upsert failed:', upsertErr.message);
         } else {
@@ -239,11 +237,11 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         console.log('[Membership] checkExpiration network error:', networkErr?.message);
         return null;
       }
-      
+
       if (data && data.expires_at && data.tier !== 'free') {
         const expiresAt = new Date(data.expires_at);
         const now = new Date();
-        
+
         if (now >= expiresAt) {
           console.log('[Membership] Membership expired, downgrading to free');
           try {
@@ -257,7 +255,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
           return 'free';
         }
       }
-      
+
       return data?.tier || 'free';
     } catch (e: any) {
       console.log('[Membership] checkExpiration failed:', e?.message || e);
@@ -272,12 +270,12 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         await loadFromLocalStorage();
         return;
       }
-      
+
       const storedId = await AsyncStorage.getItem('user_id');
       const storedPhone = await AsyncStorage.getItem('user_phone');
-      
+
       let userId = authUser?.id ?? storedId ?? null;
-      
+
       if (!userId && storedPhone) {
         try {
           const profileResult2 = await supabase
@@ -290,17 +288,17 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
           console.log('[Membership] Network error fetching profile for load:', e?.message);
         }
       }
-      
+
       if (!userId) {
         console.log('[Membership] No user ID, loading from local only');
         await loadFromLocalStorage();
         return;
       }
-      
+
       console.log('[Membership] Loading from server for user:', userId);
-      
+
       const checkedTier = await checkExpiration(userId);
-      
+
       let data: any = null;
       let error: any = null;
       try {
@@ -340,7 +338,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
         setAllowances((data.monthly_allowances as MonthlyAllowances) ?? { monthlyBoosts: 0, monthlySuperLikes: 0 });
         setLastAllowanceGrantISO(String(data.last_allowance_grant ?? ''));
         setLastReset(normalizeISODate((data as any).last_reset ?? null));
-        
+
         if (data.expires_at) {
           const expiresAt = new Date(data.expires_at);
           const now = new Date();
@@ -374,6 +372,15 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
     setRemainingProfileViews(f.profileViews);
     setRemainingRightSwipes(f.dailyRightSwipes);
     setRemainingCompliments(f.dailyCompliments);
+
+    // Grant monthly allowances immediately on upgrade
+    const base: MonthlyAllowances =
+      newTier === 'vip' ? { monthlyBoosts: 5, monthlySuperLikes: 20 } :
+        newTier === 'gold' ? { monthlyBoosts: 2, monthlySuperLikes: 10 } :
+          newTier === 'silver' ? { monthlyBoosts: 1, monthlySuperLikes: 5 } :
+            { monthlyBoosts: 0, monthlySuperLikes: 0 };
+    setAllowances(base);
+    setLastAllowanceGrantISO(new Date().toISOString());
   }, []);
 
   const addCredits = useCallback(async (type: keyof UserCredits, amount: number) => {
@@ -400,7 +407,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
 
   const useDaily = useCallback(async (type: 'messages' | 'views' | 'rightSwipes' | 'compliments'): Promise<boolean> => {
     const f = TIER_FEATURES[tier];
-    
+
     if (type === 'messages') {
       if (tier === 'vip') return true;
       if (f.dailyMessages === 99999) return true;
@@ -408,7 +415,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       setRemainingDailyMessages(prev => Math.max(0, prev - 1));
       return true;
     }
-    
+
     if (type === 'views') {
       if (tier === 'vip') return true;
       if (f.profileViews === 'unlimited') return true;
@@ -419,7 +426,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       }
       return true;
     }
-    
+
     if (type === 'rightSwipes') {
       if (tier === 'vip' || tier === 'gold') return true;
       if (f.dailyRightSwipes === 'unlimited') return true;
@@ -430,7 +437,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       }
       return true;
     }
-    
+
     if (type === 'compliments') {
       if (tier === 'vip') return true;
       if (f.dailyCompliments === 99999) return true;
@@ -441,7 +448,7 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
       }
       return true;
     }
-    
+
     return false;
   }, [tier]);
 
@@ -453,19 +460,27 @@ export const [MembershipProvider, useMembership] = createContextHook<MembershipC
 
     const base: MonthlyAllowances =
       tier === 'vip' ? { monthlyBoosts: 5, monthlySuperLikes: 20 } :
-      tier === 'gold' ? { monthlyBoosts: 2, monthlySuperLikes: 10 } :
-      tier === 'silver' ? { monthlyBoosts: 1, monthlySuperLikes: 5 } :
-      { monthlyBoosts: 0, monthlySuperLikes: 0 };
+        tier === 'gold' ? { monthlyBoosts: 2, monthlySuperLikes: 10 } :
+          tier === 'silver' ? { monthlyBoosts: 1, monthlySuperLikes: 5 } :
+            { monthlyBoosts: 0, monthlySuperLikes: 0 };
     setAllowances(base);
     setLastAllowanceGrantISO(now.toISOString());
   }, [lastAllowanceGrantISO, tier]);
 
+  // Call loadFromServer ONLY on mount or when the strictly required active user ID changes,
+  // preventing infinite sync loops caused by dependent local state changes.
   useEffect(() => {
+    let active = true;
     const timer = setTimeout(() => {
-      loadFromServer().catch(e => console.error('[Membership] loadFromServer failed:', e));
+      if (active) {
+        loadFromServer().catch(e => console.error('[Membership] loadFromServer failed:', e));
+      }
     }, 200);
-    return () => clearTimeout(timer);
-  }, [loadFromServer]);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [authUser?.id]); // Intentionally omitting loadFromServer to avoid cyclic re-fetches on local limit decrements
 
   useEffect(() => {
     const today = isoToday();

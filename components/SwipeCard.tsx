@@ -13,6 +13,7 @@ import { MapPin, CheckCircle, Crown, Shield, Star } from 'lucide-react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import Colors from '@/constants/colors';
 import { User, ThemeId } from '@/types';
+import { getValidPhoto } from '@/lib/photo';
 
 const { width: screenWidth } = Dimensions.get('window');
 const CARD_WIDTH = screenWidth - 40;
@@ -83,7 +84,7 @@ export default function SwipeCard({ user, onPress }: SwipeCardProps) {
   return (
     <View style={styles.card} testID="swipe-card">
       <TouchableOpacity activeOpacity={0.9} onPress={onPress} disabled={!onPress} style={{ flex: 1 }}>
-        <Image source={{ uri: user.photos[0] }} style={styles.image} />
+        <Image source={{ uri: getValidPhoto(user.photos) }} style={styles.image} />
       </TouchableOpacity>
       <TierBadge tier={user.membershipTier} />
       <LinearGradient

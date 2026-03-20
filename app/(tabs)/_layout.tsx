@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { Tabs, useRouter } from 'expo-router';
+import { Tabs, useRouter, usePathname } from 'expo-router';
 import { User, Heart, MessageCircle } from 'lucide-react-native';
 import { Platform, View, StyleSheet, AppState } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -55,6 +55,7 @@ export default function TabLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const insets = useSafeAreaInsets();
   const router = useRouter();
+  const pathname = usePathname();
   const [isLocked, setIsLocked] = useState<boolean>(false);
   const [lockChecked, setLockChecked] = useState<boolean>(false);
 
@@ -125,19 +126,23 @@ export default function TabLayout() {
           tabBarItemStyle: {
             paddingVertical: 4,
           },
-          tabBarStyle: {
-            position: 'absolute',
-            borderTopWidth: 0,
-            paddingTop: 12,
-            paddingBottom: Math.max(insets.bottom + 20, Platform.OS === 'ios' ? 34 : 28),
-            height: Platform.OS === 'ios' ? 100 + insets.bottom : 85 + insets.bottom,
-            backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.72)' : Colors.card,
-            shadowColor: '#000',
-            shadowOpacity: 0.1,
-            shadowRadius: 20,
-            shadowOffset: { width: 0, height: -3 },
-            elevation: 10,
-          },
+          tabBarStyle: (() => {
+            const isHiddenRoute = pathname.includes('/messages/') || pathname.includes('/profile-details/');
+            if (isHiddenRoute) return { display: 'none' };
+            return {
+              position: 'absolute',
+              borderTopWidth: 0,
+              paddingTop: 12,
+              paddingBottom: Math.max(insets.bottom + 20, Platform.OS === 'ios' ? 34 : 28),
+              height: Platform.OS === 'ios' ? 100 + insets.bottom : 85 + insets.bottom,
+              backgroundColor: Platform.OS === 'ios' ? 'rgba(255, 255, 255, 0.72)' : Colors.card,
+              shadowColor: '#000',
+              shadowOpacity: 0.1,
+              shadowRadius: 20,
+              shadowOffset: { width: 0, height: -3 },
+              elevation: 10,
+            };
+          })(),
           tabBarBackground: () => (
             Platform.OS === 'ios' ? (
               <BlurView

@@ -840,7 +840,8 @@
                 <p class="login-error" id="loginErr"></p>
             </form>
             <div class="hint">⚠️ Use the <strong>Service Role Key</strong> (not anon key) to bypass RLS.<br>Find it in:
-                <code>Settings → API → service_role</code></div>
+                <code>Settings → API → service_role</code>
+            </div>
         </div>
     </div>
 
@@ -971,7 +972,7 @@
             } catch (e) { err.textContent = 'Connection failed: ' + (e.message || 'Invalid credentials'); err.style.display = 'block' }
             finally { btn.disabled = false; btn.textContent = 'Connect to Dashboard' }
         });
-        if (sUrl && sKey) document.getElementById('loginForm').dispatchEvent(new Event('submit'));
+        if (sUrl && sKey) document.getElementById('loginForm').requestSubmit();
 
         function logout() { localStorage.removeItem('zw_url'); localStorage.removeItem('zw_key'); location.reload() }
         function fmtN(n) { if (n == null) return '0'; if (n >= 1e6) return (n / 1e6).toFixed(1) + 'M'; if (n >= 1e3) return (n / 1e3).toFixed(1) + 'K'; return n.toLocaleString() }

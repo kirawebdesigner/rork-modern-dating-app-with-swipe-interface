@@ -1,16 +1,10 @@
 import { Hono } from "hono";
 import { trpcServer } from "@hono/trpc-server";
 import { cors } from "hono/cors";
-import { appRouter } from "./trpc/app-router";
-import { createContext } from "./trpc/create-context";
-import webhooks from "./hono-webhooks";
-
-type BunModule = typeof import("bun");
-type BunRuntime = Pick<BunModule, "serve">;
-type BunServer = { stop: () => void };
-
-type BunAwareGlobal = typeof globalThis & { Bun?: BunRuntime };
-const bunRuntime = (globalThis as BunAwareGlobal).Bun;
+import { appRouter } from "./trpc/app-router.ts";
+import { createContext } from "./trpc/create-context.ts";
+import webhooks from "./hono-webhooks.ts";
+import { serve } from "@hono/node-server";
 
 const app = new Hono();
 
@@ -36,12 +30,10 @@ app.use("*", async (c, next) => {
 app.onError((err, c) => {
   console.error("[Hono] Error:", err);
   console.error("[Hono] Error stack:", err.stack);
-
   if (c.req.path.startsWith('/trpc') || c.req.path.startsWith('/api/trpc')) {
     console.log("[Hono] tRPC route error - letting tRPC handle it");
     throw err;
   }
-
   return c.json(
     {
       error: true,
@@ -54,7 +46,7 @@ app.onError((err, c) => {
 });
 
 app.use(
-  "/trpc/*",
+  "/api/trpc/*",
   trpcServer({
     endpoint: "/api/trpc",
     router: appRouter,
@@ -100,58 +92,18 @@ app.get("/health", (c) => {
   });
 });
 
-const startBunServer = () => {
-  if (!bunRuntime?.serve) {
-    console.log("[Hono] Bun runtime not detected. Skipping embedded server start.");
-    return;
-  }
+// App logic ends here. 
+const port = process.env.PORT || 8080;
 
-  const port = Number(process.env.PORT ?? 8081);
-
-  console.log("\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log("🚀 Backend Server Starting");
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━");
-  console.log(`📍 Port: ${port}`);
-  console.log(`🔑 ArifPay API Key: ${process.env.ARIFPAY_API_KEY ? "✅ Set" : "❌ Missing"}`);
-  console.log(`🏦 ArifPay Base URL: ${process.env.ARIFPAY_BASE_URL || "Using default"}`);
-  console.log("━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n");
-
-  try {
-    const server: BunServer = bunRuntime.serve({
-      port,
-      fetch: app.fetch,
-      error(error: unknown) {
-        console.error("[Bun Server Error]", error);
-        return new Response("Internal Server Error", { status: 500 });
-      },
-    });
-
-    console.log("\n✅ Backend server is running!");
-    console.log(`🌐 URL: http://localhost:${port}`);
-    console.log(`🔗 Health check: http://localhost:${port}/health`);
-    console.log(`📡 tRPC endpoint: http://localhost:${port}/api/trpc`);
-    console.log("\n💡 Tip: This server will auto-restart on file changes\n");
-
-    const createShutdownHandler = (signal: string) => () => {
-      console.log(`\n👋 Shutting down backend server (${signal})...`);
-      server.stop();
-      if (typeof process !== "undefined") {
-        process.exit(0);
-      }
-    };
-
-    if (typeof process !== "undefined" && process.on) {
-      process.on("SIGINT", createShutdownHandler("SIGINT"));
-      process.on("SIGTERM", createShutdownHandler("SIGTERM"));
-    }
-  } catch (error) {
-    console.error("\n❌ Failed to start backend server:", error);
-    if (typeof process !== "undefined") {
-      process.exit(1);
-    }
-  }
-};
-
-startBunServer();
+try {
+  serve({
+    fetch: app.fetch,
+    port: isNaN(Number(port)) ? port : Number(port)
+  }, (info) => {
+    console.log(`\n🚀 SERVER LIVE: ${info.port ?? port}`);
+  });
+} catch (e) {
+  console.error("Failed to start server:", e);
+}
 
 export default app;

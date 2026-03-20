@@ -223,7 +223,21 @@ export default function PremiumScreen() {
     } catch (error: any) {
       setIsProcessing(false);
       console.error('[Premium] Upgrade error:', error);
-      Alert.alert('Upgrade Failed', error.message || 'Failed to initiate upgrade. Please try again.');
+      // Extract user-friendly message from tRPC errors
+      let errorMessage = 'Failed to initiate upgrade. Please try again.';
+      if (error?.message) {
+        const msg = error.message;
+        if (msg.includes('Unable to transform response') || msg.includes('Unable to transform')) {
+          errorMessage = 'Server connection error. Please check your internet connection and try again.';
+        } else if (msg.includes('timed out') || msg.includes('AbortError')) {
+          errorMessage = 'Request timed out. Please try again.';
+        } else if (msg.includes('Network') || msg.includes('fetch failed')) {
+          errorMessage = 'Network error. Please check your internet connection.';
+        } else {
+          errorMessage = msg;
+        }
+      }
+      Alert.alert('Upgrade Failed', errorMessage);
     }
   };
 

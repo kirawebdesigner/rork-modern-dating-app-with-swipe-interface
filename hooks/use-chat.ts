@@ -287,11 +287,20 @@ export function useUserMatches(userId: string | null) {
           const matchInfo = matchMap.get(matchId)!;
           const prof = (profiles as any[] | null)?.find((p) => p.id === matchInfo.otherId);
           const latest = latestByConv.get(matchId);
+
+          let validPhotoUrl = null;
+          if (Array.isArray(prof?.photos) && prof.photos.length > 0) {
+            const first = prof.photos[0];
+            if (typeof first === 'string' && !first.startsWith('file://')) {
+              validPhotoUrl = first;
+            }
+          }
+
           return {
             id: matchId,
             otherUserId: matchInfo.otherId,
             otherUserName: prof?.name ?? 'User',
-            otherUserAvatar: Array.isArray(prof?.photos) && prof.photos.length ? prof.photos[0] : null,
+            otherUserAvatar: validPhotoUrl,
             lastMessage: latest ? {
               id: latest.id,
               senderId: latest.sender_id,

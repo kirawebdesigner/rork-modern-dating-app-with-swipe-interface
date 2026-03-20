@@ -9,31 +9,34 @@ export const trpc = createTRPCReact<AppRouter>();
 const getBaseUrl = () => {
   const env = process.env as Record<string, string | undefined>;
   const extra = (Constants.expoConfig?.extra as Record<string, any> | undefined) ?? {};
-  
-  const url = 
-    env.EXPO_PUBLIC_RORK_API_BASE_URL ?? 
+
+  const url =
+    env.EXPO_PUBLIC_RORK_API_BASE_URL ??
     extra.EXPO_PUBLIC_RORK_API_BASE_URL ??
-    'https://rork.com';
-  
+    'https://api.zewijuna.com';
+
   const normalizedUrl = url.replace(/\/$/, '');
   console.log('[tRPC] Using API base URL:', normalizedUrl);
   return normalizedUrl;
 };
 
 const buildSuperjsonErrorResponse = (message: string, httpStatus: number): Response => {
-  const errorPayload = {
-    error: {
-      message,
-      code: -32603,
-      data: {
-        code: 'INTERNAL_SERVER_ERROR',
-        httpStatus,
-      },
+  // tRPC expects the response envelope to have { error: <superjson-serialized-error> }
+  // The error object itself is serialized with superjson, NOT the whole envelope
+  const errorObject = {
+    message,
+    code: -32603,
+    data: {
+      code: 'INTERNAL_SERVER_ERROR',
+      httpStatus,
     },
   };
-  const serialized = superjson.serialize(errorPayload);
+  const serializedError = superjson.serialize(errorObject);
+  const responseBody = {
+    error: serializedError,
+  };
   return new Response(
-    JSON.stringify({ result: serialized }),
+    JSON.stringify(responseBody),
     {
       status: httpStatus,
       headers: { 'Content-Type': 'application/json' },
@@ -44,11 +47,13 @@ const buildSuperjsonErrorResponse = (message: string, httpStatus: number): Respo
 const createTrpcClient = () => {
   let apiUrl: string;
   try {
-    apiUrl = `${getBaseUrl()}/api/trpc`;
+    const baseUrl = getBaseUrl();
+    apiUrl = `${baseUrl}/api/trpc`;
     console.log('[tRPC] Full tRPC URL:', apiUrl);
   } catch (error) {
     console.error('[tRPC] Failed to get base URL, using fallback:', error);
-    apiUrl = 'https://rork.com/api/trpc';
+    // Use the project-specific domain from route.ts as a better fallback
+    apiUrl = 'https://api.zewijuna.com/api/trpc';
     console.log('[tRPC] Using fallback URL:', apiUrl);
   }
 
@@ -59,9 +64,12 @@ const createTrpcClient = () => {
           url: apiUrl,
           transformer: superjson,
           fetch: async (input, init) => {
+            const urlString = input.toString();
+            console.log(`[tRPC Request] ${init?.method || 'GET'} ${urlString}`);
+
             try {
               const controller = new AbortController();
-              const timeoutId = setTimeout(() => controller.abort(), 30000);
+              const timeoutId = setTimeout(() => controller.abort(), 35000); // 35s to account for slow ArifPay
               const response = await fetch(input, {
                 ...init,
                 signal: controller.signal,
@@ -72,29 +80,62 @@ const createTrpcClient = () => {
               });
               clearTimeout(timeoutId);
 
-              if (!response.ok) {
-                console.log('[tRPC] Non-OK response status:', response.status);
-                const text = await response.text();
-                console.log('[tRPC] Response body preview:', text.slice(0, 300));
+              console.log(`[tRPC Response] Status: ${response.status} ${response.statusText}`);
+              const text = await response.text();
 
+              // Log a snippet of the response body for debugging
+              const preview = text.length > 500 ? text.slice(0, 500) + '...' : text;
+              console.log('[tRPC Response Body Preview]:', preview);
+
+              if (!response.ok) {
+                // Check if response is valid JSON
+                let parsed: any = null;
                 try {
-                  JSON.parse(text);
+                  parsed = JSON.parse(text);
+                } catch {
+                  // Not JSON at all - wrap it
+                  console.log('[tRPC] Non-JSON error response, wrapping as tRPC error');
+                  return buildSuperjsonErrorResponse(
+                    `Server Error (${response.status}): ${text.slice(0, 100)}`,
+                    response.status,
+                  );
+                }
+
+                // Check if it's already a valid tRPC error response (server-side tRPC errors)
+                // tRPC+superjson format: { error: { json: {...}, meta: {...} } }
+                // tRPC without transformer: { error: { message: "...", code: ... } }
+                if (parsed.error && (typeof parsed.error === 'object')) {
+                  // It's a valid tRPC error envelope, pass through as-is
                   return new Response(text, {
                     status: response.status,
                     headers: response.headers,
                   });
-                } catch {
-                  console.log('[tRPC] Non-JSON error response, wrapping as tRPC error');
-                  return buildSuperjsonErrorResponse(
-                    `Server returned status ${response.status}`,
-                    response.status,
-                  );
                 }
+
+                // JSON but not tRPC format - wrap it
+                console.log('[tRPC] Non-tRPC JSON error response, wrapping as tRPC error');
+                const msg = parsed.message || parsed.msg || parsed.error || `Server Error (${response.status})`;
+                return buildSuperjsonErrorResponse(
+                  String(msg).slice(0, 200),
+                  response.status,
+                );
               }
 
-              return response;
+              // Even for 200 OK, verify it's JSON if we're on a non-tRPC environment (like placeholder HTML)
+              if (text.trim().startsWith('<') || !text.includes('{')) {
+                console.warn('[tRPC] Received non-JSON success response (likely HTML placeholder)');
+                return buildSuperjsonErrorResponse(
+                  `Invalid server response (HTML detected). Please check if the backend is running.`,
+                  500,
+                );
+              }
+
+              return new Response(text, {
+                status: response.status,
+                headers: response.headers,
+              });
             } catch (error: any) {
-              console.log('[tRPC] Fetch error (network may be unavailable):', error?.message || error);
+              console.log('[tRPC] Fetch Error:', error?.message || error);
               const msg = error?.name === 'AbortError'
                 ? 'Request timed out. Please try again.'
                 : 'Network unavailable. Please check your connection.';
@@ -109,7 +150,7 @@ const createTrpcClient = () => {
     return trpc.createClient({
       links: [
         httpLink<AppRouter>({
-          url: 'https://rork.com/api/trpc',
+          url: 'https://api.zewijuna.com/api/trpc',
           transformer: superjson,
         }),
       ],

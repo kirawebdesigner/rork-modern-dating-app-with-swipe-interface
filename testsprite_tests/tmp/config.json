@@ -1,0 +1,18 @@
+{
+  "status": "init",
+  "type": "frontend",
+  "scope": "codebase",
+  "localEndpoint": "http://localhost:8085/",
+  "executionArgs": {
+    "projectName": "zewijunaapp",
+    "projectPath": "c:\\Users\\kirub\\OneDrive\\Desktop\\zewijunaapp",
+    "testIds": [],
+    "additionalInstruction": "Run all high-priority frontend tests. Focus on onboarding, profile setup, and swipe interface.",
+    "serverMode": "development",
+    "envs": {
+      "API_KEY": "sk-user-uyoaH3eKX4C-upOREGQU4GpCK4ZiNKtW3Tqb3zZ6g4Q4CJA5uPGdmpAmlFN2ojnx6pSAvioR4wlM0-6yDYpEK3u_FVSF8KXBLH9EwZdQxu6TUnniNSAQvVwFF1FyYjXDNYg"
+    }
+  },
+  "serverPort": 5571,
+  "proxy": "http://1c4d772f-24a7-4309-af8e-81808bd713dc:TTt27GzmHYsZ20SIdDHTiWP83toTyDus@tun.testsprite.com:8080"
+}

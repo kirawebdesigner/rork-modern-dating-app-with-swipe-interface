@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure } from "../../../create-context";
+import { publicProcedure } from "../../../create-context.ts";
 import { createClient } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
 
@@ -98,14 +98,14 @@ export const upgradeProcedure = publicProcedure
           const u = new URL(origin);
           baseUrl = `${u.protocol}//${u.host}`;
         }
-      } catch {}
+      } catch { }
     }
     if (!baseUrl) {
       const host = ctx.req.headers.get("x-forwarded-host") || ctx.req.headers.get("host");
       const proto = ctx.req.headers.get("x-forwarded-proto") || "https";
       if (host) baseUrl = `${proto}://${host}`;
     }
-    if (!baseUrl) baseUrl = "https://01sqivqojn0aq61khqyvn.rork.app";
+    if (!baseUrl) baseUrl = "https://api.zewijuna.com";
 
     console.log("[tRPC Upgrade] Base URL:", baseUrl);
 

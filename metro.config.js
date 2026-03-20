@@ -2,5 +2,9 @@ const { getDefaultConfig } = require("expo/metro-config");
 const { withRorkMetro } = require("@rork-ai/toolkit-sdk/metro");
 
 const config = getDefaultConfig(__dirname);
+config.resolver.blockList = [
+  ...Array.from(config.resolver.blockList || []),
+  /testsprite_tests\/.*/,
+];
 
 module.exports = withRorkMetro(config);

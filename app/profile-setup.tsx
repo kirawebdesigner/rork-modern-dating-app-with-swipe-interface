@@ -14,6 +14,7 @@ import { useAuth } from '@/hooks/auth-context';
 import { useI18n } from '@/hooks/i18n-context';
 import { User } from '@/types';
 import { supabase, TEST_MODE } from '@/lib/supabase';
+import { uploadPhotos } from '@/lib/upload';
 
 type ProfileStep = 'details' | 'gender' | 'extras' | 'interests';
 
@@ -241,6 +242,16 @@ export default function ProfileSetup() {
             lastActive: new Date(),
           } as User;
 
+          // Upload local photos to Supabase Storage
+          if (!TEST_MODE && newProfile.photos[0]?.startsWith('file://')) {
+            console.log('[ProfileSetup] Uploading photo to storage...');
+            const uploaded = await uploadPhotos(newProfile.photos, authId);
+            if (uploaded.length > 0) {
+              newProfile.photos = uploaded;
+              console.log('[ProfileSetup] Photo uploaded:', uploaded[0]);
+            }
+          }
+
           if (!TEST_MODE) {
             try {
               const { error: upErr } = await supabase
@@ -318,6 +329,16 @@ export default function ProfileSetup() {
             lastActive: new Date(),
             completed: true,
           } as User;
+
+          // Upload local photos to Supabase Storage (final step)
+          if (!TEST_MODE && newProfile.photos[0]?.startsWith('file://')) {
+            console.log('[ProfileSetup] Uploading photo to storage (final)...');
+            const uploaded = await uploadPhotos(newProfile.photos, authId);
+            if (uploaded.length > 0) {
+              newProfile.photos = uploaded;
+              console.log('[ProfileSetup] Photo uploaded (final):', uploaded[0]);
+            }
+          }
 
           if (!TEST_MODE) {
             try {

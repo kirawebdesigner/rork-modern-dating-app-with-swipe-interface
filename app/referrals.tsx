@@ -8,18 +8,13 @@ import { supabase } from '@/lib/supabase';
 import { copyToClipboard } from '@/lib/clipboard';
 import { useMembership } from '@/hooks/membership-context';
 import { useI18n } from '@/hooks/i18n-context';
-import Constants from 'expo-constants';
 
 const REQUIRED_INVITES = 20;
 const GOLD_REWARD_DAYS = 30;
 
 function getAppBaseUrl(): string {
-  const projectId = process.env.EXPO_PUBLIC_PROJECT_ID ?? Constants.expoConfig?.extra?.eas?.projectId ?? '';
   if (Platform.OS === 'web' && typeof window !== 'undefined') {
     return window.location.origin;
-  }
-  if (projectId) {
-    return `https://p_${projectId}.rork.live`;
   }
   return 'https://zewijuna.com';
 }

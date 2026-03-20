@@ -1,0 +1,92 @@
+version: "2"
+type: frontend
+tech_stack:
+  - TypeScript
+  - React Native (Expo)
+  - Supabase (Backend as a Service) 
+  - Expo Router
+  - Lucide React Native
+  - Arifpay integration
+routes:
+  - path: /login
+    file: app/(auth)/login.tsx
+    auth_required: false
+    description: User sign-in page
+  - path: /signup
+    file: app/(auth)/signup.tsx
+    auth_required: false
+    description: User registration page
+  - path: /onboarding
+    file: app/onboarding.tsx
+    auth_required: false
+    description: Initial welcome and walkthrough
+  - path: /profile-setup
+    file: app/profile-setup.tsx
+    auth_required: true
+    description: Initial user profile information entry
+  - path: /
+    file: app/(tabs)/index.tsx
+    auth_required: true
+    description: Main discovery swipe interface
+  - path: /likes
+    file: app/(tabs)/likes.tsx
+    auth_required: true
+    description: List of users who Liked the current user
+  - path: /messages
+    file: app/(tabs)/messages/index.tsx
+    auth_required: true
+    description: List of active matched conversations
+  - path: /profile
+    file: app/(tabs)/profile.tsx
+    auth_required: true
+    description: User's own profile and settings overview
+  - path: /premium
+    file: app/premium.tsx
+    auth_required: true
+    description: Subscription and premium feature purchases
+features:
+  - name: User Authentication
+    description: Login and Signup with email/password via Supabase
+    files:
+      - app/(auth)/login.tsx
+      - app/(auth)/signup.tsx
+    entry_route: /login
+    user_interactions:
+      - Fill email address
+      - Fill password
+      - Click "Sign In" or "Sign Up" button
+    api_calls:
+      - method: POST
+        endpoint: Supabase Auth API
+    auth_required: false
+  - name: Discovery / Swiping
+    description: Browse through profiles and swipe right to like or left to skip
+    files:
+      - app/(tabs)/index.tsx
+      - components/SwipeCard.tsx
+    entry_route: /
+    user_interactions:
+      - View profile card
+      - Swipe right to Like
+      - Swipe left to Pass
+    api_calls:
+      - method: GET
+        endpoint: /profiles
+      - method: POST
+        endpoint: /likes
+    auth_required: true
+  - name: Premium Membership
+    description: Upgrade membership and handle payments via Arifpay
+    files:
+      - app/premium.tsx
+      - app/payment-success.tsx
+    entry_route: /premium
+    user_interactions:
+      - Select a premium plan
+      - Click "Upgrade Now"
+      - Complete payment flow
+    api_calls:
+      - method: POST
+        endpoint: /arifpay/create-payment
+    auth_required: true
+known_limitations: []

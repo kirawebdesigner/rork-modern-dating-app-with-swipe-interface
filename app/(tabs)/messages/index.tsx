@@ -16,13 +16,9 @@ export default function MessagesScreen() {
   const [searchQuery, setSearchQuery] = useState('');
 
   const handleConversationPress = useCallback(async (item: MatchListItem) => {
-    const canMessage = await consumeDailyLimit('messages');
-    if (!canMessage && tier === 'free') {
-      router.push('/premium' as any);
-      return;
-    }
+    // Only consume messages when they actually send one, let them open the chat
     router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId: item.id } } as any);
-  }, [router, tier, consumeDailyLimit]);
+  }, [router]);
 
   const getTimeSince = useCallback((date: Date) => {
     const now = new Date();
@@ -225,16 +221,6 @@ export default function MessagesScreen() {
           <View style={styles.loadingContainer} testID="messages-loading">
             <Text style={styles.loadingText}>Loading conversations...</Text>
           </View>
-        ) : items.length === 0 ? (
-          <View style={styles.emptyContainer} testID="messages-empty">
-            <View style={styles.emptyIconWrapper}>
-              <MessageCircle size={32} color="#FF2D55" />
-            </View>
-            <Text style={styles.emptyTitle}>No Messages Yet</Text>
-            <Text style={styles.emptyDescription}>
-              Match with someone and start a conversation!
-            </Text>
-          </View>
         ) : (
           <FlatList
             data={conversations}
@@ -245,11 +231,23 @@ export default function MessagesScreen() {
             showsVerticalScrollIndicator={false}
             ItemSeparatorComponent={renderSeparator}
             ListEmptyComponent={
-              <View style={styles.noConversationsContainer}>
-                {newMatches.length > 0 ? (
-                  <Text style={styles.emptyDescription}>Tap a match above to start chatting!</Text>
+              <View style={styles.emptyContainer} testID="messages-empty">
+                {items.length === 0 && !loading ? (
+                  <>
+                    <View style={styles.emptyIconWrapper}>
+                      <MessageCircle size={32} color="#FF2D55" />
+                    </View>
+                    <Text style={styles.emptyTitle}>No Matches Yet</Text>
+                    <Text style={styles.emptyDescription}>
+                      Keep swiping to find someone you click with!
+                    </Text>
+                  </>
                 ) : (
-                  <Text style={styles.emptyDescription}>No active conversations yet.</Text>
+                  <Text style={styles.emptyDescription}>
+                    {newMatches.length > 0
+                      ? 'Tap a match above to say hello! 👋'
+                      : 'Start a conversation with your matches!'}
+                  </Text>
                 )}
               </View>
             }

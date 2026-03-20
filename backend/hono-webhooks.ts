@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { arifpay } from "./lib/arifpay";
+import { arifpay } from "./lib/arifpay.ts";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(

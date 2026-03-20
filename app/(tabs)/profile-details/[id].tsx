@@ -34,6 +34,7 @@ import { useI18n } from '@/hooks/i18n-context';
 import { supabase } from '@/lib/supabase';
 import { User } from '@/types';
 import { useAuth } from '@/hooks/auth-context';
+import { getValidPhoto } from '@/lib/photo';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const HERO_HEIGHT = SCREEN_WIDTH * 1.15;
@@ -51,7 +52,7 @@ export default function ProfileDetails() {
   const router = useRouter();
   const { potentialMatches, blockUser, swipeUser } = useApp();
   const { user: me } = useAuth();
-  const { remainingProfileViews, tier, useDaily: consumeDaily } = useMembership();
+  const { remainingProfileViews, tier, useDaily: consumeDaily, useSuperLike: consumeSuperLike } = useMembership();
   const { t } = useI18n();
 
   const [fetchedUser, setFetchedUser] = useState<User | null>(null);
@@ -127,12 +128,30 @@ export default function ProfileDetails() {
     }
   }, [router]);
 
-  const handleLike = useCallback(() => {
+  const showUpgradePrompt = useCallback((feature: string) => {
+    Alert.alert(
+      t('Upgrade Required'),
+      feature === 'right swipes'
+        ? t("You're out of likes for today!")
+        : t("You've reached your limit for this feature. Upgrade for more!"),
+      [
+        { text: t('OK'), style: 'cancel' },
+        { text: t('Upgrade Now'), onPress: () => router.push('/premium' as any) },
+      ]
+    );
+  }, [tier, router, t]);
+
+  const handleLike = useCallback(async () => {
     if (!user) return;
+    const ok = await consumeDaily('rightSwipes');
+    if (!ok) {
+      showUpgradePrompt('right swipes');
+      return;
+    }
     swipeUser(user.id, 'like');
     Alert.alert(t('Liked!'), `${t('You liked')} ${user.name}`);
     handleBack();
-  }, [user, swipeUser, t, handleBack]);
+  }, [user, swipeUser, t, handleBack, consumeDaily, showUpgradePrompt]);
 
   const handleNope = useCallback(() => {
     if (!user) return;
@@ -140,12 +159,24 @@ export default function ProfileDetails() {
     handleBack();
   }, [user, swipeUser, handleBack]);
 
-  const handleSuperLike = useCallback(() => {
+  const handleSuperLike = useCallback(async () => {
     if (!user) return;
+    if (tier === 'free') {
+      showUpgradePrompt('super likes');
+      return;
+    }
+    const ok = await consumeSuperLike();
+    if (!ok) {
+      Alert.alert(t('Out of Super Likes'), t('Get more Super Likes in the Store.'), [
+        { text: t('Cancel'), style: 'cancel' },
+        { text: t('Get More'), onPress: () => router.push('/premium' as any) },
+      ]);
+      return;
+    }
     swipeUser(user.id, 'superlike');
     Alert.alert(t('Super Liked!'), `${t('You super liked')} ${user.name}`);
     handleBack();
-  }, [user, swipeUser, t, handleBack]);
+  }, [user, swipeUser, t, handleBack, tier, showUpgradePrompt, consumeSuperLike]);
 
   const handleMessage = useCallback(async () => {
     if (!user || !me?.id) {
@@ -278,7 +309,7 @@ export default function ProfileDetails() {
               {user.photos.map((uri, idx) => (
                 <Image
                   key={`photo-${idx}-${uri}`}
-                  source={{ uri: uri || 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop' }}
+                  source={{ uri: getValidPhoto([uri]) }}
                   style={styles.heroImage}
                   resizeMode="cover"
                   onError={() => {
@@ -472,7 +503,7 @@ export default function ProfileDetails() {
                 {user.photos.slice(0, 2).map((uri, idx) => (
                   <Image
                     key={`gallery-lg-${idx}`}
-                    source={{ uri }}
+                    source={{ uri: getValidPhoto([uri]) }}
                     style={styles.galleryImageLarge}
                     resizeMode="cover"
                   />
@@ -483,7 +514,7 @@ export default function ProfileDetails() {
                   {user.photos.slice(2, 5).map((uri, idx) => (
                     <Image
                       key={`gallery-sm-${idx}`}
-                      source={{ uri }}
+                      source={{ uri: getValidPhoto([uri]) }}
                       style={styles.galleryImageSmall}
                       resizeMode="cover"
                     />

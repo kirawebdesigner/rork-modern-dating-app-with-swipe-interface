@@ -47,15 +47,21 @@ export default function UpdateChecker() {
   const checkForUpdate = async () => {
     try {
       console.log('[UpdateChecker] Checking for updates, current version:', CURRENT_VERSION);
+      
+      // Select all to be resilient to column name variations (like 'Update' vs 'release_notes')
       const { data, error } = await supabase
         .from('app_versions')
-        .select('version, apk_url, release_notes, force_update')
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (error) {
-        console.log('[UpdateChecker] No app_versions table or error:', error.message);
+        console.log('[UpdateChecker] Query error:', error.message);
+        // Temporarily alert during troubleshooting
+        if (__DEV__) {
+          // Alert.alert('Update Check Error', error.message);
+        }
         return;
       }
 
@@ -64,20 +70,32 @@ export default function UpdateChecker() {
         return;
       }
 
-      console.log('[UpdateChecker] Latest version:', data.version, 'Current:', CURRENT_VERSION);
+      const latestVersion = data.version;
+      const releaseNotes = data.release_notes || data.Update || data.notes || '';
+      const forceUpdate = !!data.force_update;
+      const apkUrl = data.apk_url;
 
-      if (isNewerVersion(data.version, CURRENT_VERSION)) {
+      console.log('[UpdateChecker] Latest:', latestVersion, 'Current:', CURRENT_VERSION, 'Force:', forceUpdate);
+
+      if (isNewerVersion(latestVersion, CURRENT_VERSION)) {
         const dismissed = await AsyncStorage.getItem(DISMISSED_VERSION_KEY);
-        if (dismissed === data.version && !data.force_update) {
+        if (dismissed === latestVersion && !forceUpdate) {
           console.log('[UpdateChecker] User dismissed this version');
           return;
         }
 
-        setUpdateInfo(data as AppVersion);
+        setUpdateInfo({
+          version: latestVersion,
+          apk_url: apkUrl,
+          release_notes: releaseNotes,
+          force_update: forceUpdate
+        });
         setVisible(true);
+      } else {
+        console.log('[UpdateChecker] App is up to date');
       }
-    } catch (e) {
-      console.log('[UpdateChecker] Check failed:', e);
+    } catch (e: any) {
+      console.log('[UpdateChecker] Exception:', e?.message || e);
     }
   };
 
@@ -95,7 +113,11 @@ export default function UpdateChecker() {
 
   const handleUpdate = () => {
     if (updateInfo?.apk_url) {
-      Linking.openURL(updateInfo.apk_url).catch(e => {
+      let url = updateInfo.apk_url;
+      if (!url.startsWith('http')) {
+        url = 'https://' + url;
+      }
+      Linking.openURL(url).catch(e => {
         console.log('[UpdateChecker] Failed to open URL:', e);
       });
     }

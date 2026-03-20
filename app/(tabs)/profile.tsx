@@ -36,6 +36,7 @@ import { useApp } from '@/hooks/app-context';
 import { useAuth } from '@/hooks/auth-context';
 import GradientButton from '@/components/GradientButton';
 import { useMembership } from '@/hooks/membership-context';
+import { getValidPhoto } from '@/lib/photo';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const PHOTO_WIDTH = SCREEN_WIDTH - 48;
@@ -184,7 +185,7 @@ export default function ProfileScreen() {
             {photos.map((uri: string, idx: number) => (
               <View key={`${uri}-${idx}`} style={styles.photoCard}>
                 <Image
-                  source={{ uri }}
+                  source={{ uri: getValidPhoto([uri]) }}
                   style={styles.photo}
                   accessibilityLabel={`Profile photo ${idx + 1}`}
                 />

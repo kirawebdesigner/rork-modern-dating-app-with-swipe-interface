@@ -10,6 +10,8 @@ import { useAuth } from '@/hooks/auth-context';
 import { supabase } from '@/lib/supabase';
 import { useRealtimeMessages } from '@/hooks/use-chat';
 import { LinearGradient } from 'expo-linear-gradient';
+import { safeGoBack } from '@/lib/navigation';
+import { useApp } from '@/hooks/app-context';
 
 class Boundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
@@ -37,6 +39,7 @@ export default function ChatScreen() {
   const { chatId } = useLocalSearchParams<{ chatId: string }>();
   const { useDaily: consumeDailyLimit } = useMembership();
   const { user } = useAuth();
+  const { blockUser } = useApp();
   const uid = user?.id ?? null;
   const [input, setInput] = useState<string>('');
   const [sending, setSending] = useState<boolean>(false);
@@ -126,7 +129,10 @@ export default function ChatScreen() {
           setOtherName((prof?.name as string) ?? 'User');
           const photos = prof?.photos as string[] | null;
           if (photos && photos.length > 0) {
-            setOtherAvatar(photos[0]);
+            const first = photos[0];
+            if (typeof first === 'string' && first.trim() !== '' && !first.startsWith('file://')) {
+              setOtherAvatar(first);
+            }
           }
           const { data: phoneProf } = await supabase
             .from('profiles')
@@ -157,7 +163,7 @@ export default function ChatScreen() {
   }, [messages, scrollToEnd]);
 
   const handleBack = useCallback(() => {
-    router.back();
+    safeGoBack(router, '/(tabs)/messages');
   }, [router]);
 
   const handleCall = useCallback(() => {
@@ -253,9 +259,14 @@ export default function ChatScreen() {
               {
                 text: 'Block',
                 style: 'destructive',
-                onPress: () => {
-                  Alert.alert('User Blocked', `${otherName} has been blocked.`);
-                  router.back();
+                onPress: async () => {
+                  if (otherId) {
+                    await blockUser(otherId);
+                    Alert.alert('User Blocked', `${otherName} has been blocked.`);
+                    router.back();
+                  } else {
+                    router.back();
+                  }
                 },
               },
             ]
@@ -415,9 +426,9 @@ export default function ChatScreen() {
           </View>
 
           <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
             style={styles.flex}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 90 : 0}
           >
             {loading ? (
               <View style={styles.loadingWrap}>
