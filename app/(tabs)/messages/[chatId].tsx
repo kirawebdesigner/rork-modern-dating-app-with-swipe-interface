@@ -12,6 +12,7 @@ import { useRealtimeMessages } from '@/hooks/use-chat';
 import { LinearGradient } from 'expo-linear-gradient';
 import { safeGoBack } from '@/lib/navigation';
 import { useApp } from '@/hooks/app-context';
+import { getValidPhoto } from '@/lib/photo';
 
 class Boundary extends React.Component<{ children: React.ReactNode }, { hasError: boolean }> {
   constructor(props: { children: React.ReactNode }) {
@@ -396,10 +397,15 @@ export default function ChatScreen() {
               <ChevronLeft size={26} color="#1A1A1A" strokeWidth={2} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.headerProfile} activeOpacity={0.8}>
+            <TouchableOpacity 
+              style={styles.headerProfile} 
+              activeOpacity={0.8}
+              onPress={() => otherId && router.push(`/(tabs)/profile-details/${otherId}` as any)}
+              testID="chat-header-profile"
+            >
               <View style={styles.avatarWrapper}>
                 {otherAvatar ? (
-                  <Image source={{ uri: otherAvatar }} style={styles.avatar} />
+                  <Image source={{ uri: getValidPhoto([otherAvatar]) }} style={styles.avatar} />
                 ) : (
                   <View style={[styles.avatar, styles.placeholderAvatar]}>
                     <Text style={styles.placeholderText}>

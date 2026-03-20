@@ -8023,3 +8023,5 @@
 {"timestamp":"2026-03-15T22:11:33.268Z","level":"error","message":"checkPortListening tcp error: 19000 127.0.0.1\nError: connect ECONNREFUSED 127.0.0.1:19000"}
 {"timestamp":"2026-03-15T22:11:33.768Z","level":"error","message":"checkPortListening tcp error: 19000 127.0.0.1\nError: connect ECONNREFUSED 127.0.0.1:19000"}
 {"timestamp":"2026-03-15T22:11:34.280Z","level":"error","message":"checkPortListening tcp error: 19000 127.0.0.1\nError: connect ECONNREFUSED 127.0.0.1:19000"}
+{"timestamp":"2026-03-20T11:35:48.513Z","level":"debug","message":"Generate code and execute params","context":{"projectName":"zewijunaapp","projectPath":"c:\\Users\\kirub\\OneDrive\\Desktop\\zewijunaapp","testIds":[],"serverMode":"development"}}
+{"timestamp":"2026-03-20T11:35:48.574Z","level":"info","message":"Attempting to start server (attempt 1/3)"}

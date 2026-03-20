@@ -371,7 +371,7 @@ export default function ProfileScreen() {
                 {photos.map((photo: string, index: number) => (
                   <Image
                     key={index}
-                    source={{ uri: photo }}
+                    source={{ uri: getValidPhoto([photo]) }}
                     style={styles.galleryThumb}
                     accessibilityLabel={`Gallery photo ${index + 1}`}
                   />

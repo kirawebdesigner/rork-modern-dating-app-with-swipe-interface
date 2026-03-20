@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '@/hooks/auth-context';
 import { useUserMatches, MatchListItem } from '@/hooks/use-chat';
 import { LinearGradient } from 'expo-linear-gradient';
+import { getValidPhoto } from '@/lib/photo';
 
 export default function MessagesScreen() {
   const router = useRouter();
@@ -13,12 +14,6 @@ export default function MessagesScreen() {
   const uid = user?.id ?? null;
   const { items, loading } = useUserMatches(uid);
   const { tier, remainingDailyMessages, useDaily: consumeDailyLimit } = useMembership();
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const handleConversationPress = useCallback(async (item: MatchListItem) => {
-    // Only consume messages when they actually send one, let them open the chat
-    router.push({ pathname: '/(tabs)/messages/[chatId]', params: { chatId: item.id } } as any);
-  }, [router]);
 
   const getTimeSince = useCallback((date: Date) => {
     const now = new Date();
@@ -62,7 +57,7 @@ export default function MessagesScreen() {
       <TouchableOpacity
         key={item.id}
         style={styles.activityItem}
-        onPress={() => !isCurrentUser && handleConversationPress(item)}
+        onPress={() => !isCurrentUser && handleMatchPress(item)}
         activeOpacity={0.8}
       >
         <View style={styles.activityAvatarWrapper}>
@@ -75,7 +70,7 @@ export default function MessagesScreen() {
             >
               <View style={styles.activityAvatarContainer}>
                 {item.otherUserAvatar ? (
-                  <Image source={{ uri: item.otherUserAvatar }} style={styles.activityAvatar} />
+                  <Image source={{ uri: getValidPhoto([item.otherUserAvatar]) }} style={styles.activityAvatar} />
                 ) : (
                   <View style={[styles.activityAvatar, styles.placeholderAvatar]}>
                     <Text style={styles.placeholderText}>
@@ -88,7 +83,7 @@ export default function MessagesScreen() {
           ) : (
             <View style={styles.activityNoGradient}>
               {item.otherUserAvatar ? (
-                <Image source={{ uri: item.otherUserAvatar }} style={styles.activityAvatarSimple} />
+                <Image source={{ uri: getValidPhoto([item.otherUserAvatar]) }} style={styles.activityAvatarSimple} />
               ) : (
                 <View style={[styles.activityAvatarSimple, styles.placeholderAvatar]}>
                   <Text style={styles.placeholderText}>
@@ -119,7 +114,7 @@ export default function MessagesScreen() {
       >
         <View style={styles.conversationAvatarWrapper}>
           {item.otherUserAvatar ? (
-            <Image source={{ uri: item.otherUserAvatar }} style={styles.conversationAvatarImg} />
+            <Image source={{ uri: getValidPhoto([item.otherUserAvatar]) }} style={styles.conversationAvatarImg} />
           ) : (
             <View style={[styles.conversationAvatarImg, styles.placeholderAvatar]}>
               <Text style={styles.placeholderTextLarge}>
