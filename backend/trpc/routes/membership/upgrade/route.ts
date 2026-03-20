@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { publicProcedure } from "../../../create-context.ts";
+import { publicProcedure } from "../../../create-context";
 import { createClient } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
 

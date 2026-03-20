@@ -1,9 +1,9 @@
-import { createTRPCRouter } from "./create-context.ts";
-import hiRoute from "./routes/example/hi/route.ts";
-import membershipUpgradeRoute from "./routes/membership/upgrade/route.ts";
-import creditsBuyRoute from "./routes/credits/buy/route.ts";
-import themeUnlockRoute from "./routes/themes/unlock/route.ts";
-import paymentVerifyRoute from "./routes/payment/verify/route.ts";
+import { createTRPCRouter } from "./create-context";
+import hiRoute from "./routes/example/hi/route";
+import membershipUpgradeRoute from "./routes/membership/upgrade/route";
+import creditsBuyRoute from "./routes/credits/buy/route";
+import themeUnlockRoute from "./routes/themes/unlock/route";
+import paymentVerifyRoute from "./routes/payment/verify/route";
 
 export const appRouter = createTRPCRouter({
   example: createTRPCRouter({

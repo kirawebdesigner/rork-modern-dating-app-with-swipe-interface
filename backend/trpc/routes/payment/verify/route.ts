@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { publicProcedure } from "../../../create-context.ts";
-import { arifpay } from "../../../../lib/arifpay.ts";
+import { publicProcedure } from "../../../create-context";
+import { arifpay } from "../../../../lib/arifpay";
 import { createClient } from "@supabase/supabase-js";
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://nizdrhdfhddtrukeemhp.supabase.co';

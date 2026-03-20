@@ -34,7 +34,7 @@ export default function MatchesScreen() {
   const [sortNewest, setSortNewest] = useState<boolean>(true);
 
   useEffect(() => {
-    loadLikes();
+    void loadLikes();
   }, []);
 
   const loadLikes = async () => {
@@ -165,7 +165,7 @@ export default function MatchesScreen() {
         }
       }
 
-      swipeUser(userId, action);
+      await swipeUser(userId, action);
       // Optimistically update UI
       setLikesData(prev => prev.filter(item => item.id !== userId));
     } catch (e) {
@@ -525,7 +525,6 @@ const styles = StyleSheet.create({
     height: 42,
     flexDirection: 'row',
     backgroundColor: 'rgba(0,0,0,0.35)',
-    backdropFilter: 'blur(10px)',
   },
   actionBtn: {
     flex: 1,

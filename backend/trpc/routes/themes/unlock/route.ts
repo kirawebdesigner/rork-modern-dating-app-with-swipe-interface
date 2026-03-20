@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure } from "../../../create-context.ts";
+import { protectedProcedure } from "../../../create-context";
 
 export default protectedProcedure
   .input(z.object({ theme: z.enum(["midnight", "sunset", "geometric"]) }))

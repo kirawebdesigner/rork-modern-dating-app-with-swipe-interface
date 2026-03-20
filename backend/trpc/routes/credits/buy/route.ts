@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { protectedProcedure } from "../../../create-context.ts";
+import { protectedProcedure } from "../../../create-context";
 
 const CREDIT_PRICES: Record<string, number> = {
   superLikes: 50,

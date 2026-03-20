@@ -1,9 +1,9 @@
 import { Hono } from "hono";
 import { trpcServer } from "@hono/trpc-server";
 import { cors } from "hono/cors";
-import { appRouter } from "./trpc/app-router.ts";
-import { createContext } from "./trpc/create-context.ts";
-import webhooks from "./hono-webhooks.ts";
+import { appRouter } from "./trpc/app-router";
+import { createContext } from "./trpc/create-context";
+import webhooks from "./hono-webhooks";
 import { serve } from "@hono/node-server";
 
 const app = new Hono();

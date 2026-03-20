@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { arifpay } from "./lib/arifpay.ts";
+import { arifpay } from "./lib/arifpay";
 import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
@@ -20,8 +20,8 @@ webhooks.post("/arifpay", async (c) => {
       sessionId,
       transactionStatus,
       transaction: webhookTransaction,
-      totalAmount,
-      paymentMethod
+      totalAmount: _totalAmount,
+      paymentMethod: _paymentMethod
     } = body;
 
     const actualSessionId = uuid || sessionId || webhookTransaction?.sessionId;

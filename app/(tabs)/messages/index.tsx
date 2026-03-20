@@ -13,7 +13,18 @@ export default function MessagesScreen() {
   const { user } = useAuth();
   const uid = user?.id ?? null;
   const { items, loading } = useUserMatches(uid);
-  const { tier, remainingDailyMessages, useDaily: consumeDailyLimit } = useMembership();
+  const { tier, remainingDailyMessages } = useMembership();
+  const [searchQuery, setSearchQuery] = useState<string>('');
+
+  const handleMatchPress = useCallback((item: MatchListItem) => {
+    console.log('[Messages] Opening match conversation:', item.id);
+    router.push(`/(tabs)/messages/${item.id}` as any);
+  }, [router]);
+
+  const handleConversationPress = useCallback((item: MatchListItem) => {
+    console.log('[Messages] Opening existing conversation:', item.id);
+    router.push(`/(tabs)/messages/${item.id}` as any);
+  }, [router]);
 
   const getTimeSince = useCallback((date: Date) => {
     const now = new Date();
