@@ -1,18 +1,51 @@
 import { Hono } from "hono";
 import { arifpay } from "./lib/arifpay.ts";
 import { createClient } from "@supabase/supabase-js";
+import * as crypto from "crypto";
 
-const supabase = createClient(
-  process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://nizdrhdfhddtrukeemhp.supabase.co',
-  process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg'
-);
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("[Webhook] FATAL: Missing SUPABASE env vars. Ensure SUPABASE_SERVICE_ROLE_KEY is set.");
+}
+
+// Use Service Role Key to bypass RLS for server-side webhook updates
+const supabase = createClient(supabaseUrl || '', supabaseKey || '');
 
 const webhooks = new Hono();
 
 webhooks.post("/arifpay", async (c) => {
   try {
-    const body = await c.req.json();
-    console.log("[Webhook] Arifpay notification received:", JSON.stringify(body, null, 2));
+    // --- Issue #4 Fix: Verify webhook signature before processing ---
+    const ARIFPAY_WEBHOOK_SECRET = process.env.ARIFPAY_WEBHOOK_SECRET;
+    if (ARIFPAY_WEBHOOK_SECRET) {
+      const signature = c.req.header("x-arifpay-signature") || c.req.header("x-signature");
+      const rawBody = await c.req.text();
+
+      if (!signature) {
+        console.warn("[Webhook] ⚠️ Missing signature header. Rejecting request.");
+        return c.json({ error: "Missing signature" }, 401);
+      }
+
+      const expectedSignature = crypto
+        .createHmac("sha256", ARIFPAY_WEBHOOK_SECRET)
+        .update(rawBody)
+        .digest("hex");
+
+      if (signature !== expectedSignature) {
+        console.warn("[Webhook] ⚠️ Invalid signature. Expected:", expectedSignature.slice(0, 10) + "..., Got:", signature.slice(0, 10) + "...");
+        return c.json({ error: "Invalid signature" }, 401);
+      }
+
+      // Re-parse body after reading as text for signature
+      var body = JSON.parse(rawBody);
+      console.log("[Webhook] ✅ Signature verified. Arifpay notification:", JSON.stringify(body, null, 2));
+    } else {
+      console.warn("[Webhook] ⚠️ ARIFPAY_WEBHOOK_SECRET not set. Skipping signature verification. SET THIS IN PRODUCTION!");
+      var body = await c.req.json();
+      console.log("[Webhook] Arifpay notification received:", JSON.stringify(body, null, 2));
+    }
 
     // ArifPay webhook payload structure can vary slightly; handle common mappings
     const {

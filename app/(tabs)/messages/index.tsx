@@ -14,6 +14,7 @@ export default function MessagesScreen() {
   const uid = user?.id ?? null;
   const { items, loading } = useUserMatches(uid);
   const { tier, remainingDailyMessages, useDaily: consumeDailyLimit } = useMembership();
+  const [searchQuery, setSearchQuery] = useState('');
 
   const getTimeSince = useCallback((date: Date) => {
     const now = new Date();

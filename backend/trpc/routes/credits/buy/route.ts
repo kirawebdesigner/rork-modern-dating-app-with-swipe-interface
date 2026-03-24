@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { protectedProcedure } from "../../../create-context.ts";
+import { createClient } from "@supabase/supabase-js";
 
 const CREDIT_PRICES: Record<string, number> = {
   superLikes: 50,
@@ -8,6 +9,11 @@ const CREDIT_PRICES: Record<string, number> = {
   messages: 20,
   unlocks: 75,
 };
+
+// --- Issue #9 Fix: Actually credit the user's account in test mode ---
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
 
 export default protectedProcedure
   .input(
@@ -30,12 +36,58 @@ export default protectedProcedure
     }
 
     console.log("[tRPC] Buy credits for", userId, input.kind, input.amount);
-    console.log("[tRPC] TEST MODE: Payment bypassed for testing");
 
     const unitPrice = CREDIT_PRICES[input.kind];
     const totalAmount = unitPrice * input.amount;
 
-    console.log("[tRPC] TEST MODE: Credits added successfully");
+    // TEST MODE: Bypass payment but actually add credits to DB
+    console.log("[tRPC] TEST MODE: Bypassing payment, adding credits to DB...");
+
+    if (supabase) {
+      try {
+        // Fetch current credits
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('credits')
+          .eq('id', userId)
+          .maybeSingle();
+
+        const currentCredits = (profile as any)?.credits ?? 0;
+        const newCredits = currentCredits + input.amount;
+
+        // Update credits in DB
+        const { error: updateErr } = await supabase
+          .from('profiles')
+          .update({ credits: newCredits })
+          .eq('id', userId);
+
+        if (updateErr) {
+          console.error("[tRPC] Failed to update credits in DB:", updateErr.message);
+        } else {
+          console.log(`[tRPC] TEST MODE: Credits updated ${currentCredits} → ${newCredits} for ${input.kind}`);
+        }
+
+        // Also log the transaction
+        await supabase
+          .from('payment_transactions')
+          .insert({
+            user_id: userId,
+            session_id: `test-${Date.now()}`,
+            amount: totalAmount,
+            tier: 'credits',
+            payment_method: 'TEST',
+            status: 'completed',
+            completed_at: new Date().toISOString(),
+          })
+          .then(({ error }) => {
+            if (error) console.log("[tRPC] Credit transaction log failed:", error.message);
+          });
+      } catch (dbErr: any) {
+        console.error("[tRPC] DB error adding credits:", dbErr?.message);
+      }
+    } else {
+      console.warn("[tRPC] No Supabase client available - credits NOT persisted to DB");
+    }
 
     return {
       success: true,
@@ -43,40 +95,4 @@ export default protectedProcedure
       testMode: true,
       message: 'Credits added successfully (test mode)',
     };
-
-    // OLD PAYMENT CODE - Disabled for testing
-    /*
-    try {
-      const baseUrl = input.returnUrl || "exp://192.168.1.1:8081";
-
-      const checkout = await arifpay.createCheckout({
-        amount: totalAmount,
-        currency: "ETB",
-        beneficiaries: [
-          {
-            accountNumber: process.env.ARIFPAY_ACCOUNT_NUMBER || "1000000000",
-            bank: "CBE",
-            amount: totalAmount,
-          },
-        ],
-        successUrl: `${baseUrl}/payment-verification?status=success&kind=${input.kind}&amount=${input.amount}`,
-        cancelUrl: `${baseUrl}/payment-verification?status=cancelled&kind=${input.kind}`,
-        errorUrl: `${baseUrl}/payment-verification?status=error&kind=${input.kind}`,
-        notifyUrl: `${baseUrl}/api/webhooks/arifpay`,
-      });
-
-      console.log("[tRPC] Payment checkout created:", checkout);
-
-      return {
-        success: true,
-        checkoutUrl: checkout.checkoutUrl,
-        sessionId: checkout.sessionId,
-        transactionId: checkout.transactionId,
-        amount: totalAmount,
-      };
-    } catch (error) {
-      console.error("[tRPC] Payment creation failed:", error);
-      throw new Error("Failed to create payment checkout");
-    }
-    */
   });

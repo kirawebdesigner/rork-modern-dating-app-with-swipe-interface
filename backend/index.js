@@ -7,6 +7,7 @@ const port = process.env.PORT || 8080;
 // 🛡️ Adaptive TSX Loader (Finds the hash-named register file)
 function getTsxRegister() {
     const searchPaths = [
+        path.join(__dirname, 'node_modules/tsx/dist'),
         path.join(__dirname, '../node_modules/tsx/dist'),
         '/home/zewijuxs/api_backend/node_modules/tsx/dist',
         '/home/zewijuxs/nodevenv/api_backend/24/lib/node_modules/tsx/dist'

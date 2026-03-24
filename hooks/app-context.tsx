@@ -714,12 +714,15 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, [refilterPotential]);
 
   const setCurrentProfile = useCallback(async (profile: User) => {
+    // 1. Local state update
     const normalized: User = {
       ...profile,
       ownedThemes: profile.ownedThemes ?? [],
       profileTheme: (profile.profileTheme ?? null) as ThemeId | null,
-      completed: computeCompleted(profile),
     } as User;
+    
+    (normalized as any).completed = computeCompleted(normalized);
+    
     await AsyncStorage.setItem('user_profile', JSON.stringify(normalized));
     setCurrentProfileState(normalized);
 
@@ -728,21 +731,24 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
       return;
     }
 
+    // 2. Server sync
     try {
-      let finalPhotos = normalized.photos;
-      if (!TEST_MODE && normalized.id && normalized.photos.some(p => p.startsWith('file://'))) {
+      let finalPhotos = [...normalized.photos];
+      if (normalized.id && normalized.photos.some(p => p.startsWith('file://'))) {
         console.log('[App] Local photos detected, uploading...');
         const uploaded = await uploadPhotos(normalized.photos, normalized.id);
         finalPhotos = uploaded;
         normalized.photos = uploaded;
+        // Update local state and cache again with final URLs
+        await AsyncStorage.setItem('user_profile', JSON.stringify(normalized));
+        setCurrentProfileState(normalized);
       }
       
-      // Filter out any remaining file:// URIs (failed uploads) before sending to global database
       const syncPhotos = finalPhotos.filter(p => !p.startsWith('file://'));
 
       const payload = {
         id: normalized.id,
-        name: normalized.name,
+        name: normalized.name || 'User', // Safety fallback
         age: normalized.age,
         gender: normalized.gender,
         interested_in: (normalized.interestedIn ?? null) as any,
@@ -759,70 +765,83 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         profile_theme: normalized.profileTheme ?? null,
         owned_themes: normalized.ownedThemes ?? [],
         completed: computeCompleted(normalized),
-      } as const;
+      };
+
       const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-      if (error) console.log('[App] profile upsert error', error.message);
+      if (error) {
+        console.log('[App] setCurrentProfile upsert error:', error.message);
+        throw error;
+      }
     } catch (e) {
-      console.log('[App] profile sync error', e);
+      console.log('[App] setCurrentProfile server sync failed:', e);
     }
   }, [computeCompleted]);
 
   const updateProfile = useCallback(async (patch: Partial<User>) => {
-    // Proactively upload photos if present in patch
-    if (!TEST_MODE && currentProfileRef.current?.id && patch.photos?.some(p => p.startsWith('file://'))) {
-      console.log('[App] updateProfile: Local photos detected, uploading...');
-      const uploaded = await uploadPhotos(patch.photos, currentProfileRef.current.id);
-      patch.photos = uploaded;
+    const current = currentProfileRef.current;
+    if (!current?.id) {
+      console.log('[App] Cannot updateProfile, no user ID');
+      return;
     }
 
-    setCurrentProfileState(prev => {
-      const base = (prev as User) ?? ({} as User);
-      const hasProfileTheme = Object.prototype.hasOwnProperty.call(patch, 'profileTheme');
-      const hasOwnedThemes = Object.prototype.hasOwnProperty.call(patch, 'ownedThemes');
-      const next: User = {
-        ...base,
-        ...patch,
-        ownedThemes: (hasOwnedThemes ? (patch.ownedThemes as ThemeId[] | undefined) : base.ownedThemes) ?? [],
-        profileTheme: (hasProfileTheme ? (patch.profileTheme as ThemeId | null | undefined) : base.profileTheme) ?? null,
-      } as User;
-      (next as any).completed = computeCompleted(next);
-      AsyncStorage.setItem('user_profile', JSON.stringify(next));
-
-      if (TEST_MODE) {
-        console.log('[App] TEST MODE: Profile update saved locally only');
-        return next;
+    // 1. Proactive upload if photos are being patched
+    let finalPhotos = patch.photos;
+    if (!TEST_MODE && patch.photos?.some(p => p.startsWith('file://'))) {
+      console.log('[App] updateProfile: Local photos detected, uploading...');
+      try {
+        finalPhotos = await uploadPhotos(patch.photos, current.id);
+        patch.photos = finalPhotos;
+      } catch (uploadErr) {
+        console.log('[App] updateProfile photo upload failed:', uploadErr);
       }
+    }
 
-      (async () => {
-        try {
-          const payload = {
-            id: next.id,
-            name: next.name,
-            age: next.age,
-            gender: next.gender,
-            interested_in: (next.interestedIn ?? null) as any,
-            bio: next.bio,
-            photos: next.photos.filter(p => !p.startsWith('file://')),
-            interests: next.interests,
-            city: next.location.city,
-            latitude: next.location.latitude ?? null,
-            longitude: next.location.longitude ?? null,
-            height_cm: next.heightCm ?? null,
-            education: next.education ?? null,
-            verified: next.verified ?? false,
-            last_active: new Date().toISOString(),
-            profile_theme: next.profileTheme ?? null,
-            owned_themes: next.ownedThemes ?? [],
-            completed: computeCompleted(next),
-          } as const;
-          const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
-          if (error) console.log('[App] profile update error', error.message);
-        } catch (e) {
-          console.log('[App] profile update sync failed', e);
-        }
-      })();
-      return next;
-    });
+    // 2. Merge and update local state
+    const next: User = {
+      ...current,
+      ...patch,
+      ownedThemes: (patch.ownedThemes ?? current.ownedThemes) ?? [],
+      profileTheme: (patch.profileTheme ?? current.profileTheme) ?? null,
+    } as User;
+    
+    (next as any).completed = computeCompleted(next);
+    
+    await AsyncStorage.setItem('user_profile', JSON.stringify(next));
+    setCurrentProfileState(next);
+
+    // 3. Sync to Supabase
+    if (TEST_MODE) return;
+
+    try {
+      const payload = {
+        id: next.id,
+        name: next.name || 'User', // Safety fallback
+        age: next.age,
+        gender: next.gender,
+        interested_in: (next.interestedIn ?? null) as any,
+        bio: next.bio,
+        photos: next.photos.filter(p => !p.startsWith('file://')),
+        interests: next.interests,
+        city: next.location.city,
+        latitude: next.location.latitude ?? null,
+        longitude: next.location.longitude ?? null,
+        height_cm: next.heightCm ?? null,
+        education: next.education ?? null,
+        verified: next.verified ?? false,
+        last_active: new Date().toISOString(),
+        profile_theme: next.profileTheme ?? null,
+        owned_themes: next.ownedThemes ?? [],
+        completed: computeCompleted(next),
+      };
+
+      const { error } = await supabase.from('profiles').upsert(payload, { onConflict: 'id' });
+      if (error) {
+        console.log('[App] updateProfile server upsert error:', error.message);
+        throw error;
+      }
+    } catch (e) {
+      console.log('[App] updateProfile server sync failed:', e);
+    }
   }, [computeCompleted]);
 
   const setFilters = useCallback(async (next: FiltersState) => {

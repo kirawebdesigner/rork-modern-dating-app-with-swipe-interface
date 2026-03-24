@@ -2,38 +2,36 @@ import { z } from "zod";
 import { publicProcedure } from "../../../create-context.ts";
 import { createClient } from "@supabase/supabase-js";
 import { TRPCError } from "@trpc/server";
+import { arifpay } from "../../../lib/arifpay.ts";
 
-const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || 'https://nizdrhdfhddtrukeemhp.supabase.co';
-const supabaseKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg';
-const supabase = createClient(supabaseUrl, supabaseKey);
+// --- Issue #3 Fix: No hardcoded secrets. Fail fast if env vars are missing. ---
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
-const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.net";
-const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "01320811436100";
-
-const SUPPORTED_PAYMENT_METHODS = [
-  "TELEBIRR", "AWAASH", "AWAASH_WALLET", "PSS", "CBE",
-  "AMOLE", "BOA", "KACHA", "HELLOCASH", "MPESSA"
-];
-
-function normalizePhone(phone: string): string {
-  let normalized = phone.replace(/\s+/g, '').replace(/[^0-9+]/g, '');
-  if (normalized.startsWith('+')) normalized = normalized.substring(1);
-  if (normalized.startsWith('0')) normalized = '251' + normalized.substring(1);
-  else if (!normalized.startsWith('251') && normalized.length === 9) normalized = '251' + normalized;
-  if (normalized.length !== 12) return '251911111111';
-  return normalized;
+if (!supabaseUrl || !supabaseKey) {
+  console.error("[tRPC Upgrade] FATAL: Missing SUPABASE env vars. Set EXPO_PUBLIC_SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.");
 }
 
-function normalizePaymentMethod(method: string): string[] {
-  const methodMap: Record<string, string> = {
-    'telebirr': 'TELEBIRR', 'cbe': 'CBE', 'awash': 'AWAASH',
-    'awaash': 'AWAASH', 'amole': 'AMOLE', 'boa': 'BOA',
-    'kacha': 'KACHA', 'hellocash': 'HELLOCASH', 'mpesa': 'MPESSA', 'mpessa': 'MPESSA',
-  };
-  const normalized = methodMap[method.toLowerCase()] || method.toUpperCase();
-  if (SUPPORTED_PAYMENT_METHODS.includes(normalized)) return [normalized];
-  return ["TELEBIRR", "CBE", "AWAASH"];
+const supabase = createClient(supabaseUrl || '', supabaseKey || '');
+
+// --- Issue #1 Fix: Server-side tier→price map. Client amount is IGNORED. ---
+const TIER_PRICES: Record<string, number> = {
+  silver: 500,
+  gold: 1500,
+  vip: 2600,
+};
+
+const BILLING_DISCOUNTS: Record<number, number> = {
+  1: 0,
+  6: 0.25,
+  12: 0.40,
+};
+
+function getServerSideAmount(tier: string, billingMonths: number): number {
+  const monthlyPrice = TIER_PRICES[tier];
+  if (!monthlyPrice) return 0;
+  const discount = BILLING_DISCOUNTS[billingMonths] ?? 0;
+  return Math.round(monthlyPrice * billingMonths * (1 - discount));
 }
 
 export const upgradeProcedure = publicProcedure
@@ -43,7 +41,7 @@ export const upgradeProcedure = publicProcedure
       tier: z.enum(["free", "silver", "gold", "vip"]),
       paymentMethod: z.string().optional(),
       phone: z.string().optional(),
-      amount: z.number().optional(),
+      amount: z.number().optional(), // Kept for backward compat but IGNORED
       billingMonths: z.number().optional(),
     })
   )
@@ -51,11 +49,9 @@ export const upgradeProcedure = publicProcedure
     console.log("[tRPC Upgrade] Processing upgrade for user:", input.userId);
     console.log("[tRPC Upgrade] Upgrading to tier:", input.tier);
 
-    const amount = input.amount ?? 0;
     const billingMonths = input.billingMonths ?? 1;
-    console.log("[tRPC Upgrade] Amount:", amount, "ETB, billing months:", billingMonths);
 
-    if (amount === 0 || input.tier === 'free') {
+    if (input.tier === 'free') {
       console.log("[tRPC Upgrade] Free tier, no payment required");
       return {
         success: true,
@@ -67,6 +63,22 @@ export const upgradeProcedure = publicProcedure
         error: null,
       };
     }
+
+    // Issue #1 Fix: Calculate amount server-side, never trust client
+    const amount = getServerSideAmount(input.tier, billingMonths);
+    if (amount <= 0) {
+      throw new TRPCError({
+        code: 'BAD_REQUEST',
+        message: `Invalid tier "${input.tier}" or billing months "${billingMonths}".`,
+      });
+    }
+
+    // Log if client sent a mismatched amount (potential manipulation attempt)
+    if (input.amount && input.amount !== amount) {
+      console.warn(`[tRPC Upgrade] ⚠️ Client sent amount=${input.amount} but server calculated amount=${amount} for tier=${input.tier}, months=${billingMonths}. Using server amount.`);
+    }
+
+    console.log("[tRPC Upgrade] Server-calculated amount:", amount, "ETB, billing months:", billingMonths);
 
     let phone = input.phone || '';
     try {
@@ -88,8 +100,7 @@ export const upgradeProcedure = publicProcedure
       });
     }
 
-    const normalizedPhone = normalizePhone(phone);
-
+    // --- Issue #10 Fix: Use ArifpayClient instead of duplicated logic ---
     let baseUrl = process.env.EXPO_PUBLIC_API_URL || '';
     if (!baseUrl) {
       try {
@@ -114,101 +125,26 @@ export const upgradeProcedure = publicProcedure
     const errorUrl = `${baseUrl}/payment-error`;
     const notifyUrl = `${baseUrl}/webhooks/arifpay`;
 
-    const email = phone.includes('@') ? phone : `${input.userId}@app.com`;
-    const nonce = `${input.userId}-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const expireDate = new Date();
-    expireDate.setHours(expireDate.getHours() + 24);
-    const expireDateStr = expireDate.toISOString().replace('.000Z', 'Z');
-    const paymentMethods = normalizePaymentMethod(input.paymentMethod || 'TELEBIRR');
-
-    const arifPayload = {
-      cancelUrl,
-      phone: normalizedPhone,
-      email,
-      nonce,
-      successUrl,
-      errorUrl,
-      notifyUrl,
-      paymentMethods,
-      expireDate: expireDateStr,
-      items: [
-        {
-          name: `${input.tier.charAt(0).toUpperCase() + input.tier.slice(1)} Membership`,
-          quantity: 1,
-          price: amount,
-          description: `Premium ${input.tier} membership subscription`,
-        },
-      ],
-      beneficiaries: [
-        {
-          accountNumber: ARIFPAY_ACCOUNT_NUMBER,
-          bank: "AWINETAA",
-          amount,
-        },
-      ],
-      lang: "EN",
-    };
-
-    console.log("[tRPC Upgrade] ArifPay payload:", JSON.stringify(arifPayload, null, 2));
-
     let paymentUrl = '';
     let sessionId = '';
 
     try {
-      const url = `${ARIFPAY_BASE_URL}/api/checkout/session`;
-      console.log("[tRPC Upgrade] Calling ArifPay at:", url);
-
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 20000);
-
-      const response = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "x-arifpay-key": ARIFPAY_API_KEY,
-        },
-        body: JSON.stringify(arifPayload),
-        signal: controller.signal,
+      const result = await arifpay.createPayment({
+        amount,
+        phone,
+        tier: input.tier,
+        userId: input.userId,
+        paymentMethod: input.paymentMethod || 'TELEBIRR',
+        cancelUrl,
+        errorUrl,
+        notifyUrl,
+        successUrl,
       });
 
-      clearTimeout(timeout);
-
-      const responseText = await response.text();
-      console.log("[tRPC Upgrade] ArifPay raw response status:", response.status);
-      console.log("[tRPC Upgrade] ArifPay raw response:", responseText.slice(0, 500));
-
-      if (responseText.trim().startsWith('<')) {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Payment gateway returned an invalid response. Please try again later.',
-        });
-      }
-
-      let result: any;
-      try {
-        result = JSON.parse(responseText);
-      } catch {
-        throw new TRPCError({
-          code: 'INTERNAL_SERVER_ERROR',
-          message: 'Payment gateway returned unparseable response. Please try again.',
-        });
-      }
-
-      if (!response.ok) {
-        const msg = result?.msg || result?.message || `Payment failed with status ${response.status}`;
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: String(msg) });
-      }
-
-      if (result?.error === false && result?.data?.paymentUrl) {
-        paymentUrl = String(result.data.paymentUrl);
-        sessionId = String(result.data.sessionId || '');
-      } else {
-        const msg = result?.msg || 'Payment creation failed - invalid response';
-        throw new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: String(msg) });
-      }
+      paymentUrl = result.paymentUrl;
+      sessionId = result.sessionId;
     } catch (error: any) {
       console.error("[tRPC Upgrade] ArifPay call failed:", error?.message || error);
-      if (error instanceof TRPCError) throw error;
 
       let errorMsg = 'Failed to create payment';
       if (error?.name === 'AbortError') {

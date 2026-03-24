@@ -1,8 +1,15 @@
 import { v4 as uuidv4 } from "uuid";
 
-const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY || "hxsMUuBvV4j3ONdDif4SRSo2cKPrMoWY";
+const ARIFPAY_API_KEY = process.env.ARIFPAY_API_KEY;
 const ARIFPAY_BASE_URL = process.env.ARIFPAY_BASE_URL || "https://gateway.arifpay.net";
-const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER || "01320811436100";
+const ARIFPAY_ACCOUNT_NUMBER = process.env.ARIFPAY_ACCOUNT_NUMBER;
+
+if (!ARIFPAY_API_KEY) {
+  console.error("[Arifpay] FATAL: Missing ARIFPAY_API_KEY env var.");
+}
+if (!ARIFPAY_ACCOUNT_NUMBER) {
+  console.error("[Arifpay] FATAL: Missing ARIFPAY_ACCOUNT_NUMBER env var.");
+}
 
 // Supported payment methods from Arifpay API documentation
 const SUPPORTED_PAYMENT_METHODS = [
@@ -57,7 +64,7 @@ export class ArifpayClient {
   private baseUrl: string;
 
   constructor() {
-    this.apiKey = ARIFPAY_API_KEY;
+    this.apiKey = ARIFPAY_API_KEY || '';
     this.baseUrl = ARIFPAY_BASE_URL;
     console.log("[Arifpay] Client initialized");
   }

@@ -208,10 +208,13 @@ export default function PremiumScreen() {
       if (result.success && result.requiresPayment && result.paymentUrl) {
         console.log('[Premium] Redirecting to:', result.paymentUrl);
         if (result.sessionId) {
+          // Fix #8: Await both writes BEFORE redirecting to prevent race condition
           await AsyncStorage.setItem('pending_payment_session', result.sessionId);
           await AsyncStorage.setItem('pending_payment_tier', selectedTier);
+          console.log('[Premium] Payment session saved to storage. Now opening URL...');
         }
-        Linking.openURL(result.paymentUrl);
+        // Only open URL after storage writes complete
+        await Linking.openURL(result.paymentUrl);
         Alert.alert('Payment', 'Redirecting to payment page. You will receive a confirmation on your phone.', [{ text: 'OK' }]);
       } else if (result.success && !result.requiresPayment) {
         await upgradeTier(selectedTier);

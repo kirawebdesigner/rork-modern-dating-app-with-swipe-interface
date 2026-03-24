@@ -269,7 +269,7 @@ export default function ProfileSetup() {
                   height_cm: newProfile.heightCm ?? null,
                   education: newProfile.education ?? null,
                   phone: profileData.phone || null,
-                  completed: false,
+                  completed: true,
                 })
                 .eq('id', authId);
               if (upErr) {

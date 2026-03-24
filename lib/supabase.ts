@@ -21,7 +21,11 @@ const envAnon =
   extra.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 const DEFAULT_URL = 'https://nizdrhdfhddtrukeemhp.supabase.co';
-const DEFAULT_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5pemRyaGRmaGRkdHJ1a2VlbWhwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTQ2NDI2NTksImV4cCI6MjA3MDIxODY1OX0.5_8FUNRcHkr8PQtLMBhYp7PuqOgYphAjcw_E9jq-QTg';
+const DEFAULT_ANON = '';
+
+if (!envAnon) {
+  console.warn('[Supabase] ⚠️ ANON KEY not set via env vars. Supabase calls will fail until configured.');
+}
 
 const supabaseUrl = envUrl ?? DEFAULT_URL;
 const supabaseAnonKey = envAnon ?? DEFAULT_ANON;
