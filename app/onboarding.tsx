@@ -107,8 +107,15 @@ export default function OnboardingScreen() {
     let mounted = true;
     const checkCachedSession = async () => {
       try {
-        const cachedUserId = await AsyncStorage.getItem('user_id');
-        const cachedProfile = await AsyncStorage.getItem('user_profile');
+        // Wrap AsyncStorage calls with timeout — can hang on some production devices
+        const getWithTimeout = (key: string, ms: number) => 
+          Promise.race([
+            AsyncStorage.getItem(key),
+            new Promise<string | null>((resolve) => setTimeout(() => resolve(null), ms)),
+          ]);
+
+        const cachedUserId = await getWithTimeout('user_id', 1000);
+        const cachedProfile = await getWithTimeout('user_profile', 1000);
         
         if (cachedUserId && cachedProfile) {
           const profile = JSON.parse(cachedProfile);
@@ -133,9 +140,10 @@ export default function OnboardingScreen() {
     };
     checkCachedSession();
 
+    // Reduced from 2s to 1.5s — prevents white screen on slow devices
     const fallback = setTimeout(() => {
       if (mounted) setCheckingCached(false);
-    }, 2000);
+    }, 1500);
 
     return () => { mounted = false; clearTimeout(fallback); };
   }, [router]);

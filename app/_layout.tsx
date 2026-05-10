@@ -18,6 +18,12 @@ import UpdateChecker from "@/components/UpdateChecker";
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
+// Safety net: Force-hide splash after 2s no matter what happens in React
+// Uses a shorter timeout to prevent the white-screen-of-death on slow devices
+setTimeout(() => {
+  SplashScreen.hideAsync().catch(() => {});
+}, 2000);
+
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
@@ -105,10 +111,10 @@ export default function RootLayout() {
     const hardTimeout = setTimeout(() => {
       if (mounted && !isReady) {
         console.log('[RootLayout] Hard timeout reached, forcing app ready');
-        setIsReady(true);
         SplashScreen.hideAsync().catch(() => {});
+        setIsReady(true);
       }
-    }, 5000);
+    }, 2000);
 
     const init = async () => {
       try {
@@ -151,14 +157,14 @@ export default function RootLayout() {
         }).catch(e => console.log('[RootLayout] Notification handlers error', e));
 
         if (mounted) {
-          setIsReady(true);
           await SplashScreen.hideAsync().catch(() => {});
+          setIsReady(true);
         }
       } catch (e) {
         console.error('[RootLayout] Init failed:', e);
         if (mounted) {
-          setIsReady(true);
           await SplashScreen.hideAsync().catch(() => {});
+          setIsReady(true);
         }
       }
     };
