@@ -388,26 +388,10 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     if (loginError) {
       throw new Error(loginError.message || 'Invalid credentials');
     }
-    await synchronizeUser();
     
-    if (loginData?.user) {
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('completed')
-          .eq('id', loginData.user.id)
-          .maybeSingle();
-        
-        if (profile?.completed) {
-          router.replace('/(tabs)' as any);
-        } else {
-          router.replace('/profile-setup' as any);
-        }
-      } catch (e: any) {
-        console.log('[Auth] Error checking profile after login:', e?.message);
-        router.replace('/profile-setup' as any);
-      }
-    }
+    // Sync user state — navigation is handled by onboarding screen's
+    // useEffect watching isAuthenticated + user.profile.completed
+    await synchronizeUser();
   }, [synchronizeUser]);
 
   const signup = useCallback(async (email: string, password: string, name: string) => {
@@ -483,9 +467,8 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
       }
     }
 
+    // Navigation is handled by onboarding screen's useEffect
     await synchronizeUser();
-    
-    router.replace('/profile-setup' as any);
     
     return data;
   }, [synchronizeUser]);
@@ -532,6 +515,13 @@ export const [AuthProvider, useAuth] = createContextHook<AuthContextValue>(() =>
     setIsLoading(false);
     isLoggingOutRef.current = false;
     console.log('[Auth] Logout completed');
+    
+    // Explicitly navigate to onboarding after logout
+    try {
+      router.replace('/onboarding' as any);
+    } catch (e) {
+      console.log('[Auth] Post-logout navigation error:', e);
+    }
   }, []);
 
   const reloadProfile = useCallback(async () => {

@@ -555,7 +555,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
         const filtered = applyFilters(mapped, {
           ...filters,
           interestedIn: effectiveInterestedIn,
-        }, JSON.parse(history ?? '[]'), JSON.parse(storedBlocked ?? '[]'), myUserId);
+        }, localHistory, JSON.parse(storedBlocked ?? '[]'), myUserId);
         setPotentialMatches(filtered);
       }
 
@@ -593,38 +593,45 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
             if (matchesRows && matchesRows.length > 0) {
               console.log('[App] loading matches:', matchesRows.length);
-              const matchesWithUsers = await Promise.all(
-                matchesRows.map(async (m: any) => {
-                  try {
-                    const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
-                    const { data: otherUser } = await supabase
-                      .from('profiles')
-                      .select('id,name,age,gender,bio,photos,interests,city')
-                      .eq('id', otherId)
-                      .maybeSingle();
-
-                    if (!otherUser) return null;
-
-                    return {
-                      id: String(m.id),
-                      user: {
-                        id: String(otherUser.id),
-                        name: String(otherUser.name ?? 'User'),
-                        age: Number(otherUser.age ?? 0),
-                        gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
-                        bio: String(otherUser.bio ?? ''),
-                        photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
-                        interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
-                        location: { city: String(otherUser.city ?? '') },
-                      },
-                      matchedAt: new Date(String(m.matched_at)),
-                    } as Match;
-                  } catch (e: any) {
-                    console.log('[App] Network error loading match user:', e?.message);
-                    return null;
-                  }
-                })
+              
+              // Batch load all matched user profiles in a single query (fixes N+1)
+              const otherUserIds = matchesRows.map((m: any) => 
+                m.user1_id === myId ? m.user2_id : m.user1_id
               );
+              
+              let profilesMap = new Map<string, any>();
+              try {
+                const { data: profiles } = await supabase
+                  .from('profiles')
+                  .select('id,name,age,gender,bio,photos,interests,city')
+                  .in('id', otherUserIds);
+                if (profiles) {
+                  profiles.forEach((p: any) => profilesMap.set(p.id, p));
+                }
+              } catch (e: any) {
+                console.log('[App] Batch profile fetch error:', e?.message);
+              }
+
+              const matchesWithUsers = matchesRows.map((m: any) => {
+                const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
+                const otherUser = profilesMap.get(otherId);
+                if (!otherUser) return null;
+
+                return {
+                  id: String(m.id),
+                  user: {
+                    id: String(otherUser.id),
+                    name: String(otherUser.name ?? 'User'),
+                    age: Number(otherUser.age ?? 0),
+                    gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
+                    bio: String(otherUser.bio ?? ''),
+                    photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+                    interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
+                    location: { city: String(otherUser.city ?? '') },
+                  },
+                  matchedAt: new Date(String(m.matched_at)),
+                } as Match;
+              });
 
               const validMatches = matchesWithUsers.filter((m): m is Match => m !== null);
               setMatches(validMatches);
@@ -658,31 +665,30 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
 
   const refreshProfiles = useCallback(async () => {
     console.log('[App] refreshProfiles called');
-    setIsLoadingProfiles(true);
     dataLoadedRef.current = false;
     try {
       await loadAppData();
     } catch (e) {
       console.error('[App] refreshProfiles failed:', e);
-    } finally {
-      setIsLoadingProfiles(false);
     }
   }, [loadAppData]);
 
   useEffect(() => {
-    if (currentProfile?.completed && potentialMatches.length === 0 && allProfiles.length === 0) {
+    if (currentProfile?.completed && potentialMatches.length === 0 && allProfiles.length === 0 && !isLoadingProfiles) {
       console.log('[App] Profile completed but no profiles loaded, triggering reload');
       dataLoadedRef.current = false;
       loadAppData().catch(e => console.error('[App] auto-reload failed:', e));
     }
-  }, [currentProfile?.completed]);
+  }, [currentProfile?.completed, isLoadingProfiles]);
 
   useEffect(() => {
     let retryCount = 0;
     const maxRetries = 3;
+    let stopped = false;
 
     const checkAndReload = async () => {
-      if (retryCount >= maxRetries) return;
+      if (stopped || retryCount >= maxRetries) return;
+      if (dataLoadedRef.current && currentProfileRef.current?.id) return;
       try {
         const storedPhone = await AsyncStorage.getItem('user_phone');
         const storedProfile = await AsyncStorage.getItem('user_profile');
@@ -706,12 +712,17 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
     const interval = setInterval(checkAndReload, 5000);
     checkAndReload();
 
-    return () => clearInterval(interval);
+    return () => {
+      stopped = true;
+      clearInterval(interval);
+    };
   }, [loadAppData]);
 
   useEffect(() => {
-    refilterPotential();
-  }, [refilterPotential]);
+    if (allProfiles.length > 0) {
+      refilterPotential();
+    }
+  }, [refilterPotential, allProfiles.length]);
 
   const setCurrentProfile = useCallback(async (profile: User) => {
     // 1. Local state update
@@ -954,115 +965,65 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           console.log('[App] swipe recorded successfully');
         }
 
-        if (action === 'like' || action === 'superlike') {
-          console.log('[App] Checking for mutual like...');
-          const { data: mutualLike, error: mutualErr } = await supabase
-            .from('swipes')
-            .select('id')
-            .eq('swiper_id', userId)
-            .eq('swiped_id', myId)
-            .in('action', ['like', 'superlike'])
-            .maybeSingle();
+        // Wait a small amount of time for the DB trigger to finish its work
+        await new Promise(resolve => setTimeout(resolve, 300));
 
-          if (!mutualErr && mutualLike) {
-            console.log('[App] Mutual like found! Creating match...');
+        const { data: newMatches, error: matchError } = await supabase
+          .from('matches')
+          .select('id, user1_id, user2_id, matched_at')
+          .or(`user1_id.eq.${myId},user2_id.eq.${myId}`);
 
-            const { data: existingMatch } = await supabase
-              .from('matches')
-              .select('id')
-              .or(`and(user1_id.eq.${myId},user2_id.eq.${userId}),and(user1_id.eq.${userId},user2_id.eq.${myId})`)
-              .maybeSingle();
-
-            let matchId: string | null = existingMatch?.id ?? null;
-
-            if (!matchId) {
-              const user1 = myId < userId ? myId : userId;
-              const user2 = myId < userId ? userId : myId;
-
-              const { data: newMatch, error: matchInsertErr } = await supabase
-                .from('matches')
-                .insert({ user1_id: user1, user2_id: user2, matched_at: new Date().toISOString() })
-                .select('id')
-                .single();
-
-              if (matchInsertErr) {
-                console.log('[App] Match insert error:', matchInsertErr.message);
-                const { data: triggerMatch } = await supabase
-                  .from('matches')
-                  .select('id')
-                  .or(`and(user1_id.eq.${user1},user2_id.eq.${user2}),and(user1_id.eq.${user2},user2_id.eq.${user1})`)
-                  .maybeSingle();
-                matchId = triggerMatch?.id ?? null;
-              } else {
-                matchId = newMatch?.id ?? null;
-                console.log('[App] Match created:', matchId);
-              }
-            } else {
-              console.log('[App] Match already exists:', matchId);
+        if (!matchError && newMatches) {
+          console.log('[App] loaded matches after swipe:', newMatches.length);
+          
+          // Batch load all matched user profiles in a single query (fixes N+1)
+          const otherIds = newMatches.map((m: any) => 
+            m.user1_id === myId ? m.user2_id : m.user1_id
+          );
+          
+          let profilesMap = new Map<string, any>();
+          try {
+            const { data: profiles } = await supabase
+              .from('profiles')
+              .select('id,name,age,gender,bio,photos,interests,city')
+              .in('id', otherIds);
+            if (profiles) {
+              profiles.forEach((p: any) => profilesMap.set(p.id, p));
             }
-
-            if (matchId) {
-              const { data: existingConv } = await supabase
-                .from('conversations')
-                .select('id')
-                .eq('id', matchId)
-                .maybeSingle();
-
-              if (!existingConv) {
-                await supabase.from('conversations').insert({ id: matchId, created_by: myId });
-                await supabase.from('conversation_participants').insert([
-                  { conversation_id: matchId, user_id: myId },
-                  { conversation_id: matchId, user_id: userId },
-                ]);
-                console.log('[App] Conversation created for match:', matchId);
-              }
-              matchResult = { isMatch: true, matchId: matchId ?? undefined };
-            }
-          } else {
-            console.log('[App] No mutual like yet');
+          } catch (e: any) {
+            console.log('[App] Batch profile fetch (post-swipe) error:', e?.message);
           }
 
-          await new Promise(resolve => setTimeout(resolve, 300));
+          const matchesWithUsers = newMatches.map((m: any) => {
+            const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
+            const otherUser = profilesMap.get(otherId);
+            if (!otherUser) return null;
 
-          const { data: newMatches, error: matchError } = await supabase
-            .from('matches')
-            .select('id, user1_id, user2_id, matched_at')
-            .or(`user1_id.eq.${myId},user2_id.eq.${myId}`);
+            return {
+              id: String(m.id),
+              user: {
+                id: String(otherUser.id),
+                name: String(otherUser.name ?? 'User'),
+                age: Number(otherUser.age ?? 0),
+                gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
+                bio: String(otherUser.bio ?? ''),
+                photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
+                interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
+                location: { city: String(otherUser.city ?? '') },
+              },
+              matchedAt: new Date(String(m.matched_at)),
+            } as Match;
+          });
 
-          if (!matchError && newMatches) {
-            console.log('[App] loaded matches after swipe:', newMatches.length);
-            const matchesWithUsers = await Promise.all(
-              newMatches.map(async (m: any) => {
-                const otherId = m.user1_id === myId ? m.user2_id : m.user1_id;
-                const { data: otherUser } = await supabase
-                  .from('profiles')
-                  .select('id,name,age,gender,bio,photos,interests,city')
-                  .eq('id', otherId)
-                  .maybeSingle();
-
-                if (!otherUser) return null;
-
-                return {
-                  id: String(m.id),
-                  user: {
-                    id: String(otherUser.id),
-                    name: String(otherUser.name ?? 'User'),
-                    age: Number(otherUser.age ?? 0),
-                    gender: (otherUser.gender as 'boy' | 'girl') ?? 'boy',
-                    bio: String(otherUser.bio ?? ''),
-                    photos: Array.isArray(otherUser.photos) && otherUser.photos.length > 0 ? (otherUser.photos as string[]) : ['https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=640&auto=format&fit=crop'],
-                    interests: Array.isArray(otherUser.interests) ? (otherUser.interests as string[]) : [],
-                    location: { city: String(otherUser.city ?? '') },
-                  },
-                  matchedAt: new Date(String(m.matched_at)),
-                } as Match;
-              })
-            );
-
-            const validMatches = matchesWithUsers.filter((m: Match | null): m is Match => m !== null);
-            setMatches(validMatches);
-            console.log('[App] updated matches state:', validMatches.length);
+          const validMatches = matchesWithUsers.filter((m: Match | null): m is Match => m !== null);
+          setMatches(validMatches);
+          
+          // Check if the current swipe resulted in a NEW match
+          const recentMatch = validMatches.find(m => m.user.id === userId);
+          if (recentMatch) {
+            matchResult = { isMatch: true, matchId: recentMatch.id };
           }
+          console.log('[App] updated matches state:', validMatches.length);
         }
       } catch (e) {
         console.log('[App] swipe sync failed', e);
@@ -1072,17 +1033,49 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
   }, [currentProfile?.id]);
 
   const setTier = useCallback(async (next: MembershipTier) => {
+    // --- Fix #21: Persist Tier to Database ---
     await AsyncStorage.setItem('tier', JSON.stringify(next));
     setTierState(next);
-  }, []);
+    
+    if (!TEST_MODE && currentProfile?.id) {
+      try {
+        await supabase
+          .from('memberships')
+          .upsert({ 
+            user_id: currentProfile.id, 
+            tier: next,
+            updated_at: new Date().toISOString()
+          }, { onConflict: 'user_id' });
+        console.log('[App] Tier persisted to DB:', next);
+      } catch (err) {
+        console.warn('[App] Failed to persist tier to DB', err);
+      }
+    }
+  }, [currentProfile?.id]);
 
   const addCredits = useCallback(async (n: number) => {
+    // --- Fix #22: Persist Credits to Database ---
     setCredits(prev => {
       const next = prev + n;
       AsyncStorage.setItem('credits', JSON.stringify(next));
+      
+      if (!TEST_MODE && currentProfile?.id) {
+        (async () => {
+          try {
+            const { error } = await supabase
+              .from('profiles')
+              .update({ credits: next })
+              .eq('id', currentProfile.id);
+            if (error) console.warn('[App] Failed to persist credits to DB', error.message);
+            else console.log('[App] Credits persisted to DB:', next);
+          } catch (err) {
+            console.warn('[App] Credit persist exception', err);
+          }
+        })();
+      }
       return next;
     });
-  }, []);
+  }, [currentProfile?.id]);
 
   const unlockTheme = useCallback(async (theme: ThemeId) => {
     setCurrentProfileState(prev => {

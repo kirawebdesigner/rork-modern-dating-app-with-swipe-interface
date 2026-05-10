@@ -20,7 +20,7 @@ const envAnon =
   extra.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
   extra.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const DEFAULT_URL = 'https://nizdrhdfhddtrukeemhp.supabase.co';
+const DEFAULT_URL = '';
 const DEFAULT_ANON = '';
 
 if (!envAnon) {
@@ -30,7 +30,7 @@ if (!envAnon) {
 const supabaseUrl = envUrl ?? DEFAULT_URL;
 const supabaseAnonKey = envAnon ?? DEFAULT_ANON;
 
-export const isSupabaseConfigured = true;
+export const isSupabaseConfigured = Boolean(supabaseUrl && supabaseUrl.length > 10 && supabaseAnonKey && supabaseAnonKey.length > 10);
 
 const createStorageAdapter = () => {
   if (Platform.OS === 'web') {
@@ -179,5 +179,7 @@ export const safeFetch = async <T>(fn: () => PromiseLike<T>, fallback: T): Promi
 };
 
 if (!TEST_MODE && isSupabaseConfigured) {
-  testConnection();
+  // Defer connection test to avoid blocking JS module initialization
+  // This prevents splash screen hangs on slow/unreachable networks
+  setTimeout(() => testConnection(), 2000);
 }

@@ -14,8 +14,15 @@ console.log("[Hono] Environment:", {
   arifpayBaseUrl: process.env.ARIFPAY_BASE_URL,
 });
 
+const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS
+  ? process.env.ALLOWED_ORIGINS.split(",").map(s => s.trim())
+  : ["http://localhost:8081", "http://localhost:19006", "https://zewijuna.com", "https://api.zewijuna.com"];
+
 app.use("*", cors({
-  origin: "*",
+  origin: (origin) => {
+    if (!origin) return ALLOWED_ORIGINS[0]; // Allow server-to-server
+    return ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0];
+  },
   allowHeaders: ["Content-Type", "Authorization", "Accept"],
   allowMethods: ["POST", "GET", "OPTIONS"],
   credentials: true,

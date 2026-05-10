@@ -31,6 +31,7 @@ yarn-error.*
 
 # local env files
 .env*.local
+.env
 
 # typescript
 *.tsbuildinfo
@@ -39,8 +40,20 @@ yarn-error.*
 ios/
 android/
 .rork
-.env
 rork-eslint.config.js
 core
-node_modules
-.expo
+
+# Build artifacts & debug files (DO NOT COMMIT)
+backend/server.js
+backend.zip
+output.log
+build_status.json
+config_test.json
+
+# Debug/PII logs (SECURITY: may contain user data)
+lastchat.txt
+new.txt
+doctor_output*.txt
+
+# Analysis artifacts
+zewijuna_analysis*

@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { arifpay } from "./lib/arifpay.ts";
+import { arifpay } from "./lib/arifpay";
 import { createClient } from "@supabase/supabase-js";
 import * as crypto from "crypto";
 
@@ -17,8 +17,9 @@ const webhooks = new Hono();
 
 webhooks.post("/arifpay", async (c) => {
   try {
-    // --- Issue #4 Fix: Verify webhook signature before processing ---
+    let body: any;
     const ARIFPAY_WEBHOOK_SECRET = process.env.ARIFPAY_WEBHOOK_SECRET;
+
     if (ARIFPAY_WEBHOOK_SECRET) {
       const signature = c.req.header("x-arifpay-signature") || c.req.header("x-signature");
       const rawBody = await c.req.text();
@@ -34,17 +35,18 @@ webhooks.post("/arifpay", async (c) => {
         .digest("hex");
 
       if (signature !== expectedSignature) {
-        console.warn("[Webhook] ⚠️ Invalid signature. Expected:", expectedSignature.slice(0, 10) + "..., Got:", signature.slice(0, 10) + "...");
+        console.warn("[Webhook] ⚠️ Invalid signature.");
         return c.json({ error: "Invalid signature" }, 401);
       }
 
-      // Re-parse body after reading as text for signature
-      var body = JSON.parse(rawBody);
-      console.log("[Webhook] ✅ Signature verified. Arifpay notification:", JSON.stringify(body, null, 2));
+      body = JSON.parse(rawBody);
+      console.log("[Webhook] ✅ Signature verified.");
     } else {
-      console.warn("[Webhook] ⚠️ ARIFPAY_WEBHOOK_SECRET not set. Skipping signature verification. SET THIS IN PRODUCTION!");
-      var body = await c.req.json();
-      console.log("[Webhook] Arifpay notification received:", JSON.stringify(body, null, 2));
+      // ArifPay doesn't provide HMAC signing — accept webhook but 
+      // rely on arifpay.verifyPayment() API call (line ~98) as the real security gate.
+      // No upgrade happens unless ArifPay's own API confirms the payment.
+      body = await c.req.json();
+      console.log("[Webhook] Received notification (will verify via API before fulfilling).");
     }
 
     // ArifPay webhook payload structure can vary slightly; handle common mappings

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Modal,
   Linking,
   TextInput,
+  AppState,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { safeGoBack } from '@/lib/navigation';
@@ -125,8 +126,26 @@ const tierData: Record<MembershipTier, TierInfo> = {
 
 export default function PremiumScreen() {
   const router = useRouter();
-  const { tier, upgradeTier } = useMembership();
+  const { tier, upgradeTier, refreshMembership } = useMembership();
   const { user } = useAuth();
+
+  // Refresh membership when returning to this screen or app focus
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'active') {
+        console.log('[Premium] App became active, refreshing membership...');
+        refreshMembership();
+      }
+    });
+
+    // Also refresh once on mount
+    refreshMembership();
+
+    return () => {
+      subscription.remove();
+    };
+  }, [refreshMembership]);
+
   const [selectedTier, setSelectedTier] = useState<MembershipTier>(tier === 'free' ? 'gold' : tier);
   const [billingPeriod, setBillingPeriod] = useState<BillingPeriod>('monthly');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -197,29 +216,28 @@ export default function PremiumScreen() {
       const result = await upgradeMutation.mutateAsync({
         userId: user!.id,
         tier: selectedTier,
-        phone: normalizePhone(phoneNumber),
-        paymentMethod: 'TELEBIRR',
         amount: totalAmount,
         billingMonths: billingOpt.months,
       });
 
       setIsProcessing(false);
 
-      if (result.success && result.requiresPayment && result.paymentUrl) {
+      if (result.paymentUrl) {
         console.log('[Premium] Redirecting to:', result.paymentUrl);
         if (result.sessionId) {
-          // Fix #8: Await both writes BEFORE redirecting to prevent race condition
           await AsyncStorage.setItem('pending_payment_session', result.sessionId);
           await AsyncStorage.setItem('pending_payment_tier', selectedTier);
           console.log('[Premium] Payment session saved to storage. Now opening URL...');
         }
-        // Only open URL after storage writes complete
         await Linking.openURL(result.paymentUrl);
         Alert.alert('Payment', 'Redirecting to payment page. You will receive a confirmation on your phone.', [{ text: 'OK' }]);
-      } else if (result.success && !result.requiresPayment) {
-        await upgradeTier(selectedTier);
-        Alert.alert('Success!', `Your membership has been upgraded to ${tierData[selectedTier].name}!`,
-          [{ text: 'OK', onPress: () => router.back() }]);
+      } else if ((result as any).success || (result as any).tier === 'free') {
+        // Free tier transition was handled server-side
+        await upgradeTier('free');
+        await AsyncStorage.setItem('membership_tier', JSON.stringify('free'));
+        Alert.alert('Success', 'Your membership has been updated to the Free plan.', [
+          { text: 'OK', onPress: () => router.back() }
+        ]);
       } else {
         throw new Error('Failed to create payment session from server');
       }
