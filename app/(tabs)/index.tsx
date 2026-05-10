@@ -111,7 +111,7 @@ export default function DiscoverScreen() {
     Animated.timing(position, {
       toValue: { x, y: 0 },
       duration: 300,
-      useNativeDriver: false,
+      useNativeDriver: true,
     }).start(() => {
       onSwipeComplete(direction);
     });
@@ -146,7 +146,7 @@ export default function DiscoverScreen() {
   const resetPosition = useCallback(() => {
     Animated.spring(position, {
       toValue: { x: 0, y: 0 },
-      useNativeDriver: false,
+      useNativeDriver: true,
       friction: 5,
     }).start();
   }, [position]);
@@ -445,7 +445,7 @@ export default function DiscoverScreen() {
       ) : (
         <>
           <View style={styles.cardsContainer} testID="cards-container" accessibilityLabel="Cards">
-            {nextUser && (
+            {nextUser && !outOfViews && (
               <Animated.View
                 style={[
                   styles.cardWrapper,

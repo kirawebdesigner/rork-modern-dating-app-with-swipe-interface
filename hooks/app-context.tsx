@@ -514,7 +514,7 @@ export const [AppProvider, useApp] = createContextHook<AppContextType>(() => {
           .from('profiles')
           .select('id,phone,name,age,birthday,gender,interested_in,bio,photos,interests,city,latitude,longitude,height_cm,education,verified,last_active,profile_theme,owned_themes,completed')
           .eq('completed', true)
-          .limit(100);
+          .limit(500);
         profiles = profilesResult.data;
         error = profilesResult.error;
       } catch (fetchErr: any) {
