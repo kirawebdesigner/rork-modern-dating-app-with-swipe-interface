@@ -255,7 +255,7 @@ export default function DiscoverScreen() {
       Animated.timing(position, {
         toValue: { x: 0, y: -screenWidth },
         duration: 300,
-        useNativeDriver: false,
+        useNativeDriver: true,
       }).start(async () => {
         setLocalSwipedIds(prev => new Set(prev).add(currentUser.id));
         setRewindStack(prev => [currentUser.id, ...prev].slice(0, 50));

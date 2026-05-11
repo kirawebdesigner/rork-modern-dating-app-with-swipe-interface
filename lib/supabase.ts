@@ -20,8 +20,8 @@ const envAnon =
   extra.EXPO_PUBLIC_SUPABASE_ANON_KEY ??
   extra.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-const DEFAULT_URL = '';
-const DEFAULT_ANON = '';
+const DEFAULT_URL = 'https://placeholder.supabase.co';
+const DEFAULT_ANON = 'placeholder_key';
 
 if (!envAnon) {
   console.warn('[Supabase] ⚠️ ANON KEY not set via env vars. Supabase calls will fail until configured.');
